@@ -1,18 +1,16 @@
-default: spartan.native
+default: terminus.native
 
 OCAMLBUILD = ocamlbuild
 OCAMLBUILD_FLAGS = -j 4 -cflags -w,+a-4-27-29-50,"-warn-error +a" -lib unix -use-ocamlfind -pkg menhirLib -pkg sedlex
 OCAMLBUILD_MENHIRFLAGS = -use-menhir -menhir "menhir --explain"
-SRCDIR = src
 
-default: spartan.native
+default: terminus.native
 
-.PHONY: doc clean spartan.byte spartan.native spartan.d.byte spartan.p.native
+.PHONY: doc clean terminus.byte terminus.native terminus.d.byte terminus.p.native
 
 ### Compilation of OCaml files
 
-spartan.byte spartan.native spartan.d.byte spartan.p.native:
-	echo $$PATH
+terminus.byte terminus.native terminus.d.byte terminus.p.native:
 	ocamlbuild $(OCAMLBUILD_MENHIRFLAGS) $(OCAMLBUILD_FLAGS) $@
 
 # Cleaning up
@@ -23,4 +21,4 @@ clean:
 # Build the documentation
 
 doc:
-	ocamlbuild -docflag -keep-code $(OCAMLBUILD_MENHIRFLAGS) $(OCAMLBUILD_FLAGS) spartan.docdir/index.html
+	ocamlbuild -docflag -keep-code $(OCAMLBUILD_MENHIRFLAGS) $(OCAMLBUILD_FLAGS) terminus.docdir/index.html

@@ -1,4 +1,4 @@
-(** Spartan type checking. *)
+(** Terminus type checking. *)
 
 (** Type errors *)
 type type_error =

@@ -1,4 +1,4 @@
-(** Configuration parameters that control how Spartan works. *)
+(** Configuration parameters that control how Terminus works. *)
 
 (** How to load the prelude file. *)
 type prelude =

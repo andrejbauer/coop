@@ -3,24 +3,24 @@
   . ((eval
       . (progn
           ;; root directory (ending with slash)
-          (let ((spartan-root-directory
+          (let ((terminus-root-directory
                  (when buffer-file-name
                    (locate-dominating-file buffer-file-name ".dir-locals.el")))
-                (spartan-project-find-file
-                 (and (boundp 'spartan-project-find-file) spartan-project-find-file)))
+                (terminus-project-find-file
+                 (and (boundp 'terminus-project-find-file) terminus-project-find-file)))
 
-            ;; spartan tags file
-            (when spartan-root-directory
-              (setq tags-file-name (concat spartan-root-directory "TAGS"))
-              (add-to-list 'compilation-search-path spartan-root-directory)
-              ;; Setting the compilation directory to spartan root. This is
+            ;; terminus tags file
+            (when terminus-root-directory
+              (setq tags-file-name (concat terminus-root-directory "TAGS"))
+              (add-to-list 'compilation-search-path terminus-root-directory)
+              ;; Setting the compilation directory to terminus root. This is
               ;; mutually exclusive with the setting of default-directory
               ;; below.
-              (if (not spartan-project-find-file)
-                  (setq compile-command (concat "make -C " spartan-root-directory)))
+              (if (not terminus-project-find-file)
+                  (setq compile-command (concat "make -C " terminus-root-directory)))
               )
-            (setq spartan-executable (concat spartan-root-directory "spartan.native")))))))
+            (setq terminus-executable (concat terminus-root-directory "terminus.native")))))))
  (tuareg-mode
   (show-trailing-whitespace . t))
- (spartan-mode
+ (terminus-mode
   (show-trailing-whitespace . t)))

@@ -1,7 +1,7 @@
 (** Command-line processing and the main program. *)
 
 (** The usage message. *)
-let usage = "Usage: spartan [option] ... [file] ..."
+let usage = "Usage: terminus [option] ... [file] ..."
 
 (** A list of files to be loaded and run, together with information on whether they should
     be loaded in interactive mode. *)
@@ -53,8 +53,6 @@ let options = Arg.align [
 
 (** Interactive toplevel. *)
 let interactive_shell state =
-  Format.printf "Very spartan type theory@." ;
-
   let rec loop state =
     let state =
       try

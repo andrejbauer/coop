@@ -1,4 +1,4 @@
-(** {1 Spartan type theory} *)
+(** {1 Terminus type theory} *)
 
 (** De Bruijn index *)
 type index
