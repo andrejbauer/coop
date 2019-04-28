@@ -79,6 +79,7 @@ plain_term:
   | e=plain_infix_term                            { e }
   | FUN a=lambda_abstraction ARROW e=term         { Input.Lambda (a, e) }
   | LET x=var_name EQUAL c1=infix_term IN c2=term { Input.Let (x, c1, c2) }
+  | e=infix_term COLON t=ty                       { Input.Ascribe (e, t) }
 
 infix_term: mark_location(plain_infix_term) { $1 }
 plain_infix_term:

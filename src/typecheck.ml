@@ -71,61 +71,65 @@ and comp_ty ty = Rsyntax.purely (expr_ty ty)
 (** [infer_expr ctx e] infers the expression type [ty] of an expression [e]. It
    returns the processed expression [e] and its type [ty]. *)
 let rec infer_expr (ctx : context) {Location.data=e'; loc} =
-  let e', ty =
-    match e' with
-    | Dsyntax.Var k ->
-       let ty = lookup ~loc k ctx in
-       Rsyntax.Var k, ty
+  let locate = Location.locate ~loc in
+  match e' with
+  | Dsyntax.Var k ->
+     let ty = lookup ~loc k ctx in
+     locate (Rsyntax.Var k), ty
 
-    | Dsyntax.Numeral n ->
-       Rsyntax.Numeral n, Rsyntax.Int
+  | Dsyntax.Numeral n ->
+     locate (Rsyntax.Numeral n), Rsyntax.Int
 
-    | Dsyntax.Lambda (x, Some t, c) ->
-       let t = expr_ty t in
-       let ctx  = extend x t ctx in
-       let c, c_ty = infer_comp ctx c in
-       Rsyntax.Lambda c,
-       Rsyntax.Arrow (t, c_ty)
+  | Dsyntax.Lambda (x, Some t, c) ->
+     let t = expr_ty t in
+     let ctx = extend x t ctx in
+     let c, c_ty = infer_comp ctx c in
+     locate (Rsyntax.Lambda c), Rsyntax.Arrow (t, c_ty)
 
-    | Dsyntax.Lambda (x, None, _) ->
-       error ~loc (CannotInferArgument x)
-  in
-  Location.locate ~loc e', ty
+  | Dsyntax.Lambda (x, None, _) ->
+     error ~loc (CannotInferArgument x)
+
+  | Dsyntax.AscribeExpr (e, t) ->
+     let t = expr_ty t in
+     let e = check_expr ctx e t in
+     e, t
 
 (** [infer_comp ctx c] infers the type [ty] of a computation [c]. It returns
     the processed computation [c] and its type [ty].  *)
 and infer_comp (ctx : context) {Location.data=c'; loc} =
-  let c', ty =
-    match c' with
+  let locate = Location.locate ~loc in
+  match c' with
 
-    | Dsyntax.Return e ->
-       let e, e_ty = infer_expr ctx e in
-       Rsyntax.Return e, Rsyntax.purely e_ty
+  | Dsyntax.Return e ->
+     let e, e_ty = infer_expr ctx e in
+     locate (Rsyntax.Return e), Rsyntax.purely e_ty
 
-    | Dsyntax.Sequence (x, c1, c2) ->
-       let c1, c1_ty = infer_comp ctx c1 in
-       let ctx = extend x (Rsyntax.purify c1_ty) ctx in
-       let c2, c2_ty = infer_comp ctx c2 in
-       Rsyntax.Sequence (c1, c2), c2_ty
+  | Dsyntax.Sequence (x, c1, c2) ->
+     let c1, c1_ty = infer_comp ctx c1 in
+     let ctx = extend x (Rsyntax.purify c1_ty) ctx in
+     let c2, c2_ty = infer_comp ctx c2 in
+     locate (Rsyntax.Sequence (c1, c2)), c2_ty
 
-    | Dsyntax.Apply (e1, e2) ->
-       let e1, t1 = infer_expr ctx e1 in
-       begin
-         match t1 with
-         | Rsyntax.Arrow (u1, u2) ->
-            let e2 = check_expr ctx e2 u1 in
-            Rsyntax.Apply (e1, e2),
-            u2
+  | Dsyntax.Apply (e1, e2) ->
+     let e1, t1 = infer_expr ctx e1 in
+     begin
+       match t1 with
+       | Rsyntax.Arrow (u1, u2) ->
+          let e2 = check_expr ctx e2 u1 in
+          locate (Rsyntax.Apply (e1, e2)), u2
 
-         | Rsyntax.Int -> error ~loc (FunctionExpected t1)
-       end
-  in
-  Location.locate ~loc c', ty
+       | Rsyntax.Int -> error ~loc (FunctionExpected t1)
+     end
 
+  | Dsyntax.AscribeComp (c, t) ->
+     let t = comp_ty t in
+     let c = check_comp ctx c t in
+     c, t
 
 (** [check_expr ctx e ty] checks that expression [e] has type [ty] in context [ctx].
     It returns the processed expression [e]. *)
 and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
+  let locate = Location.locate ~loc in
   match e' with
 
   | Dsyntax.Lambda (x, None, e) ->
@@ -133,17 +137,17 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
        match ty with
        | Rsyntax.Arrow (t, u) ->
           let c = check_comp (extend x t ctx) e u in
-          Location.locate ~loc (Rsyntax.Lambda c)
+          locate (Rsyntax.Lambda c)
        | Rsyntax.Int -> error ~loc (TypeExpectedButFunction ty)
      end
 
   | Dsyntax.Numeral k ->
      begin match ty with
-     | Rsyntax.Int -> Location.locate ~loc (Rsyntax.Numeral k)
+     | Rsyntax.Int -> locate (Rsyntax.Numeral k)
      | Rsyntax.Arrow _ -> error ~loc (TypeExpectedButFunction ty)
      end
 
-  | (Dsyntax.Lambda (_, Some _, _) | Dsyntax.Var _) ->
+  | (Dsyntax.Lambda (_, Some _, _) | Dsyntax.Var _ | Dsyntax.AscribeExpr _) ->
      let e, ty' = infer_expr ctx e in
      if Rsyntax.equal_expr_ty ty ty'
      then
@@ -154,18 +158,19 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
 (** [check_comp ctx c ty] checks that computation [c] has type [ty] in context [ctx].
     It returns the processed computation [c]. *)
 and check_comp (ctx : context) ({Location.data=c'; loc} as c) ty : Rsyntax.comp =
+  let locate = Location.locate ~loc in
   match c' with
 
   | Dsyntax.Return e ->
     let (Rsyntax.CompTy (ty, _)) = ty in
     let e = check_expr ctx e ty in
-    Location.locate ~loc (Rsyntax.Return e)
+    locate (Rsyntax.Return e)
 
   | Dsyntax.Sequence (x, c1, c2) ->
      let c1, t1 = infer_comp ctx c1 in
      check_comp (extend x (Rsyntax.purify t1) ctx) c2 ty
 
-  | Dsyntax.Apply _ ->
+  | (Dsyntax.Apply _ | Dsyntax.AscribeComp _) ->
      let c, ty' = infer_comp ctx c in
      if Rsyntax.equal_comp_ty ty ty'
      then

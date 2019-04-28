@@ -80,6 +80,11 @@ let rec expr ctx binds ({Location.data=e'; Location.loc=loc} as e) =
        in
        (binds, fold lst)
 
+    | Input.Ascribe (e, t) ->
+       let binds, e = expr ctx binds e in
+       let t = ty t in
+       (binds, Location.locate ~loc (Dsyntax.AscribeExpr (e, t)))
+
     | (Input.Apply _ | Input.Let _) ->
        let c = comp ctx e in
        let k = debruijn binds in
@@ -113,6 +118,11 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Dsyntax.comp =
        let c1 = comp ctx c1 in
        let c2 = comp (extend x ctx) c2 in
        Location.locate ~loc (Dsyntax.Sequence (x, c1, c2))
+
+    | Input.Ascribe (c, t) ->
+       let c = comp ctx c in
+       let t = ty t in
+       Location.locate ~loc (Dsyntax.AscribeComp (c, t))
 
 (** Desugar a lambda abstraction. *)
 and lambda_abstraction ctx a : context * (Name.ident * Dsyntax.ty option) list =

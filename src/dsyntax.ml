@@ -14,6 +14,7 @@ and expr' =
   | Var of index
   | Numeral of int
   | Lambda of Name.ident * ty option * comp
+  | AscribeExpr of expr * ty
 
 (** Computations *)
 and comp = comp' Location.located
@@ -21,6 +22,7 @@ and comp' =
   | Return of expr
   | Sequence of Name.ident * comp * comp
   | Apply of expr * expr
+  | AscribeComp of comp * ty
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located

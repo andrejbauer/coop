@@ -6,19 +6,20 @@ type ty =
   | Arrow of ty * ty
 
 (** Parsed expressions/computations *)
-type expr = expr' Location.located
-and expr' =
+type term = term' Location.located
+and term' =
   | Var of Name.ident
   | Numeral of int
   | Lambda of (Name.ident list * ty option) list * comp
-  | Apply of expr * expr
+  | Apply of term * term
   | Let of Name.ident * comp * comp
+  | Ascribe of term * ty
 
-and comp = expr
+and comp = term
 
 (** Parsed top-level command. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of string
-  | TopLet of Name.ident * expr
+  | TopLet of Name.ident * term
   | TopComp of comp
