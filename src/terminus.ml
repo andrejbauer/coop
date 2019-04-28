@@ -67,7 +67,7 @@ let interactive_shell state =
       | Typecheck.Error {Location.data=err; Location.loc} ->
          Print.error "Typechecking error at %t:@ %t"
            (Location.print loc)
-           (Typecheck.print_error ~penv:(Toplevel.penv state) err) ;
+           (Typecheck.print_error err) ;
          state
       | Sys.Break ->
          Print.error "Interrupted." ;
@@ -144,7 +144,7 @@ let main =
     | Typecheck.Error {Location.data=err; Location.loc} ->
        Print.error "Typechecking error at %t:@ %t"
          (Location.print loc)
-         (Typecheck.print_error ~penv:(Toplevel.penv topstate) err)
+         (Typecheck.print_error err)
   in
 
   run_code Toplevel.initial !files

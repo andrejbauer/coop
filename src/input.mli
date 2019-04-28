@@ -1,24 +1,24 @@
 (** Concrete syntax as parsed by the parser. *)
 
-(** Parsed expression. *)
+(** Parsed type. *)
+type ty =
+  | Int
+  | Arrow of ty * ty
+
+(** Parsed expressions/computations *)
 type expr = expr' Location.located
 and expr' =
   | Var of Name.ident
-  | Type
-  | Prod of (Name.ident list * ty) list * ty
-  | Lambda of (Name.ident list * ty option) list * ty
+  | Numeral of int
+  | Lambda of (Name.ident list * ty option) list * comp
   | Apply of expr * expr
-  | Arrow of expr * expr
-  | Ascribe of expr * ty
+  | Let of Name.ident * comp * comp
 
-(** Parsed type (equal to expression). *)
-and ty = expr
+and comp = expr
 
 (** Parsed top-level command. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of string
-  | TopDefinition of Name.ident * expr
-  | TopCheck of expr
-  | TopEval of expr
-  | TopAxiom of Name.ident * expr
+  | TopLet of Name.ident * expr
+  | TopComp of comp

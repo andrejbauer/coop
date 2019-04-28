@@ -23,27 +23,15 @@ val no_parens : t
 val prefix : t
 val prefix_arg : t
 
-(** The level of application and its left and right arguments *)
-val app : t
-val app_left : t
-val app_right : t
-
 (** The level of an infix operator, and its left and right arguments *)
 val infix : infix -> t * t * t
 
-(** The level of an equality, and its arguments *)
-val eq : t
-val eq_left : t
-val eq_right : t
-
-(** The level of a binder (such as lambda) and its body *)
-val binder : t
-val in_binder : t
-
-(** The elvel of an arrow and its arguments *)
+(** The level of an arrow and its arguments *)
 val arr : t
 val arr_left : t
 val arr_right : t
 
-(** The level of type ascription *)
-val ascription : t
+(** The level of a computation type with its dirt *)
+val comp_ty : t
+val comp_ty_left : t
+val comp_ty_right : t

@@ -1,172 +1,202 @@
 (** Terminus type checking. *)
 
+(** Typing context *)
+type context = (Name.ident * Rsyntax.expr_ty) list
+
+(** Initial typing context *)
+let initial = []
+
 (** Type errors *)
-type type_error =
+type error =
   | InvalidIndex of int
-  | TypeExpected of TT.ty * TT.ty
-  | TypeExpectedButFunction of TT.ty
-  | FunctionExpected of TT.ty
+  | ExprTypeMismatch of Rsyntax.expr_ty * Rsyntax.expr_ty
+  | CompTypeMismatch of Rsyntax.comp_ty * Rsyntax.comp_ty
+  | TypeExpectedButFunction of Rsyntax.expr_ty
+  | FunctionExpected of Rsyntax.expr_ty
   | CannotInferArgument of Name.ident
 
-exception Error of type_error Location.located
+exception Error of error Location.located
 
 (** [error ~loc err] raises the given type-checking error. *)
 let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
 
-let print_error ~penv err ppf =
+let print_error err ppf =
   match err with
 
   | InvalidIndex k -> Format.fprintf ppf "invalid de Bruijn index %d, please report" k
 
-  | TypeExpected (ty_expected, ty_actual) ->
+  | ExprTypeMismatch (ty_expected, ty_actual) ->
      Format.fprintf ppf "this expression should have type %t but has type %t"
-                        (TT.print_ty ~penv ty_expected)
-                        (TT.print_ty ~penv ty_actual)
+                        (Rsyntax.print_expr_ty ty_expected)
+                        (Rsyntax.print_expr_ty ty_actual)
+
+  | CompTypeMismatch (ty_expected, ty_actual) ->
+     Format.fprintf ppf "this expression should have type %t but has type %t"
+                        (Rsyntax.print_comp_ty ty_expected)
+                        (Rsyntax.print_comp_ty ty_actual)
 
   | TypeExpectedButFunction ty ->
      Format.fprintf ppf "this expression is a function but should have type %t"
-                        (TT.print_ty ~penv ty)
+                        (Rsyntax.print_expr_ty ty)
 
   | FunctionExpected ty ->
      Format.fprintf ppf "this expression should be a function but has type %t"
-                        (TT.print_ty ~penv ty)
+                        (Rsyntax.print_expr_ty ty)
 
   | CannotInferArgument x ->
      Format.fprintf ppf "cannot infer the type of %t" (Name.print_ident x)
 
-(** [infer ctx e] infers the type [ty] of expression [e]. It returns
-    the processed expression [e] and its type [ty].  *)
-let rec infer ctx {Location.data=e'; loc} =
-  match e' with
+(** Extend the context with the type of deBruijn index 0 *)
+let extend x ty ctx = (x, ty) :: ctx
 
-  | Syntax.Var k ->
-     begin
-       match Context.lookup k ctx with
-       | None -> error ~loc (InvalidIndex k)
-       | Some (a, t) -> TT.Atom a, t
-     end
+(** Lookup the type of a deBruijn index *)
+let lookup ~loc k ctx =
+  try
+    snd (List.nth ctx k)
+  with
+    | Failure _ -> error ~loc (InvalidIndex k)
 
-  | Syntax.Type ->
-     TT.Type, TT.ty_Type
+(** Check that a type is valid. Retrn the processed type. *)
+let rec expr_ty = function
 
-  | Syntax.Prod ((x, t), u) ->
-     let t = check_ty ctx t in
-     let x' = TT.new_atom x in
-     let ctx = Context.extend_ident x' t ctx in
-     let u = check_ty ctx u in
-     let u = TT.abstract_ty x' u in
-     TT.Prod ((x, t), u),
-     TT.ty_Type
+  | Dsyntax.Int -> Rsyntax.Int
 
-  | Syntax.Lambda ((x, Some t), e) ->
-     let t = check_ty ctx t in
-     let x' = TT.new_atom x in
-     let ctx  = Context.extend_ident x' t ctx in
-     let e, u = infer ctx e in
-     let e = TT.abstract x' e in
-     let u = TT.abstract_ty x' u in
-     TT.Lambda ((x, t), e),
-     TT.Ty (TT.Prod ((x, t), u))
+  | Dsyntax.Arrow (t1, t2) ->
+     let t1 = expr_ty t1
+     and t2 = comp_ty t2 in
+     Rsyntax.Arrow (t1, t2)
 
-  | Syntax.Lambda ((x, None), _) ->
-     error ~loc (CannotInferArgument x)
+and comp_ty ty = Rsyntax.purely (expr_ty ty)
 
-  | Syntax.Apply (e1, e2) ->
-     let e1, t1 = infer ctx e1 in
-     begin
-       match Equal.as_prod ctx t1 with
-       | None -> error ~loc (FunctionExpected t1)
-       | Some ((x, t), u) ->
-          let e2 = check ctx e2 t in
-          TT.Apply (e1, e2),
-          TT.instantiate_ty e2 u
-     end
+(** [infer_expr ctx e] infers the expression type [ty] of an expression [e]. It
+   returns the processed expression [e] and its type [ty]. *)
+let rec infer_expr (ctx : context) {Location.data=e'; loc} =
+  let e', ty =
+    match e' with
+    | Dsyntax.Var k ->
+       let ty = lookup ~loc k ctx in
+       Rsyntax.Var k, ty
 
-  | Syntax.Ascribe (e, t) ->
-     let t = check_ty ctx t in
-     let e = check ctx e t in
-     e, t
+    | Dsyntax.Numeral n ->
+       Rsyntax.Numeral n, Rsyntax.Int
 
-(** [check ctx e ty] checks that [e] has type [ty] in context [ctx].
+    | Dsyntax.Lambda (x, Some t, c) ->
+       let t = expr_ty t in
+       let ctx  = extend x t ctx in
+       let c, c_ty = infer_comp ctx c in
+       Rsyntax.Lambda c,
+       Rsyntax.Arrow (t, c_ty)
+
+    | Dsyntax.Lambda (x, None, _) ->
+       error ~loc (CannotInferArgument x)
+  in
+  Location.locate ~loc e', ty
+
+(** [infer_comp ctx c] infers the type [ty] of a computation [c]. It returns
+    the processed computation [c] and its type [ty].  *)
+and infer_comp (ctx : context) {Location.data=c'; loc} =
+  let c', ty =
+    match c' with
+
+    | Dsyntax.Return e ->
+       let e, e_ty = infer_expr ctx e in
+       Rsyntax.Return e, Rsyntax.purely e_ty
+
+    | Dsyntax.Sequence (x, c1, c2) ->
+       let c1, c1_ty = infer_comp ctx c1 in
+       let ctx = extend x (Rsyntax.purify c1_ty) ctx in
+       let c2, c2_ty = infer_comp ctx c2 in
+       Rsyntax.Sequence (c1, c2), c2_ty
+
+    | Dsyntax.Apply (e1, e2) ->
+       let e1, t1 = infer_expr ctx e1 in
+       begin
+         match t1 with
+         | Rsyntax.Arrow (u1, u2) ->
+            let e2 = check_expr ctx e2 u1 in
+            Rsyntax.Apply (e1, e2),
+            u2
+
+         | Rsyntax.Int -> error ~loc (FunctionExpected t1)
+       end
+  in
+  Location.locate ~loc c', ty
+
+
+(** [check_expr ctx e ty] checks that expression [e] has type [ty] in context [ctx].
     It returns the processed expression [e]. *)
-and check ctx ({Location.data=e'; loc} as e) ty =
+and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
   match e' with
 
-  | Syntax.Lambda ((x, None), e) ->
+  | Dsyntax.Lambda (x, None, e) ->
      begin
-       match Equal.as_prod ctx ty with
-       | None -> error ~loc (TypeExpectedButFunction ty)
-       | Some ((x, t), u) ->
-          let x' = TT.new_atom x in
-          let ctx = Context.extend_ident x' t ctx
-          and u = TT.unabstract_ty x' u in
-          check ctx e u
+       match ty with
+       | Rsyntax.Arrow (t, u) ->
+          let c = check_comp (extend x t ctx) e u in
+          Location.locate ~loc (Rsyntax.Lambda c)
+       | Rsyntax.Int -> error ~loc (TypeExpectedButFunction ty)
      end
 
-  | Syntax.Lambda ((_, Some _), _)
-  | Syntax.Apply _
-  | Syntax.Prod _
-  | Syntax.Var _
-  | Syntax.Type
-  | Syntax.Ascribe _ ->
-     let e, ty' = infer ctx e in
-     if Equal.ty ctx ty ty'
+  | Dsyntax.Numeral k ->
+     begin match ty with
+     | Rsyntax.Int -> Location.locate ~loc (Rsyntax.Numeral k)
+     | Rsyntax.Arrow _ -> error ~loc (TypeExpectedButFunction ty)
+     end
+
+  | (Dsyntax.Lambda (_, Some _, _) | Dsyntax.Var _) ->
+     let e, ty' = infer_expr ctx e in
+     if Rsyntax.equal_expr_ty ty ty'
      then
        e
      else
-       error ~loc (TypeExpected (ty, ty'))
+       error ~loc (ExprTypeMismatch (ty, ty'))
 
+(** [check_comp ctx c ty] checks that computation [c] has type [ty] in context [ctx].
+    It returns the processed computation [c]. *)
+and check_comp (ctx : context) ({Location.data=c'; loc} as c) ty : Rsyntax.comp =
+  match c' with
 
-(** [check_ty ctx t] checks that [t] is a type in context [ctx]. It returns the processed
-   type [t]. *)
-and check_ty ctx t =
-  let t = check ctx t TT.ty_Type in
-  TT.Ty t
+  | Dsyntax.Return e ->
+    let (Rsyntax.CompTy (ty, _)) = ty in
+    let e = check_expr ctx e ty in
+    Location.locate ~loc (Rsyntax.Return e)
 
-let rec toplevel ~quiet ctx {Location.data=tc; loc} =
-  let ctx = toplevel' ~quiet ctx tc in
-  ctx
+  | Dsyntax.Sequence (x, c1, c2) ->
+     let c1, t1 = infer_comp ctx c1 in
+     check_comp (extend x (Rsyntax.purify t1) ctx) c2 ty
 
-and toplevel' ~quiet ctx = function
+  | Dsyntax.Apply _ ->
+     let c, ty' = infer_comp ctx c in
+     if Rsyntax.equal_comp_ty ty ty'
+     then
+       c
+     else
+       error ~loc (CompTypeMismatch (ty, ty'))
 
-  | Syntax.TopLoad lst ->
-     topfile ~quiet ctx lst
+and toplevel ~quiet ctx {Location.data=d'; loc} =
+  let ctx, d' =
+    match d' with
 
-  | Syntax.TopDefinition (x, e) ->
-     let e, ty = infer ctx e in
-     let x' = TT.new_atom x in
-     let ctx = Context.extend_ident x' ty ctx in
-     let ctx = Context.extend_def x' e ctx in
-     if not quiet then Format.printf "%t is defined.@." (Name.print_ident x) ;
-     ctx
+    | Dsyntax.TopLoad lst ->
+       let ctx, lst = topfile ~quiet ctx lst in
+       ctx, Rsyntax.TopLoad lst
 
-  | Syntax.TopCheck e ->
-     let e, ty = infer ctx e in
-     Format.printf "@[<hov>%t@]@\n     : @[<hov>%t@]@."
-       (TT.print_expr ~penv:(Context.penv ctx) e)
-       (TT.print_ty ~penv:(Context.penv ctx) ty) ;
-     ctx
+    | Dsyntax.TopLet (x, c) ->
+       let c, ty = infer_comp ctx c in
+       let ctx = extend x (Rsyntax.purify ty) ctx in
+       ctx, Rsyntax.TopLet (x, Rsyntax.purify ty, c)
 
-  | Syntax.TopEval e ->
-     let e, ty = infer ctx e in
-     let e = Equal.norm_expr ~strategy:Equal.CBV ctx e in
-     Format.printf "@[<hov>%t@]@\n     : @[<hov>%t@]@."
-       (TT.print_expr ~penv:(Context.penv ctx) e)
-       (TT.print_ty ~penv:(Context.penv ctx) ty) ;
-     ctx
-
-  | Syntax.TopAxiom (x, ty) ->
-     let ty = check_ty ctx ty in
-     let x' = TT.new_atom x in
-     let ctx = Context.extend_ident x' ty ctx in
-     if not quiet then Format.printf "%t is assumed.@." (Name.print_ident x) ;
-     ctx
-
-and topfile ~quiet ctx lst =
-  let rec fold ctx = function
-    | [] -> ctx
-    | top_cmd :: lst ->
-       let ctx = toplevel ~quiet ctx top_cmd in
-       fold ctx lst
+    | Dsyntax.TopComp c ->
+       let c, ty = infer_comp ctx c in
+       ctx, Rsyntax.TopComp (c, ty)
   in
-  fold ctx lst
+  ctx, Location.locate ~loc d'
+
+and topfile ~quiet (ctx : context) lst =
+  let rec fold ctx ds = function
+    | [] -> ctx, List.rev ds
+    | top_cmd :: lst ->
+       let ctx, d = toplevel ~quiet ctx top_cmd in
+       fold ctx (d :: ds) lst
+  in
+  fold ctx [] lst

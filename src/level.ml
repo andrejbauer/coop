@@ -19,10 +19,6 @@ let no_parens = least
 let prefix = 50
 let prefix_arg = 50
 
-let app = 100
-let app_left = app
-let app_right = app - 1
-
 let infix = function
   | Infix4 -> (200, 199, 200)
   | Infix3 -> (300, 300, 299)
@@ -30,14 +26,10 @@ let infix = function
   | Infix1 -> (500, 499, 500)
   | Infix0 -> (600, 600, 599)
 
-let eq = 700
-let eq_left = eq - 1
-let eq_right = eq - 1
+let comp_ty = 700
+let comp_ty_left = comp_ty - 1
+let comp_ty_right = no_parens
 
-let binder = 800
-let in_binder = binder
-let arr = binder
+let arr = 800
 let arr_left = arr - 1
 let arr_right = arr
-
-let ascription = 950

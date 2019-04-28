@@ -2,18 +2,11 @@
 
 (** Reserved words. *)
 let reserved = [
-  ("Axiom", Parser.AXIOM) ;
-  ("Check", Parser.CHECK) ;
-  ("Definition", Parser.DEFINITION) ;
-  ("Eval", Parser.EVAL) ;
-  ("fun", Parser.LAMBDA) ;
-  ("λ", Parser.LAMBDA) ;
-  ("Load", Parser.LOAD) ;
-  ("forall", Parser.PROD) ;
-  ("∀", Parser.PROD) ;
-  ("Π", Parser.PROD) ;
-  ("∏", Parser.PROD) ;
-  ("Type", Parser.TYPE)
+  ("int", Parser.INT) ;
+  ("fun", Parser.FUN) ;
+  ("let", Parser.LET) ;
+  ("in", Parser.IN) ;
+  ("load", Parser.LOAD)
 ]
 
 let name =
@@ -22,10 +15,8 @@ let name =
                       | 185 | 178 | 179 | 8304 .. 8351 (* sub-/super-scripts *)
                       | '0'..'9' | '\'')) | math]
 
-(*
 let digit = [%sedlex.regexp? '0'..'9']
 let numeral = [%sedlex.regexp? Opt '-', Plus digit]
-*)
 
 let symbolchar = [%sedlex.regexp?  ('!' | '$' | '%' | '&' | '*' | '+' | '-' | '.' | '/' | ':' | '<' | '=' | '>' | '?' | '@' | '^' | '|' | '~')]
 
@@ -77,12 +68,10 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | '_'                      -> f (); Parser.UNDERSCORE
   | '('                      -> f (); Parser.LPAREN
   | ')'                      -> f (); Parser.RPAREN
-  | '.'                      -> f (); Parser.PERIOD
-  | ','                      -> f (); Parser.COMMA
   | ':'                      -> f (); Parser.COLON
-  | "=>" | 8658 | 10233      -> f (); Parser.DARROW
+  | ";;"                     -> f (); Parser.SEMISEMI
+  | '='                      -> f (); Parser.EQUAL
   | "->" | 8594 | 10230      -> f (); Parser.ARROW
-  | ":="                     -> f (); Parser.COLONEQ
 
   (* We record the location of operators here because menhir cannot handle %infix and
      mark_location simultaneously, it seems. *)
@@ -112,9 +101,9 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
     begin try List.assoc n reserved
     with Not_found -> Parser.NAME (Name.Ident (n, Name.Word))
     end
-(*
-  | numeral                  -> f (); let k = safe_int_of_string lexbuf in NUMERAL k
-*)
+
+  | numeral                  -> f (); let k = safe_int_of_string lexbuf in Parser.NUMERAL k
+
   | any -> f ();
      let w = Ulexbuf.lexeme lexbuf in
      let loc = loc_of lexbuf in

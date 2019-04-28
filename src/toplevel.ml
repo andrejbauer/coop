@@ -3,23 +3,25 @@
 type state =
   {
     desugar : Desugar.context; (** The desugaring state *)
-    typecheck : Context.context; (** The typechecking state *)
+    typecheck : Typecheck.context; (** The typechecking state *)
+    runtime : Runtime.environment; (** The runtime environment *)
   }
 
 let initial = {
     desugar = Desugar.initial;
-    typecheck = Context.initial;
+    typecheck = Typecheck.initial;
+    runtime = Runtime.initial
 }
 
-let penv {typecheck;_} = Context.penv typecheck
-
-let exec_interactive {desugar; typecheck} =
+let exec_interactive {desugar; typecheck; runtime} =
   let e = Lexer.read_toplevel Parser.commandline () in
-  let desugar, e = Desugar.toplevel desugar e in
-  let typecheck = Typecheck.toplevel ~quiet:false typecheck e in
-  {desugar; typecheck}
+  let desugar, d = Desugar.toplevel desugar e in
+  let typecheck, d = Typecheck.toplevel ~quiet:false typecheck d in
+  let runtime = Eval.toplevel ~quiet:false runtime d in
+  {desugar; typecheck; runtime}
 
-let load_file ~quiet {desugar; typecheck} fn =
-  let desugar, es = Desugar.load desugar fn in
-  let typecheck = Typecheck.topfile ~quiet typecheck es in
-  {desugar; typecheck}
+let load_file ~quiet {desugar; typecheck; runtime} fn =
+  let desugar, ds = Desugar.load desugar fn in
+  let typecheck, ds = Typecheck.topfile ~quiet typecheck ds in
+  let runtime = Eval.topfile ~quiet runtime ds in
+  {desugar; typecheck; runtime}

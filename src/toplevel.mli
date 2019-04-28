@@ -9,6 +9,3 @@ val exec_interactive : state -> state
 
 (** Load the contents of a file and execute it. *)
 val load_file : quiet:bool -> state -> string -> state
-
-(** Names of bound variables, used for printing de Bruijn indices. *)
-val penv : state -> Name.ident list

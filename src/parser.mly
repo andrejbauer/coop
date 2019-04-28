@@ -8,29 +8,28 @@
 %token <Name.ident> NAME
 %token UNDERSCORE
 
-(* Parentheses & punctuations *)
-%token LPAREN RPAREN PERIOD
-%token COLONEQ
-%token COMMA COLON DARROW ARROW
+(* Primitive types *)
+%token INT
 
-(* Expressions *)
-%token TYPE
-%token PROD
-%token LAMBDA
+(* Parentheses & punctuations *)
+%token LPAREN RPAREN
+%token COLON ARROW SEMISEMI
+
+(* Expressions and computations *)
+%token <int> NUMERAL
+%token FUN
+%token LET EQUAL IN
 
 (* Toplevel commands *)
 
 %token <string> QUOTED_STRING
 %token LOAD
-%token DEFINITION
-%token CHECK
-%token EVAL
-%token AXIOM
 
 (* End of input token *)
 %token EOF
 
 (* Precedence and fixity of infix operators *)
+%right    ARROW
 %left     INFIXOP0
 %right    INFIXOP1
 %left     INFIXOP2
@@ -48,29 +47,38 @@ file:
   | f=filecontents EOF            { f }
 
 filecontents:
-  |                                   { [] }
-  | d=topcomp PERIOD ds=filecontents  { d :: ds }
+  |                                         { [] }
+  | d=topcomp                               { [d] }
+  | d=toplevel SEMISEMI ds=filecontents     { d :: ds }
+  | d=topcomp  SEMISEMI ds=filecontents     { d :: ds }
+  | d=toplevel ds=filecontents_top          { d :: ds }
+
+filecontents_top:
+  |                                         { [] }
+  | d=toplevel SEMISEMI ds=filecontents     { d :: ds }
+  | d=toplevel ds=filecontents_top          { d :: ds }
 
 commandline:
-  | topcomp PERIOD EOF       { $1 }
+  | t=toplevel EOF     { t }
+  | t=topcomp EOF      { t }
 
-(* Things that can be defined on toplevel. *)
+(* Toplevel computation *)
 topcomp: mark_location(plain_topcomp) { $1 }
 plain_topcomp:
+  | c=term             { Input.TopComp c }
+
+(* Things that can be done at the toplevel, except for a computation. *)
+toplevel: mark_location(plain_toplevel) { $1 }
+plain_toplevel:
   | LOAD fn=QUOTED_STRING                { Input.TopLoad fn }
-  | DEFINITION x=var_name COLONEQ e=term { Input.TopDefinition (x, e) }
-  | CHECK e=term                         { Input.TopCheck e }
-  | EVAL e=term                          { Input.TopEval e }
-  | AXIOM x=var_name COLON e=term        { Input.TopAxiom (x, e) }
+  | LET x=var_name EQUAL e=term          { Input.TopLet (x, e) }
 
 (* Main syntax tree *)
 term : mark_location(plain_term) { $1 }
 plain_term:
-  | e=plain_infix_term                          { e }
-  | PROD a=prod_abstraction COMMA e=term        { Input.Prod (a, e) }
-  | e1=infix_term ARROW e2=term                 { Input.Arrow (e1, e2) }
-  | LAMBDA a=lambda_abstraction DARROW e=term   { Input.Lambda (a, e) }
-  | e=infix_term COLON t=term                   { Input.Ascribe (e, t) }
+  | e=plain_infix_term                            { e }
+  | FUN a=lambda_abstraction ARROW e=term         { Input.Lambda (a, e) }
+  | LET x=var_name EQUAL c1=infix_term IN c2=term { Input.Let (x, c1, c2) }
 
 infix_term: mark_location(plain_infix_term) { $1 }
 plain_infix_term:
@@ -99,7 +107,7 @@ plain_prefix_term:
 (* simple_term : mark_location(plain_simple_term) { $1 } *)
 plain_simple_term:
   | LPAREN e=plain_term RPAREN         { e }
-  | TYPE                               { Input.Type }
+  | n=NUMERAL                          { Input.Numeral n }
   | x=var_name                         { Input.Var x }
 
 var_name:
@@ -119,16 +127,15 @@ var_name:
   | op=PREFIXOP { op }
 
 lambda_abstraction:
-  | xs=nonempty_list(var_name) COLON t=term  { [(xs, Some t)] }
   | xs=nonempty_list(var_name)               { [(xs, None)] }
   | lst=nonempty_list(typed_binder)          { List.map (fun (xs, t) -> (xs, Some t)) lst }
 
-prod_abstraction:
-  | xs=nonempty_list(var_name) COLON t=term  { [(xs, t)] }
-  | lst=nonempty_list(typed_binder)          { lst }
-
 typed_binder:
-  | LPAREN xs=nonempty_list(var_name) COLON t=term RPAREN { (xs, t) }
+  | LPAREN xs=nonempty_list(var_name) COLON t=ty RPAREN { (xs, t) }
+
+ty:
+  | INT                 { Input.Int }
+  | t1=ty ARROW t2=ty   { Input.Arrow (t1, t2) }
 
 mark_location(X):
   x=X

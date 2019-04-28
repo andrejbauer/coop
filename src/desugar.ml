@@ -8,7 +8,6 @@
 (** Desugaring errors *)
 type desugar_error =
   | UnknownIdentifier of Name.ident
-  | AlreadyDefined of Name.ident
 
 (** The exception signalling a desugaring error*)
 exception Error of desugar_error Location.located
@@ -20,7 +19,6 @@ let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
 let print_error err ppf =
   match err with
   | UnknownIdentifier x -> Format.fprintf ppf "unknown identifier %t" (Name.print_ident x)
-  | AlreadyDefined x -> Format.fprintf ppf "%t is already defined" (Name.print_ident x)
 
 (** A desugaring context is a list of known identifiers, which is used to compute de
    Bruijn indices. *)
@@ -32,6 +30,9 @@ let initial = []
 (** Add a new identifier to the context. *)
 let extend x ctx = x :: ctx
 
+(** The next de Bruijn index to be used for hoisting of computations from expressions. *)
+let debruijn binds = List.length binds
+
 (** Find the de Bruijn index of [x] in the context [ctx]. *)
 let index x ctx =
   let rec search k = function
@@ -41,105 +42,100 @@ let index x ctx =
   in
   search 0 ctx
 
+(** Desugar a type, which at this stage is the same as an expressions. *)
+let rec ty = function
+  | Input.Int -> Dsyntax.Int
+  | Input.Arrow (t1, t2) ->
+     let t1 = ty t1
+     and t2 = ty t2 in
+     Dsyntax.Arrow (t1, t2)
+
+let ty_opt = function
+  | None -> None
+  | Some t -> Some (ty t)
+
 (** Desugar an expression *)
-let rec expr ctx {Location.data=e; Location.loc=loc} =
-  match e with
+let rec expr ctx binds ({Location.data=e'; Location.loc=loc} as e) =
+  match e' with
 
     | Input.Var x ->
        begin match index x ctx with
        | None -> error ~loc (UnknownIdentifier x)
-       | Some k -> Location.locate ~loc (Syntax.Var k)
+       | Some k -> (binds, Location.locate ~loc (Dsyntax.Var k))
        end
 
-    | Input.Type -> Location.locate ~loc Syntax.Type
+    | Input.Numeral n ->
+       (binds, Location.locate ~loc (Dsyntax.Numeral n))
 
-    | Input.Prod (a, u) ->
-       let ctx, xts = prod_abstraction ctx a in
-       let u = ty ctx u in
-       List.fold_right
-         (fun (x, t) e -> Location.locate ~loc:t.Location.loc (Syntax.Prod ((x, t), e)))
-         xts u
-
-    | Input.Arrow (t1, t2) ->
-       let t1 = ty ctx t1
-       and t2 = ty ctx t2 in
-       let t2 = Syntax.shift_ty 0 1 t2 in
-       let x = Name.anonymous () in
-       Location.locate ~loc (Syntax.Prod ((x, t1), t2))
-
-    | Input.Lambda (a, e) ->
+    | Input.Lambda (a, c) ->
        let ctx, lst = lambda_abstraction ctx a in
-       let e = expr ctx e in
-       List.fold_right
-         (fun (x, topt) e -> Location.locate ~loc (Syntax.Lambda ((x, topt), e)))
-         lst e
+       let c = comp ctx c in
+       let rec fold = function
+         | [] -> assert false
+         | [(x,topt)] -> Location.locate ~loc (Dsyntax.Lambda (x, topt, c))
+         | (x,topt) :: lst ->
+            let e = fold lst in
+            let c = Location.locate ~loc (Dsyntax.Return e) in
+            Location.locate ~loc (Dsyntax.Lambda (x, topt, c))
+       in
+       (binds, fold lst)
+
+    | (Input.Apply _ | Input.Let _) ->
+       let c = comp ctx e in
+       let k = debruijn binds in
+       (c :: binds, Location.locate ~loc (Dsyntax.Var k))
+
+(** Desugar a computation *)
+and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Dsyntax.comp =
+  let let_binds binds c =
+    let rec fold = function
+    | [] -> c
+    | b :: binds ->
+       let let_cs = fold binds in
+       let x = Name.anonymous () in
+       Location.locate ~loc (Dsyntax.Sequence (x, c, let_cs))
+    in
+    fold (List.rev binds)
+  in
+  match c' with
+    | (Input.Var _ | Input.Numeral _ | Input.Lambda _) ->
+       let binds, e = expr ctx [] c in
+       let return_e = Location.locate ~loc (Dsyntax.Return e) in
+       let_binds binds return_e
 
     | Input.Apply (e1, e2) ->
-       let e1 = expr ctx e1
-       and e2 = expr ctx e2 in
-       Location.locate ~loc (Syntax.Apply (e1, e2))
+       let binds, e1 = expr ctx [] e1 in
+       let binds, e2 = expr ctx [] e2 in
+       let app = Location.locate ~loc (Dsyntax.Apply (e1, e2)) in
+       let_binds binds app
 
-    | Input.Ascribe (e, t) ->
-       let e = expr ctx e
-       and t = ty ctx t in
-       Location.locate ~loc (Syntax.Ascribe (e, t))
-
-
-(** Desugar a type, which at this stage is the same as an expressions. *)
-and ty ctx t = expr ctx t
-
-(** Desugar an optional type. *)
-and tyopt ctx = function
-  | None -> None
-  | Some t -> Some (ty ctx t)
-
-(** Desugar a product abstraction. *)
-and prod_abstraction ctx a : context * (Name.ident * Syntax.ty) list =
-  let rec fold ctx = function
-    | [] -> ctx, []
-    | (xs, t) :: lst ->
-       let ctx, xts = prod_abstraction1 ctx xs t in
-       let ctx, yts = fold ctx lst in
-       ctx, xts @ yts
-  in
-  fold ctx a
-
-(** Auxiliary function used to desugar product abstractions. *)
-and prod_abstraction1 ctx xs t : context * (Name.ident * Syntax.ty) list =
-  let rec fold ctx t lst = function
-    | [] -> ctx, List.rev lst
-    | x :: xs ->
-       let ctx = extend x ctx
-       and lst = (x, t) :: lst
-       and t = Syntax.shift_ty 0 1 t in
-       fold ctx t lst xs
-  in
-  let t = ty ctx t in
-  fold ctx t [] xs
+    | Input.Let (x, c1, c2) ->
+       let c1 = comp ctx c1 in
+       let c2 = comp (extend x ctx) c2 in
+       Location.locate ~loc (Dsyntax.Sequence (x, c1, c2))
 
 (** Desugar a lambda abstraction. *)
-and lambda_abstraction ctx a : context * (Name.ident * Syntax.ty option) list =
+and lambda_abstraction ctx a : context * (Name.ident * Dsyntax.ty option) list =
   let rec fold ctx = function
     | [] -> ctx, []
-    | (xs, t) :: lst ->
-       let ctx, xts = lambda_abstraction1 ctx xs t in
+    | (xs, topt) :: lst ->
+       let ctx, xts = lambda_abstraction1 ctx xs topt in
        let ctx, yts = fold ctx lst in
        ctx, xts @ yts
   in
   fold ctx a
 
 (** Auxiliary function used to desugar lambda abstractions. *)
-and lambda_abstraction1 ctx xs t : context * (Name.ident * Syntax.ty option) list =
-  let rec fold ctx t lst = function
+and lambda_abstraction1 ctx xs topt : context * (Name.ident * Dsyntax.ty option) list =
+  let topt = ty_opt topt in
+  let rec fold ctx lst = function
     | [] -> ctx, List.rev lst
     | x :: xs ->
        let ctx = extend x ctx
-       and lst = (x, t) :: lst
-       and t = Syntax.shift_tyopt 0 1 t in
-       fold ctx t lst xs
+       and lst = (x, topt) :: lst in
+       fold ctx lst xs
   in
-  let t = tyopt ctx t in
-  fold ctx t [] xs
+  fold ctx [] xs
 
 
 (** Desugar a toplevel. *)
@@ -150,29 +146,16 @@ let toplevel' ctx = function
 
     | Input.TopLoad fn ->
        let ctx, cmds = load ctx fn in
-       ctx, Syntax.TopLoad cmds
+       ctx, Dsyntax.TopLoad cmds
 
-    | Input.TopDefinition (x, e) ->
-       begin match index x ctx with
-       | Some _ -> error ~loc (AlreadyDefined x)
-       | None ->
-          let e = expr ctx e
-          and ctx = extend x ctx in
-          ctx, Syntax.TopDefinition (x, e)
-       end
+    | Input.TopLet(x, c) ->
+       let c = comp ctx c
+       and ctx = extend x ctx in
+       ctx, Dsyntax.TopLet (x, c)
 
-    | Input.TopCheck e ->
-       let e = expr ctx e in
-       ctx, Syntax.TopCheck e
-
-    | Input.TopEval e ->
-       let e = expr ctx e in
-       ctx, Syntax.TopEval e
-
-    | Input.TopAxiom (x, t) ->
-       let t = ty ctx t in
-       let ctx = extend x ctx in
-       ctx, Syntax.TopAxiom (x, t)
+    | Input.TopComp c ->
+       let c = comp ctx c in
+       ctx, Dsyntax.TopComp c
 
   in
   let ctx, c = toplevel' ctx c in

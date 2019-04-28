@@ -1,14 +1,20 @@
+(** The typing context *)
+type context
+
 (** Type errors *)
-type type_error
+type error
 
 (** Exception signalling a type error. *)
-exception Error of type_error Location.located
+exception Error of error Location.located
 
 (** Print error description. *)
-val print_error : penv:Name.ident list -> type_error -> Format.formatter -> unit
+val print_error : error -> Format.formatter -> unit
+
+(** The initial typing context *)
+val initial : context
 
 (** Type-check a top-level command. *)
-val toplevel : quiet:bool -> Context.context -> Syntax.toplevel -> Context.context
+val toplevel : quiet:bool -> context -> Dsyntax.toplevel -> context * Rsyntax.toplevel
 
 (** Type-check the contents of a file. *)
-val topfile : quiet:bool -> Context.context -> Syntax.toplevel list -> Context.context
+val topfile : quiet:bool -> context -> Dsyntax.toplevel list -> context * Rsyntax.toplevel list
