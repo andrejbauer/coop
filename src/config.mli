@@ -1,13 +1,13 @@
 (** Configuration parameters that control how Terminus works. *)
 
-(** How to load the prelude file. *)
-type prelude =
-  | PreludeNone (** Do not load the prelude file *)
-  | PreludeDefault (** Load the default prelude file *)
-  | PreludeFile of string (** Load a specific prelude file *)
+(** How to load the pervasives file. *)
+type pervasives =
+  | PervasivesNone (** Do not load the pervasives file *)
+  | PervasivesDefault (** Load the default pervasives file *)
+  | PervasivesFile of string (** Load a specific pervasives file *)
 
-(** The prelude file to load. *)
-val prelude_file : prelude ref
+(** The pervasives file to load. *)
+val pervasives_file : pervasives ref
 
 (** Should the interactive shell be started. *)
 val interactive_shell : bool ref

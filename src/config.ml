@@ -1,9 +1,9 @@
-type prelude =
-  | PreludeNone (** Do not load the prelude file *)
-  | PreludeDefault (** Load the default prelude file *)
-  | PreludeFile of string (** Load a specific prelude file *)
+type pervasives =
+  | PervasivesNone (** Do not load the pervasives file *)
+  | PervasivesDefault (** Load the default pervasives file *)
+  | PervasivesFile of string (** Load a specific pervasives file *)
 
-let prelude_file = ref PreludeDefault
+let pervasives_file = ref PervasivesDefault
 
 let interactive_shell = ref true
 

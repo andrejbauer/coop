@@ -26,13 +26,13 @@ let options = Arg.align [
      Arg.Unit (fun () -> Config.wrapper := []),
      " Do not use a command-line wrapper");
 
-    ("--no-prelude",
-     Arg.Unit (fun () -> Config.prelude_file := Config.PreludeNone),
-     " Do not load the prelude.tt file");
+    ("--no-pervasives",
+     Arg.Unit (fun () -> Config.pervasives_file := Config.PervasivesNone),
+     " Do not load the pervasives file");
 
-    ("--prelude",
-     Arg.String (fun str -> Config.prelude_file := Config.PreludeFile str),
-     "<file> Specify the prelude file to load initially");
+    ("--pervasives",
+     Arg.String (fun str -> Config.pervasives_file := Config.PervasivesFile str),
+     "<file> Specify the pervasives file to load initially");
 
     ("--ascii",
      Arg.Set Config.ascii,
@@ -106,15 +106,15 @@ let main =
     end ;
   (* Files were accumulated in the wrong order, so we reverse them *)
   files := List.rev !files ;
-  (* Should we load the prelude file? *)
+  (* Should we load the pervasives file? *)
   begin
-    match !Config.prelude_file with
-    | Config.PreludeNone -> ()
-    | Config.PreludeFile f -> add_file true f
-    | Config.PreludeDefault ->
-      (* look for prelude next to the executable and don't whine if it is not there *)
+    match !Config.pervasives_file with
+    | Config.PervasivesNone -> ()
+    | Config.PervasivesFile f -> add_file true f
+    | Config.PervasivesDefault ->
+      (* look for pervasives next to the executable and don't whine if it is not there *)
        let d = Filename.dirname Sys.argv.(0) in
-       let f = Filename.concat d "prelude.tt" in
+       let f = Filename.concat d "pervasives.trm" in
        if Sys.file_exists f then add_file true f
   end ;
 
