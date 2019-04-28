@@ -10,7 +10,6 @@ and closure = value -> result
 
 type environment = value list
 
-(** Runtime errors *)
 type error =
   | InvalidDeBruijn of int
   | UnhandledOperation of Name.ident
@@ -28,10 +27,9 @@ let print_error err ppf =
   | UnhandledOperation op ->
      Format.fprintf ppf "unhandled operation %t" (Name.print_ident op)
 
-(** Initial environment *)
 let initial = []
 
-let extend v (env : environment) = v :: env
+let extend v env = v :: env
 
 let lookup ~loc i env =
   try
