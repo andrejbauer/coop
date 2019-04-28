@@ -30,3 +30,4 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of Name.ident * comp
   | TopComp of comp
+  | DeclOperation of Name.ident * ty * ty

@@ -34,12 +34,16 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of Name.ident * expr_ty * comp
   | TopComp of comp * comp_ty
+  | DeclOperation of Name.ident * expr_ty * comp_ty
 
 (** Make a pure computation type *)
 val purely : expr_ty -> comp_ty
 
 (** The expression type associated with the given computation type *)
 val purify : comp_ty -> expr_ty
+
+(** Add the operation the dirt of a computation type *)
+val pollute : comp_ty -> Name.ident -> comp_ty
 
 (** Are expression types equal? *)
 val equal_expr_ty : expr_ty -> expr_ty -> bool

@@ -24,6 +24,7 @@
 
 %token <string> QUOTED_STRING
 %token LOAD
+%token OPERATION
 
 (* End of input token *)
 %token EOF
@@ -70,8 +71,9 @@ plain_topcomp:
 (* Things that can be done at the toplevel, except for a computation. *)
 toplevel: mark_location(plain_toplevel) { $1 }
 plain_toplevel:
-  | LOAD fn=QUOTED_STRING                { Input.TopLoad fn }
-  | LET x=var_name EQUAL e=term          { Input.TopLet (x, e) }
+  | LOAD fn=QUOTED_STRING                                { Input.TopLoad fn }
+  | LET x=var_name EQUAL e=term                          { Input.TopLet (x, e) }
+  | OPERATION op=var_name COLON t1=simple_ty ARROW t2=ty { Input.DeclOperation (op, t1, t2) }
 
 (* Main syntax tree *)
 term : mark_location(plain_term) { $1 }
@@ -135,8 +137,13 @@ typed_binder:
   | LPAREN xs=nonempty_list(var_name) COLON t=ty RPAREN { (xs, t) }
 
 ty:
-  | INT                 { Input.Int }
+  | t=simple_ty         { t }
   | t1=ty ARROW t2=ty   { Input.Arrow (t1, t2) }
+
+simple_ty:
+  | LPAREN t=ty RPAREN  { t }
+  | INT                 { Input.Int }
+
 
 mark_location(X):
   x=X

@@ -23,3 +23,4 @@ and toplevel' =
   | TopLoad of string
   | TopLet of Name.ident * term
   | TopComp of comp
+  | DeclOperation of Name.ident * ty * ty

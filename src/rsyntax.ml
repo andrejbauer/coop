@@ -34,12 +34,16 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of Name.ident * expr_ty * comp
   | TopComp of comp * comp_ty
+  | DeclOperation of Name.ident * expr_ty * comp_ty
 
 (** Convert an expression type to a computation type. *)
 let purely ty = CompTy (ty, ())
 
 (** Compute the expression-type part of a computation type *)
 let purify (CompTy (ty, ())) = ty
+
+(** Add an operation to the dirt *)
+let pollute ty op = ty
 
 let equal_dirt d1 d2 = (d1 = d2)
 
@@ -57,7 +61,7 @@ let rec print_expr_ty ?max_level ty ppf =
   | Int -> Format.fprintf ppf "int"
 
   | Arrow (t1, t2) ->
-     Print.print ?max_level ~at_level:Level.arr ppf "@[<hov>%t@ %s@ %t@]"
+     Print.print ?max_level ~at_level:Level.arr ppf "%t@ %s@ %t"
        (print_expr_ty ~max_level:Level.arr_left t1)
        (Print.char_arrow ())
        (print_comp_ty ~max_level:Level.arr_right t2)

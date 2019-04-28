@@ -58,20 +58,31 @@ let interactive_shell state =
       try
         Toplevel.exec_interactive state
       with
+
       | Ulexbuf.Error {Location.data=err; Location.loc} ->
          Print.error "Lexical error at %t:@ %t" (Location.print loc) (Ulexbuf.print_error err) ;
          state
+
       | Desugar.Error {Location.data=err; Location.loc} ->
          Print.error "Syntax error at %t:@ %t" (Location.print loc) (Desugar.print_error err) ;
          state
+
       | Typecheck.Error {Location.data=err; Location.loc} ->
          Print.error "Typechecking error at %t:@ %t"
            (Location.print loc)
            (Typecheck.print_error err) ;
          state
+
+      | Runtime.Error {Location.data=err; Location.loc} ->
+         Print.error "Runtime error at %t:@ %t"
+           (Location.print loc)
+           (Runtime.print_error err) ;
+         state
+
       | Sys.Break ->
          Print.error "Interrupted." ;
          state
+
     in loop state
   in
   try
@@ -137,14 +148,22 @@ let main =
            run_code topstate files
       end
     with
+
     | Ulexbuf.Error {Location.data=err; Location.loc} ->
-       Print.error "Lexical error at %t:@ %t" (Location.print loc) (Ulexbuf.print_error err)
+       Print.error "@[<hov>Lexical error at %t:@ %t@]@." (Location.print loc) (Ulexbuf.print_error err)
+
     | Desugar.Error {Location.data=err; Location.loc} ->
-       Print.error "Syntax error at %t:@ %t" (Location.print loc) (Desugar.print_error err)
+       Print.error "@[<hov>Syntax error at %t:@ %t@]@." (Location.print loc) (Desugar.print_error err)
+
     | Typecheck.Error {Location.data=err; Location.loc} ->
-       Print.error "Typechecking error at %t:@ %t"
+       Print.error "@[<hov>Typechecking error at %t:@ %t@]@."
          (Location.print loc)
          (Typecheck.print_error err)
+
+      | Runtime.Error {Location.data=err; Location.loc} ->
+         Print.error "@[<hov>Runtime error at %t:@ %t@]@."
+           (Location.print loc)
+           (Runtime.print_error err)
   in
 
   run_code Toplevel.initial !files

@@ -6,7 +6,8 @@ let reserved = [
   ("fun", Parser.FUN) ;
   ("let", Parser.LET) ;
   ("in", Parser.IN) ;
-  ("load", Parser.LOAD)
+  ("load", Parser.LOAD) ;
+  ("operation", Parser.OPERATION) ;
 ]
 
 let name =
@@ -176,24 +177,15 @@ let read_toplevel parse () =
     fold 0
   in
 
-  let ends_with_backslash_or_empty str =
-    let i = String.length str - 1 in
-    if i >= 0 && str.[i] = '\\'
-    then (true, String.sub str 0 i)
-    else (all_white str, str)
-  in
-
   let rec read_more prompt acc =
     print_string prompt ;
     let str = read_line () in
-    let more, str = ends_with_backslash_or_empty str in
-    let acc = acc ^ "\n" ^ str in
-    if more
-    then read_more "  " acc
-    else acc
+    if all_white str
+    then read_more prompt acc
+    else acc ^ "\n" ^ str
   in
 
-  let str = read_more "# " "" in
+  let str = read_more "terminus> " "" in
   let lex = Ulexbuf.from_string (str ^ "\n") in
   run token parse lex
 

@@ -26,25 +26,25 @@ let print_error err ppf =
   | InvalidIndex k -> Format.fprintf ppf "invalid de Bruijn index %d, please report" k
 
   | ExprTypeMismatch (ty_expected, ty_actual) ->
-     Format.fprintf ppf "this expression should have type %t but has type %t"
+     Format.fprintf ppf "this expression should have type@ %t but has type@ %t"
                         (Rsyntax.print_expr_ty ty_expected)
                         (Rsyntax.print_expr_ty ty_actual)
 
   | CompTypeMismatch (ty_expected, ty_actual) ->
-     Format.fprintf ppf "this expression should have type %t but has type %t"
+     Format.fprintf ppf "this expression should have type@ %t but has type@ %t"
                         (Rsyntax.print_comp_ty ty_expected)
                         (Rsyntax.print_comp_ty ty_actual)
 
   | TypeExpectedButFunction ty ->
-     Format.fprintf ppf "this expression is a function but should have type %t"
+     Format.fprintf ppf "this expression is a function but should have type@ %t"
                         (Rsyntax.print_expr_ty ty)
 
   | FunctionExpected ty ->
-     Format.fprintf ppf "this expression should be a function but has type %t"
+     Format.fprintf ppf "this expression should be a function but has type@ %t"
                         (Rsyntax.print_expr_ty ty)
 
   | CannotInferArgument x ->
-     Format.fprintf ppf "cannot infer the type of %t" (Name.print_ident x)
+     Format.fprintf ppf "cannot infer the type of@ %t" (Name.print_ident x)
 
 (** Extend the context with the type of deBruijn index 0 *)
 let extend x ty ctx = (x, ty) :: ctx
@@ -118,7 +118,7 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
           let e2 = check_expr ctx e2 u1 in
           locate (Rsyntax.Apply (e1, e2)), u2
 
-       | Rsyntax.Int -> error ~loc (FunctionExpected t1)
+       | Rsyntax.Int -> error ~loc:(e1.Location.loc) (FunctionExpected t1)
      end
 
   | Dsyntax.AscribeComp (c, t) ->
@@ -144,7 +144,7 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
   | Dsyntax.Numeral k ->
      begin match ty with
      | Rsyntax.Int -> locate (Rsyntax.Numeral k)
-     | Rsyntax.Arrow _ -> error ~loc (TypeExpectedButFunction ty)
+     | Rsyntax.Arrow _ -> error ~loc (FunctionExpected ty)
      end
 
   | (Dsyntax.Lambda (_, Some _, _) | Dsyntax.Var _ | Dsyntax.AscribeExpr _) ->
@@ -157,7 +157,7 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
 
 (** [check_comp ctx c ty] checks that computation [c] has type [ty] in context [ctx].
     It returns the processed computation [c]. *)
-and check_comp (ctx : context) ({Location.data=c'; loc} as c) ty : Rsyntax.comp =
+and check_comp ctx ({Location.data=c'; loc} as c) ty =
   let locate = Location.locate ~loc in
   match c' with
 
@@ -168,7 +168,8 @@ and check_comp (ctx : context) ({Location.data=c'; loc} as c) ty : Rsyntax.comp 
 
   | Dsyntax.Sequence (x, c1, c2) ->
      let c1, t1 = infer_comp ctx c1 in
-     check_comp (extend x (Rsyntax.purify t1) ctx) c2 ty
+     let c2 = check_comp (extend x (Rsyntax.purify t1) ctx) c2 ty in
+     locate (Rsyntax.Sequence (c1, c2))
 
   | (Dsyntax.Apply _ | Dsyntax.AscribeComp _) ->
      let c, ty' = infer_comp ctx c in
@@ -194,6 +195,13 @@ and toplevel ~quiet ctx {Location.data=d'; loc} =
     | Dsyntax.TopComp c ->
        let c, ty = infer_comp ctx c in
        ctx, Rsyntax.TopComp (c, ty)
+
+    | Dsyntax.DeclOperation (op, ty1, ty2) ->
+       let ty1 = expr_ty ty1
+       and ty2 = Rsyntax.pollute (Rsyntax.purely (expr_ty ty2)) op in
+       let ctx = extend op (Rsyntax.Arrow (ty1, ty2)) ctx in
+       ctx, Rsyntax.DeclOperation (op, ty1, ty2)
+
   in
   ctx, Location.locate ~loc d'
 

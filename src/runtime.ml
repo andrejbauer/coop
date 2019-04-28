@@ -13,6 +13,7 @@ type environment = value list
 type error =
   | InvalidDeBruijn of int
   | UnhandledOperation of Name.ident
+  | FunctionExpected
 
 exception Error of error Location.located
 
@@ -27,6 +28,9 @@ let print_error err ppf =
   | UnhandledOperation op ->
      Format.fprintf ppf "unhandled operation %t" (Name.print_ident op)
 
+  | FunctionExpected ->
+     Format.fprintf ppf "function expected, please report"
+
 let initial = []
 
 let extend v env = v :: env
@@ -36,6 +40,9 @@ let lookup ~loc i env =
     List.nth env i
   with
   | Failure _ -> error ~loc (InvalidDeBruijn i)
+
+let generic op =
+  Closure (fun u -> Operation (op, u, (fun u -> Return u)))
 
 let print_value ?max_level v ppf =
   match v with
@@ -50,3 +57,10 @@ let as_value ~loc = function
 
   | Operation (op, _, _) ->
      error ~loc (UnhandledOperation op)
+
+let as_closure ~loc = function
+
+  | Closure f -> f
+
+  | Numeral _ ->
+     error ~loc FunctionExpected

@@ -167,6 +167,12 @@ let toplevel' ctx = function
        let c = comp ctx c in
        ctx, Dsyntax.TopComp c
 
+    | Input.DeclOperation (op, t1, t2) ->
+       let t1 = ty t1
+       and t2 = ty t2
+       and ctx = extend op ctx in
+       ctx, Dsyntax.DeclOperation (op, t1, t2)
+
   in
   let ctx, c = toplevel' ctx c in
   ctx, Location.locate ~loc c
