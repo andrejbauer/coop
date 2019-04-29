@@ -8,6 +8,9 @@ type fixity =
 (** An identifier. *)
 type ident = Ident of string * fixity
 
+(** Are the given identifiers equal? *)
+val equal : ident -> ident -> bool
+
 (** Print an identifier. *)
 val print_ident : ?parentheses:bool -> ident -> Format.formatter -> unit
 

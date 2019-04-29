@@ -30,17 +30,8 @@ let initial = []
 (** Add a new identifier to the context. *)
 let extend x ctx = x :: ctx
 
-(** The next de Bruijn index to be used for hoisting of computations from expressions. *)
-let debruijn binds = List.length binds
-
-(** Find the de Bruijn index of [x] in the context [ctx]. *)
-let index x ctx =
-  let rec search k = function
-    | [] -> None
-    | y :: ys ->
-     if x = y then Some k else search (k+1) ys
-  in
-  search 0 ctx
+(** Is [x] a known identifier? *)
+let known x ctx = List.exists (Name.equal x) ctx
 
 (** Desugar a type, which at this stage is the same as an expressions. *)
 let rec ty = function
@@ -55,17 +46,17 @@ let ty_opt = function
   | Some t -> Some (ty t)
 
 (** Desugar an expression *)
-let rec expr ctx binds ({Location.data=e'; Location.loc=loc} as e) =
+let rec expr ctx ({Location.data=e'; Location.loc=loc} as e) =
   match e' with
 
     | Input.Var x ->
-       begin match index x ctx with
-       | None -> error ~loc (UnknownIdentifier x)
-       | Some k -> (binds, Location.locate ~loc (Dsyntax.Var k))
+       begin match known x ctx with
+       | false -> error ~loc (UnknownIdentifier x)
+       | true -> ([], Location.locate ~loc (Dsyntax.Var x))
        end
 
     | Input.Numeral n ->
-       (binds, Location.locate ~loc (Dsyntax.Numeral n))
+       ([], Location.locate ~loc (Dsyntax.Numeral n))
 
     | Input.Lambda (a, c) ->
        let ctx, lst = lambda_abstraction ctx a in
@@ -78,41 +69,40 @@ let rec expr ctx binds ({Location.data=e'; Location.loc=loc} as e) =
             let c = Location.locate ~loc (Dsyntax.Return e) in
             Location.locate ~loc (Dsyntax.Lambda (x, topt, c))
        in
-       (binds, fold lst)
+       ([], fold lst)
 
     | Input.Ascribe (e, t) ->
-       let binds, e = expr ctx binds e in
+       let w, e = expr ctx e in
        let t = ty t in
-       (binds, Location.locate ~loc (Dsyntax.AscribeExpr (e, t)))
+       (w, Location.locate ~loc (Dsyntax.AscribeExpr (e, t)))
 
     | (Input.Apply _ | Input.Let _) ->
        let c = comp ctx e in
-       let k = debruijn binds in
-       (c :: binds, Location.locate ~loc (Dsyntax.Var k))
+       let x = Name.anonymous () in
+       ([(x, c)], Location.locate ~loc (Dsyntax.Var x))
 
 (** Desugar a computation *)
 and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Dsyntax.comp =
-  let let_binds binds c =
+  let let_binds ws c =
     let rec fold = function
     | [] -> c
-    | b :: binds ->
-       let let_cs = fold binds in
-       let x = Name.anonymous () in
+    | (x,c) :: ws ->
+       let let_cs = fold ws in
        Location.locate ~loc (Dsyntax.Sequence (x, c, let_cs))
     in
-    fold (List.rev binds)
+    fold ws
   in
   match c' with
     | (Input.Var _ | Input.Numeral _ | Input.Lambda _) ->
-       let binds, e = expr ctx [] c in
+       let ws, e = expr ctx c in
        let return_e = Location.locate ~loc (Dsyntax.Return e) in
-       let_binds binds return_e
+       let_binds ws return_e
 
     | Input.Apply (e1, e2) ->
-       let binds, e1 = expr ctx [] e1 in
-       let binds, e2 = expr ctx [] e2 in
+       let ws1, e1 = expr ctx e1 in
+       let ws2, e2 = expr ctx e2 in
        let app = Location.locate ~loc (Dsyntax.Apply (e1, e2)) in
-       let_binds binds app
+       let_binds (ws1 @ ws2) app
 
     | Input.Let (x, c1, c2) ->
        let c1 = comp ctx c1 in

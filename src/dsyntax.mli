@@ -5,13 +5,10 @@ type ty =
   | Int
   | Arrow of ty * ty
 
-(** De Bruijn index *)
-type index = int
-
 (** Expressions *)
 type expr = expr' Location.located
 and expr' =
-  | Var of index
+  | Var of Name.ident
   | Numeral of int
   | Lambda of Name.ident * ty option * comp
   | AscribeExpr of expr * ty

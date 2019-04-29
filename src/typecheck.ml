@@ -8,7 +8,7 @@ let initial = []
 
 (** Type errors *)
 type error =
-  | InvalidIndex of int
+  | InvalidName of Name.ident
   | ExprTypeMismatch of Rsyntax.expr_ty * Rsyntax.expr_ty
   | CompTypeMismatch of Rsyntax.comp_ty * Rsyntax.comp_ty
   | TypeExpectedButFunction of Rsyntax.expr_ty
@@ -23,7 +23,7 @@ let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
 let print_error err ppf =
   match err with
 
-  | InvalidIndex k -> Format.fprintf ppf "invalid de Bruijn index %d, please report" k
+  | InvalidName x -> Format.fprintf ppf "invalid name %t, please report" (Name.print_ident x)
 
   | ExprTypeMismatch (ty_expected, ty_actual) ->
      Format.fprintf ppf "this expression should have type@ %t but has type@ %t"
@@ -49,12 +49,14 @@ let print_error err ppf =
 (** Extend the context with the type of deBruijn index 0 *)
 let extend x ty ctx = (x, ty) :: ctx
 
-(** Lookup the type of a deBruijn index *)
-let lookup ~loc k ctx =
-  try
-    snd (List.nth ctx k)
-  with
-    | Failure _ -> error ~loc (InvalidIndex k)
+(** Lookup the index and the type of a name *)
+let lookup ~loc x ctx =
+  let rec fold k = function
+    | [] -> error ~loc (InvalidName x)
+    | (y,t) :: ctx when Name.equal x y -> (k, t)
+    | _ :: ctx -> fold (k+1) ctx
+  in
+  fold 0 ctx
 
 (** Check that a type is valid. Retrn the processed type. *)
 let rec expr_ty = function
@@ -73,8 +75,8 @@ and comp_ty ty = Rsyntax.purely (expr_ty ty)
 let rec infer_expr (ctx : context) {Location.data=e'; loc} =
   let locate = Location.locate ~loc in
   match e' with
-  | Dsyntax.Var k ->
-     let ty = lookup ~loc k ctx in
+  | Dsyntax.Var x ->
+     let k, ty = lookup ~loc x ctx in
      locate (Rsyntax.Var k), ty
 
   | Dsyntax.Numeral n ->
@@ -141,13 +143,7 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
        | Rsyntax.Int -> error ~loc (TypeExpectedButFunction ty)
      end
 
-  | Dsyntax.Numeral k ->
-     begin match ty with
-     | Rsyntax.Int -> locate (Rsyntax.Numeral k)
-     | Rsyntax.Arrow _ -> error ~loc (FunctionExpected ty)
-     end
-
-  | (Dsyntax.Lambda (_, Some _, _) | Dsyntax.Var _ | Dsyntax.AscribeExpr _) ->
+  | (Dsyntax.Numeral _ | Dsyntax.Lambda (_, Some _, _) | Dsyntax.Var _ | Dsyntax.AscribeExpr _) ->
      let e, ty' = infer_expr ctx e in
      if Rsyntax.equal_expr_ty ty ty'
      then

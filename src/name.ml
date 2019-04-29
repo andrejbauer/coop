@@ -10,6 +10,8 @@ type fixity =
 (** An identifier. *)
 type ident = Ident of string * fixity
 
+let equal i1 i2 = (i1 = i2)
+
 (** Create a fresh anonymous name. *)
 let anonymous =
   let k = ref (-1) in
