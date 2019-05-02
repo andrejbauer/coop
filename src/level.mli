@@ -26,6 +26,13 @@ val prefix_arg : t
 (** The level of an infix operator, and its left and right arguments *)
 val infix : infix -> t * t * t
 
+(** The level of a product type and its arguments *)
+val product : t
+val product_arg : t
+
+val tuple : t
+val tuple_arg : t
+
 (** The level of an arrow and its arguments *)
 val arr : t
 val arr_left : t

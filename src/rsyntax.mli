@@ -6,10 +6,18 @@ type dirt = unit
 (** Expression type *)
 type expr_ty =
   | Int
+  | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
 
 (** Computation type *)
 and comp_ty = CompTy of expr_ty * dirt
+
+(** Patterns *)
+type pattern =
+  | PattAnonymous
+  | PattVar
+  | PattNumeral of int
+  | PattTuple of pattern list
 
 (** De Bruijn index *)
 type index = int
@@ -19,6 +27,7 @@ type expr = expr' Location.located
 and expr' =
   | Var of index
   | Numeral of int
+  | Tuple of expr list
   | Lambda of comp
 
 (** Computations *)
@@ -26,6 +35,7 @@ and comp = comp' Location.located
 and comp' =
   | Return of expr
   | Sequence of comp * comp
+  | Match of expr * (pattern * comp) list
   | Apply of expr * expr
 
 (** Top-level commands. *)

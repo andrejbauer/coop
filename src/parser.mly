@@ -13,12 +13,13 @@
 
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
-%token COLON ARROW SEMISEMI
+%token COLON ARROW SEMISEMI COMMA STAR
 
 (* Expressions and computations *)
 %token <int> NUMERAL
 %token FUN
 %token LET EQUAL IN
+%token MATCH WITH BAR END
 
 (* Toplevel commands *)
 
@@ -30,7 +31,6 @@
 %token EOF
 
 (* Precedence and fixity of infix operators *)
-%right    ARROW
 %left     INFIXOP0
 %right    INFIXOP1
 %left     INFIXOP2
@@ -81,6 +81,7 @@ plain_term:
   | e=plain_infix_term                            { e }
   | FUN a=lambda_abstraction ARROW e=term         { Input.Lambda (a, e) }
   | LET x=var_name EQUAL c1=infix_term IN c2=term { Input.Let (x, c1, c2) }
+  | MATCH e=infix_term WITH lst=match_clauses END { Input.Match (e, lst) }
   | e=infix_term COLON t=ty                       { Input.Ascribe (e, t) }
 
 infix_term: mark_location(plain_infix_term) { $1 }
@@ -109,15 +110,18 @@ plain_prefix_term:
 
 (* simple_term : mark_location(plain_simple_term) { $1 } *)
 plain_simple_term:
-  | LPAREN e=plain_term RPAREN         { e }
-  | n=NUMERAL                          { Input.Numeral n }
-  | x=var_name                         { Input.Var x }
+  | n=NUMERAL   { Input.Numeral n }
+  | x=var_name  { Input.Var x }
+  | LPAREN es=separated_nonempty_list(COMMA, term) RPAREN
+                { match es with
+                  | [] -> assert false
+                  | [e] -> e.Location.data
+                  | _::_ -> Input.Tuple es }
 
 var_name:
   | NAME                     { $1 }
   | LPAREN op=infix RPAREN   { op.Location.data }
   | LPAREN op=prefix RPAREN  { op.Location.data }
-  | UNDERSCORE               { Name.anonymous () }
 
 %inline infix:
   | op=INFIXOP0    { op }
@@ -129,6 +133,12 @@ var_name:
 %inline prefix:
   | op=PREFIXOP { op }
 
+match_clauses:
+  | BAR? lst=separated_list(BAR, match_clause)  { lst }
+
+match_clause:
+  | p=pattern ARROW e=term   { (p, e) }
+
 lambda_abstraction:
   | xs=nonempty_list(var_name)               { [(xs, None)] }
   | lst=nonempty_list(typed_binder)          { List.map (fun (xs, t) -> (xs, Some t)) lst }
@@ -136,9 +146,25 @@ lambda_abstraction:
 typed_binder:
   | LPAREN xs=nonempty_list(var_name) COLON t=ty RPAREN { (xs, t) }
 
+pattern : mark_location(plain_pattern) { $1 }
+plain_pattern:
+  | UNDERSCORE  { Input.PattAnonymous }
+  | x=var_name  { Input.PattVar x }
+  | k=NUMERAL   { Input.PattNumeral k }
+  | LPAREN lst=separated_nonempty_list(COMMA, pattern) RPAREN
+                { match lst with
+                  | [] -> assert false
+                  | [p] -> p.Location.data
+                  | _::_ -> Input.PattTuple lst }
+
 ty:
-  | t=simple_ty         { t }
-  | t1=ty ARROW t2=ty   { Input.Arrow (t1, t2) }
+  | t=prod_ty               { t }
+  | t1=prod_ty ARROW t2=ty  { Input.Arrow (t1, t2) }
+
+prod_ty:
+  | t=simple_ty   { t }
+  | t=simple_ty STAR ts=separated_nonempty_list(STAR, simple_ty)
+                  { Input.Product (t :: ts) }
 
 simple_ty:
   | LPAREN t=ty RPAREN  { t }

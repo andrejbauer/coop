@@ -2,12 +2,15 @@
 
 (** Reserved words. *)
 let reserved = [
-  ("int", Parser.INT) ;
+  ("end", Parser.END) ;
   ("fun", Parser.FUN) ;
+  ("int", Parser.INT) ;
   ("let", Parser.LET) ;
+  ("match", Parser.MATCH) ;
   ("in", Parser.IN) ;
   ("load", Parser.LOAD) ;
   ("operation", Parser.OPERATION) ;
+  ("with", Parser.WITH) ;
 ]
 
 let name =
@@ -66,9 +69,12 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
      String.iter (fun c -> if c = '\n' then incr n) s;
      Ulexbuf.new_line ~n:!n lexbuf;
      Parser.QUOTED_STRING (String.sub s 1 (l - 2))
+  | '|'                      -> f (); Parser.BAR
   | '_'                      -> f (); Parser.UNDERSCORE
   | '('                      -> f (); Parser.LPAREN
   | ')'                      -> f (); Parser.RPAREN
+  | '*'                      -> f (); Parser.STAR
+  | ','                      -> f (); Parser.COMMA
   | ':'                      -> f (); Parser.COLON
   | ";;"                     -> f (); Parser.SEMISEMI
   | '='                      -> f (); Parser.EQUAL

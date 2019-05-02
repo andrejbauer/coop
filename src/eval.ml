@@ -5,6 +5,10 @@ let rec expr env {Location.data=e'; loc} =
 
   | Rsyntax.Var i -> Runtime.lookup ~loc i env
 
+  | Rsyntax.Tuple lst ->
+     let lst = List.map (expr env) lst in
+     Runtime.Tuple lst
+
   | Rsyntax.Lambda c ->
      let f v =
        let env = Runtime.extend v env in
@@ -15,9 +19,15 @@ let rec expr env {Location.data=e'; loc} =
 
 and comp env {Location.data=c'; loc} =
   match c' with
+
   | Rsyntax.Return e ->
      let v = expr env e in
      Runtime.Return v
+
+  | Rsyntax.Match (e, lst) ->
+     let v = expr env e in
+     let env, c = Runtime.match_clauses ~loc env lst v in
+     comp env c
 
   | Rsyntax.Apply (e1, e2) ->
      let v1 = expr env e1 in
@@ -35,7 +45,6 @@ and comp env {Location.data=c'; loc} =
        | Runtime.Operation (op, u, k) ->
           Runtime.Operation (op, u, (fun v -> comp (Runtime.extend v env) c2))
      end
-
 
 let rec toplevel ~quiet env {Location.data=d'; loc} =
   match d' with

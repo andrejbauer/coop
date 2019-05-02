@@ -9,11 +9,16 @@ let initial = []
 (** Type errors *)
 type error =
   | InvalidName of Name.ident
+  | PattTypeMismatch of Rsyntax.expr_ty
   | ExprTypeMismatch of Rsyntax.expr_ty * Rsyntax.expr_ty
   | CompTypeMismatch of Rsyntax.comp_ty * Rsyntax.comp_ty
   | TypeExpectedButFunction of Rsyntax.expr_ty
+  | TypeExpectedButTuple of Rsyntax.expr_ty
+  | TupleTooShort of Rsyntax.expr_ty
+  | TupleTooLong of Rsyntax.expr_ty
   | FunctionExpected of Rsyntax.expr_ty
   | CannotInferArgument of Name.ident
+  | CannotInferMatch
 
 exception Error of error Location.located
 
@@ -24,6 +29,10 @@ let print_error err ppf =
   match err with
 
   | InvalidName x -> Format.fprintf ppf "invalid name %t, please report" (Name.print_ident x)
+
+  | PattTypeMismatch ty_expected ->
+     Format.fprintf ppf "this pattern should have type@ %t"
+                        (Rsyntax.print_expr_ty ty_expected)
 
   | ExprTypeMismatch (ty_expected, ty_actual) ->
      Format.fprintf ppf "this expression should have type@ %t but has type@ %t"
@@ -39,12 +48,28 @@ let print_error err ppf =
      Format.fprintf ppf "this expression is a function but should have type@ %t"
                         (Rsyntax.print_expr_ty ty)
 
+  | TypeExpectedButTuple ty ->
+     Format.fprintf ppf "this expression is a tuple but should have type@ %t"
+                        (Rsyntax.print_expr_ty ty)
+
+  | TupleTooShort ty ->
+     Format.fprintf ppf "this tuple has too few components, it should have type@ %t"
+                        (Rsyntax.print_expr_ty ty)
+
+  | TupleTooLong ty ->
+     Format.fprintf ppf "this tuple has too many components, it should have type@ %t"
+                        (Rsyntax.print_expr_ty ty)
+
   | FunctionExpected ty ->
      Format.fprintf ppf "this expression should be a function but has type@ %t"
                         (Rsyntax.print_expr_ty ty)
 
   | CannotInferArgument x ->
      Format.fprintf ppf "cannot infer the type of@ %t" (Name.print_ident x)
+
+  | CannotInferMatch ->
+     Format.fprintf ppf "cannot infer the type of this match statement"
+
 
 (** Extend the context with the type of deBruijn index 0 *)
 let extend x ty ctx = (x, ty) :: ctx
@@ -63,12 +88,52 @@ let rec expr_ty = function
 
   | Dsyntax.Int -> Rsyntax.Int
 
+  | Dsyntax.Product lst ->
+     let lst = List.map expr_ty lst in
+     Rsyntax.Product lst
+
   | Dsyntax.Arrow (t1, t2) ->
      let t1 = expr_ty t1
      and t2 = comp_ty t2 in
      Rsyntax.Arrow (t1, t2)
 
 and comp_ty ty = Rsyntax.purely (expr_ty ty)
+
+(** Typecheck a pattern, return processed pattern and the extended context *)
+let rec check_pattern ctx {Location.data=patt'; loc} ty =
+  match patt', ty with
+
+  | Dsyntax.PattAnonymous, _ ->
+     ctx, Rsyntax.PattAnonymous
+
+  | Dsyntax.PattVar x, _ ->
+     let ctx = extend x ty ctx in
+     ctx, Rsyntax.PattVar
+
+  | Dsyntax.PattNumeral n, Rsyntax.Int ->
+     ctx, Rsyntax.PattNumeral n
+
+  | Dsyntax.PattTuple ps, Rsyntax.Product ts ->
+     check_pattern_tuple ~loc ctx ps ts
+
+  | ((Dsyntax.PattTuple _, (Rsyntax.Int | Rsyntax.Arrow _)) |
+     (Dsyntax.PattNumeral _, (Rsyntax.Product _ | Rsyntax.Arrow _))) ->
+     error ~loc (PattTypeMismatch ty)
+
+and check_pattern_tuple ~loc ctx ps ts =
+  let rec fold ctx ps ts ps' =
+    match ps, ts with
+    | [], [] ->
+       let ps' = List.rev ps' in
+       ctx, Rsyntax.PattTuple ps'
+    | p :: ps, t :: ts ->
+       let ctx, p' = check_pattern ctx p t in
+       fold ctx ps ts (p' :: ps')
+    | ([], _::_ | _::_, []) ->
+       error ~loc (PattTypeMismatch (Rsyntax.Product ts))
+  in
+  fold ctx ps ts []
+
 
 (** [infer_expr ctx e] infers the expression type [ty] of an expression [e]. It
    returns the processed expression [e] and its type [ty]. *)
@@ -81,6 +146,10 @@ let rec infer_expr (ctx : context) {Location.data=e'; loc} =
 
   | Dsyntax.Numeral n ->
      locate (Rsyntax.Numeral n), Rsyntax.Int
+
+  | Dsyntax.Tuple lst ->
+     let lst = List.map (infer_expr ctx) lst in
+     locate (Rsyntax.Tuple (List.map fst lst)),  Rsyntax.Product (List.map snd lst)
 
   | Dsyntax.Lambda (x, Some t, c) ->
      let t = expr_ty t in
@@ -112,6 +181,11 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
      let c2, c2_ty = infer_comp ctx c2 in
      locate (Rsyntax.Sequence (c1, c2)), c2_ty
 
+  | Dsyntax.Match (e, lst) ->
+     let e, e_ty = infer_expr ctx e in
+     let lst, ty = infer_match_clauses ~loc ctx e_ty lst in
+     locate (Rsyntax.Match (e, lst)), ty
+
   | Dsyntax.Apply (e1, e2) ->
      let e1, t1 = infer_expr ctx e1 in
      begin
@@ -120,13 +194,23 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
           let e2 = check_expr ctx e2 u1 in
           locate (Rsyntax.Apply (e1, e2)), u2
 
-       | Rsyntax.Int -> error ~loc:(e1.Location.loc) (FunctionExpected t1)
+       | (Rsyntax.Int | Rsyntax.Product _) ->
+          error ~loc:(e1.Location.loc) (FunctionExpected t1)
      end
 
   | Dsyntax.AscribeComp (c, t) ->
      let t = comp_ty t in
      let c = check_comp ctx c t in
      c, t
+
+and infer_match_clauses ~loc ctx patt_ty lst =
+  match lst with
+  | [] -> error ~loc CannotInferMatch
+  | (p, c) :: lst ->
+     let ctx, p = check_pattern ctx p patt_ty in
+     let c, c_ty = infer_comp ctx c in
+     let lst = check_match_clauses ctx patt_ty c_ty lst in
+     ((p, c) :: lst), c_ty
 
 (** [check_expr ctx e ty] checks that expression [e] has type [ty] in context [ctx].
     It returns the processed expression [e]. *)
@@ -140,7 +224,29 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
        | Rsyntax.Arrow (t, u) ->
           let c = check_comp (extend x t ctx) e u in
           locate (Rsyntax.Lambda c)
-       | Rsyntax.Int -> error ~loc (TypeExpectedButFunction ty)
+       | (Rsyntax.Int | Rsyntax.Product _) ->
+          error ~loc (TypeExpectedButFunction ty)
+     end
+
+  | Dsyntax.Tuple es ->
+     begin
+       match ty with
+       | Rsyntax.Product ts ->
+          let rec fold es ts es' =
+            match es, ts with
+            | [], [] ->
+               let es' = List.rev es' in
+               locate (Rsyntax.Tuple es')
+            | e :: es, t :: ts ->
+               let e' = check_expr ctx e t in
+               fold es ts (e' :: es')
+            | _ :: _, [] -> error ~loc (TupleTooLong ty)
+            | [], _ :: _ -> error ~loc (TupleTooShort ty)
+          in
+          fold es ts []
+
+       | (Rsyntax.Int | Rsyntax.Arrow _) ->
+          error ~loc (TypeExpectedButTuple ty)
      end
 
   | (Dsyntax.Numeral _ | Dsyntax.Lambda (_, Some _, _) | Dsyntax.Var _ | Dsyntax.AscribeExpr _) ->
@@ -162,6 +268,11 @@ and check_comp ctx ({Location.data=c'; loc} as c) ty =
     let e = check_expr ctx e ty in
     locate (Rsyntax.Return e)
 
+  | Dsyntax.Match (e, lst) ->
+     let e, e_ty = infer_expr ctx e in
+     let lst = check_match_clauses ctx e_ty ty lst in
+     locate (Rsyntax.Match (e, lst))
+
   | Dsyntax.Sequence (x, c1, c2) ->
      let c1, t1 = infer_comp ctx c1 in
      let c2 = check_comp (extend x (Rsyntax.purify t1) ctx) c2 ty in
@@ -174,6 +285,14 @@ and check_comp ctx ({Location.data=c'; loc} as c) ty =
        c
      else
        error ~loc (CompTypeMismatch (ty, ty'))
+
+and check_match_clauses ctx patt_ty ty lst =
+  List.map (check_match_clause ctx patt_ty ty) lst
+
+and check_match_clause ctx patt_ty ty (p, c) =
+  let ctx, p = check_pattern ctx p patt_ty in
+  let c = check_comp ctx c ty in
+  (p, c)
 
 and toplevel ~quiet ctx {Location.data=d'; loc} =
   let ctx, d' =

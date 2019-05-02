@@ -33,3 +33,9 @@ let comp_ty_right = no_parens
 let arr = 800
 let arr_left = arr - 1
 let arr_right = arr
+
+let product = 750
+let product_arg = product - 1
+
+let tuple = no_parens
+let tuple_arg = no_parens

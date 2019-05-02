@@ -1,6 +1,7 @@
 (** Runtime value *)
 type value =
   | Numeral of int
+  | Tuple of value list
   | Closure of closure
 
 (** Runtime result *)
@@ -30,6 +31,12 @@ val extend : value -> environment -> environment
 
 (** Lookup a DeBruijn index in the runtime environment *)
 val lookup : loc:Location.t -> int -> environment -> value
+
+(** Match a value against a list of match clasues *)
+val match_clauses :
+  loc:Location.t ->
+  environment ->
+  (Rsyntax.pattern * 'a) list -> value -> environment * 'a
 
 (** Create a generic operation *)
 val generic : Name.ident -> value

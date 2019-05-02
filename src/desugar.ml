@@ -35,7 +35,13 @@ let known x ctx = List.exists (Name.equal x) ctx
 
 (** Desugar a type, which at this stage is the same as an expressions. *)
 let rec ty = function
+
   | Input.Int -> Dsyntax.Int
+
+  | Input.Product lst ->
+     let lst = List.map ty lst in
+     Dsyntax.Product lst
+
   | Input.Arrow (t1, t2) ->
      let t1 = ty t1
      and t2 = ty t2 in
@@ -45,74 +51,128 @@ let ty_opt = function
   | None -> None
   | Some t -> Some (ty t)
 
+(** Desugar a pattern *)
+let rec pattern ctx {Location.data=p'; loc} =
+  let locate = Location.locate ~loc in
+  match p' with
+
+  | Input.PattAnonymous ->
+     ctx, locate (Dsyntax.PattAnonymous)
+
+  | Input.PattVar x ->
+     let ctx = extend x ctx in
+     ctx, locate (Dsyntax.PattVar x)
+
+  | Input.PattNumeral n ->
+     ctx, locate (Dsyntax.PattNumeral n)
+
+  | Input.PattTuple lst ->
+     let rec fold ctx qs = function
+
+       | [] ->
+          let qs = List.rev qs in
+          ctx, locate (Dsyntax.PattTuple qs)
+
+       | p :: ps ->
+          let ctx, q = pattern ctx p in
+          fold ctx (q :: qs) ps
+     in
+     fold ctx [] lst
+
 (** Desugar an expression *)
 let rec expr ctx ({Location.data=e'; Location.loc=loc} as e) =
+  let locate x = Location.locate ~loc x in
   match e' with
 
     | Input.Var x ->
        begin match known x ctx with
        | false -> error ~loc (UnknownIdentifier x)
-       | true -> ([], Location.locate ~loc (Dsyntax.Var x))
+       | true -> ([], locate (Dsyntax.Var x))
        end
 
     | Input.Numeral n ->
-       ([], Location.locate ~loc (Dsyntax.Numeral n))
+       ([], locate (Dsyntax.Numeral n))
+
+    | Input.Tuple lst ->
+       let rec fold = function
+         | [] -> [], []
+         | t :: ts ->
+            let w, e = expr ctx t
+            and ws, es = fold ts in
+            (w @ ws, e :: es)
+       in
+       let ws, lst = fold lst in
+       (ws, locate (Dsyntax.Tuple lst))
 
     | Input.Lambda (a, c) ->
        let ctx, lst = lambda_abstraction ctx a in
        let c = comp ctx c in
        let rec fold = function
          | [] -> assert false
-         | [(x,topt)] -> Location.locate ~loc (Dsyntax.Lambda (x, topt, c))
+         | [(x,topt)] -> locate (Dsyntax.Lambda (x, topt, c))
          | (x,topt) :: lst ->
             let e = fold lst in
-            let c = Location.locate ~loc (Dsyntax.Return e) in
-            Location.locate ~loc (Dsyntax.Lambda (x, topt, c))
+            let c = locate (Dsyntax.Return e) in
+            locate (Dsyntax.Lambda (x, topt, c))
        in
        ([], fold lst)
 
     | Input.Ascribe (e, t) ->
        let w, e = expr ctx e in
        let t = ty t in
-       (w, Location.locate ~loc (Dsyntax.AscribeExpr (e, t)))
+       (w, locate (Dsyntax.AscribeExpr (e, t)))
 
-    | (Input.Apply _ | Input.Let _) ->
+    | (Input.Match _ | Input.Apply _ | Input.Let _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
-       ([(x, c)], Location.locate ~loc (Dsyntax.Var x))
+       ([(x, c)], locate (Dsyntax.Var x))
 
 (** Desugar a computation *)
 and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Dsyntax.comp =
+  let locate x = Location.locate ~loc x in
   let let_binds ws c =
     let rec fold = function
     | [] -> c
     | (x,c) :: ws ->
        let let_cs = fold ws in
-       Location.locate ~loc (Dsyntax.Sequence (x, c, let_cs))
+       locate (Dsyntax.Sequence (x, c, let_cs))
     in
     fold ws
   in
   match c' with
-    | (Input.Var _ | Input.Numeral _ | Input.Lambda _) ->
+    | (Input.Var _ | Input.Numeral _ | Input.Lambda _ | Input.Tuple _) ->
        let ws, e = expr ctx c in
-       let return_e = Location.locate ~loc (Dsyntax.Return e) in
+       let return_e = locate (Dsyntax.Return e) in
        let_binds ws return_e
+
+    | Input.Match (e, lst) ->
+       let w, e = expr ctx e in
+       let lst = match_clauses ctx lst in
+       let_binds w (locate (Dsyntax.Match (e, lst)))
 
     | Input.Apply (e1, e2) ->
        let ws1, e1 = expr ctx e1 in
        let ws2, e2 = expr ctx e2 in
-       let app = Location.locate ~loc (Dsyntax.Apply (e1, e2)) in
+       let app = locate (Dsyntax.Apply (e1, e2)) in
        let_binds (ws1 @ ws2) app
 
     | Input.Let (x, c1, c2) ->
        let c1 = comp ctx c1 in
        let c2 = comp (extend x ctx) c2 in
-       Location.locate ~loc (Dsyntax.Sequence (x, c1, c2))
+       locate (Dsyntax.Sequence (x, c1, c2))
 
     | Input.Ascribe (c, t) ->
        let c = comp ctx c in
        let t = ty t in
-       Location.locate ~loc (Dsyntax.AscribeComp (c, t))
+       locate (Dsyntax.AscribeComp (c, t))
+
+and match_clauses ctx lst =
+  List.map (match_clause ctx) lst
+
+and match_clause ctx (patt, c) =
+  let ctx, patt = pattern ctx patt in
+  let c = comp ctx c in
+  (patt, c)
 
 (** Desugar a lambda abstraction. *)
 and lambda_abstraction ctx a : context * (Name.ident * Dsyntax.ty option) list =
