@@ -74,6 +74,11 @@ let print_error err ppf =
 (** Extend the context with the type of deBruijn index 0 *)
 let extend x ty ctx = (x, ty) :: ctx
 
+let rec extends xts ctx =
+  match xts with
+  | [] -> ctx
+  | (x, t) :: xts -> extends xts (extend x t ctx)
+
 (** Lookup the index and the type of a name *)
 let lookup ~loc x ctx =
   let rec fold k = function
@@ -99,41 +104,55 @@ let rec expr_ty = function
 
 and comp_ty ty = Rsyntax.purely (expr_ty ty)
 
-(** Typecheck a pattern, return processed pattern and the extended context *)
-let rec check_pattern ctx {Location.data=patt'; loc} ty =
-  match patt', ty with
+(** Typecheck a pattern, return processed pattern and the list of identifiers
+   and types bound by the pattern *)
+let check_pattern patt ty =
+  let rec fold xts {Location.data=p'; loc} t =
+    match p', t with
 
-  | Dsyntax.PattAnonymous, _ ->
-     ctx, Rsyntax.PattAnonymous
+    | Dsyntax.PattAnonymous, _ ->
+       Rsyntax.PattAnonymous, xts
 
-  | Dsyntax.PattVar x, _ ->
-     let ctx = extend x ty ctx in
-     ctx, Rsyntax.PattVar
+    | Dsyntax.PattVar x, _ ->
+       Rsyntax.PattVar, (x, t) :: xts
 
-  | Dsyntax.PattNumeral n, Rsyntax.Int ->
-     ctx, Rsyntax.PattNumeral n
+    | Dsyntax.PattNumeral n, Rsyntax.Int ->
+       Rsyntax.PattNumeral n, xts
 
-  | Dsyntax.PattTuple ps, Rsyntax.Product ts ->
-     check_pattern_tuple ~loc ctx ps ts
+    | Dsyntax.PattTuple ps, Rsyntax.Product ts ->
+       fold_tuple ~loc xts [] ps ts
 
-  | ((Dsyntax.PattTuple _, (Rsyntax.Int | Rsyntax.Arrow _)) |
-     (Dsyntax.PattNumeral _, (Rsyntax.Product _ | Rsyntax.Arrow _))) ->
-     error ~loc (PattTypeMismatch ty)
+    | ((Dsyntax.PattTuple _, (Rsyntax.Int | Rsyntax.Arrow _)) |
+         (Dsyntax.PattNumeral _, (Rsyntax.Product _ | Rsyntax.Arrow _))) ->
+       error ~loc (PattTypeMismatch ty)
 
-and check_pattern_tuple ~loc ctx ps ts =
-  let rec fold ctx ps ts ps' =
+  and fold_tuple ~loc xts ps' ps ts =
     match ps, ts with
     | [], [] ->
        let ps' = List.rev ps' in
-       ctx, Rsyntax.PattTuple ps'
+       Rsyntax.PattTuple ps', xts
     | p :: ps, t :: ts ->
-       let ctx, p' = check_pattern ctx p t in
-       fold ctx ps ts (p' :: ps')
+       let p', xts = fold xts p t in
+       fold_tuple ~loc xts (p' :: ps') ps ts
     | ([], _::_ | _::_, []) ->
        error ~loc (PattTypeMismatch (Rsyntax.Product ts))
   in
-  fold ctx ps ts []
 
+  let p, xts = fold [] patt ty in
+  p, List.rev xts
+
+(** Extend the context by typechecking the pattern against the type *)
+let extend_pattern ctx p t =
+  let p, xts = check_pattern p t in
+  let ctx = extends xts ctx in
+  ctx, p
+
+(** Extend the context by typechecking the pattern against the type,
+    also return the list of bound names with their types. *)
+let top_extend_pattern ctx p t =
+  let p, xts = check_pattern p t in
+  let ctx = extends xts ctx in
+  ctx, p, xts
 
 (** [infer_expr ctx e] infers the expression type [ty] of an expression [e]. It
    returns the processed expression [e] and its type [ty]. *)
@@ -175,11 +194,11 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
      let e, e_ty = infer_expr ctx e in
      locate (Rsyntax.Return e), Rsyntax.purely e_ty
 
-  | Dsyntax.Sequence (x, c1, c2) ->
+  | Dsyntax.Let (p, c1, c2) ->
      let c1, c1_ty = infer_comp ctx c1 in
-     let ctx = extend x (Rsyntax.purify c1_ty) ctx in
+     let ctx, p = extend_pattern ctx p (Rsyntax.purify c1_ty) in
      let c2, c2_ty = infer_comp ctx c2 in
-     locate (Rsyntax.Sequence (c1, c2)), c2_ty
+     locate (Rsyntax.Let (p, c1, c2)), c2_ty
 
   | Dsyntax.Match (e, lst) ->
      let e, e_ty = infer_expr ctx e in
@@ -207,7 +226,7 @@ and infer_match_clauses ~loc ctx patt_ty lst =
   match lst with
   | [] -> error ~loc CannotInferMatch
   | (p, c) :: lst ->
-     let ctx, p = check_pattern ctx p patt_ty in
+     let ctx, p = extend_pattern ctx p patt_ty in
      let c, c_ty = infer_comp ctx c in
      let lst = check_match_clauses ctx patt_ty c_ty lst in
      ((p, c) :: lst), c_ty
@@ -273,10 +292,11 @@ and check_comp ctx ({Location.data=c'; loc} as c) ty =
      let lst = check_match_clauses ctx e_ty ty lst in
      locate (Rsyntax.Match (e, lst))
 
-  | Dsyntax.Sequence (x, c1, c2) ->
+  | Dsyntax.Let (p, c1, c2) ->
      let c1, t1 = infer_comp ctx c1 in
-     let c2 = check_comp (extend x (Rsyntax.purify t1) ctx) c2 ty in
-     locate (Rsyntax.Sequence (c1, c2))
+     let ctx, p = extend_pattern ctx p (Rsyntax.purify t1) in
+     let c2 = check_comp ctx c2 ty in
+     locate (Rsyntax.Let (p, c1, c2))
 
   | (Dsyntax.Apply _ | Dsyntax.AscribeComp _) ->
      let c, ty' = infer_comp ctx c in
@@ -290,7 +310,7 @@ and check_match_clauses ctx patt_ty ty lst =
   List.map (check_match_clause ctx patt_ty ty) lst
 
 and check_match_clause ctx patt_ty ty (p, c) =
-  let ctx, p = check_pattern ctx p patt_ty in
+  let ctx, p = extend_pattern ctx p patt_ty in
   let c = check_comp ctx c ty in
   (p, c)
 
@@ -302,10 +322,10 @@ and toplevel ~quiet ctx {Location.data=d'; loc} =
        let ctx, lst = topfile ~quiet ctx lst in
        ctx, Rsyntax.TopLoad lst
 
-    | Dsyntax.TopLet (x, c) ->
+    | Dsyntax.TopLet (p, c) ->
        let c, ty = infer_comp ctx c in
-       let ctx = extend x (Rsyntax.purify ty) ctx in
-       ctx, Rsyntax.TopLet (x, Rsyntax.purify ty, c)
+       let ctx, p, xts = top_extend_pattern ctx p (Rsyntax.purify ty) in
+       ctx, Rsyntax.TopLet (p, xts, c)
 
     | Dsyntax.TopComp c ->
        let c, ty = infer_comp ctx c in

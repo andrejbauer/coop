@@ -34,9 +34,14 @@ val lookup : loc:Location.t -> int -> environment -> value
 
 (** Match a value against a list of match clasues *)
 val match_clauses :
-  loc:Location.t ->
-  environment ->
+  loc:Location.t -> environment ->
   (Rsyntax.pattern * 'a) list -> value -> environment * 'a
+
+(** Extend the runtime environment by matching a pattern against a value *)
+val extend_pattern : loc:Location.t -> Rsyntax.pattern -> value -> environment -> environment
+
+(** Extend the runtime environment by matching a pattern against a value, return the list of bound values *)
+val top_extend_pattern : loc:Location.t -> Rsyntax.pattern -> value -> environment -> environment * value list
 
 (** Create a generic operation *)
 val generic : Name.ident -> value

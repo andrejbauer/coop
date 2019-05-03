@@ -34,7 +34,7 @@ and expr' =
 and comp = comp' Location.located
 and comp' =
   | Return of expr
-  | Sequence of comp * comp
+  | Let of pattern * comp * comp
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr
 
@@ -42,7 +42,7 @@ and comp' =
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
-  | TopLet of Name.ident * expr_ty * comp
+  | TopLet of pattern * (Name.ident * expr_ty) list * comp
   | TopComp of comp * comp_ty
   | DeclOperation of Name.ident * expr_ty * comp_ty
 
@@ -71,7 +71,8 @@ let rec print_expr_ty ?max_level ty ppf =
   | Int -> Format.fprintf ppf "int"
 
   | Product lst ->
-     Print.sequence (print_expr_ty ~max_level:Level.product_arg) " *" lst ppf
+     Print.print ?max_level ~at_level:Level.product ppf "%t"
+       (Print.sequence (print_expr_ty ~max_level:Level.product_arg) " *" lst)
 
   | Arrow (t1, t2) ->
      Print.print ?max_level ~at_level:Level.arr ppf "%t@ %s@ %t"

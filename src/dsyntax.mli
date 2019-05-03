@@ -27,7 +27,7 @@ and expr' =
 and comp = comp' Location.located
 and comp' =
   | Return of expr
-  | Sequence of Name.ident * comp * comp
+  | Let of pattern * comp * comp
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr
   | AscribeComp of comp * ty
@@ -36,6 +36,6 @@ and comp' =
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
-  | TopLet of Name.ident * comp
+  | TopLet of pattern * comp
   | TopComp of comp
   | DeclOperation of Name.ident * ty * ty

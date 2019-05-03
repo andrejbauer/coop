@@ -40,26 +40,33 @@ let initial = []
 
 let extend v env = v :: env
 
+let rec extends vs env =
+  match vs with
+  | [] -> env
+  | v :: vs ->
+     let env = extend v env in
+     extends vs env
+
 let lookup ~loc i env =
   try
     List.nth env i
   with
   | Failure _ -> error ~loc (InvalidDeBruijn i)
 
-let rec match_pattern env p v =
-  match p, v with
+let match_pattern p v =
+  let rec fold us p v =
+    match p, v with
 
-  | Rsyntax.PattAnonymous, _ -> Some env
+    | Rsyntax.PattAnonymous, _ -> Some us
 
-  | Rsyntax.PattVar, _ ->
-     let env = extend v env in
-     Some env
+    | Rsyntax.PattVar, _ ->
+       Some (v :: us)
 
   | Rsyntax.PattNumeral m, Numeral n ->
-     if m = n then Some env else None
+     if m = n then Some us else None
 
   | Rsyntax.PattTuple ps, Tuple vs ->
-     match_pattern_tuple env ps vs
+     fold_tuple us ps vs
 
   | _, Closure _ -> None
 
@@ -67,28 +74,41 @@ let rec match_pattern env p v =
      Rsyntax.PattNumeral _, Tuple _) ->
      None
 
-and match_pattern_tuple env ps vs =
-  let rec fold env ps vs =
+  and fold_tuple us ps vs =
     match ps, vs with
-    | [], [] -> Some env
+    | [], [] -> Some us
     | p :: ps, v :: vs ->
        begin
-         match match_pattern env p v with
+         match fold us p v with
          | None -> None
-         | Some env -> fold env ps vs
+         | Some us -> fold_tuple us ps vs
        end
     | [], _::_ | _::_, [] -> None
   in
-  fold env ps vs
+
+  match fold [] p v with
+  | None -> None
+  | Some us -> Some (List.rev us)
+
+
+let extend_pattern ~loc p v env =
+  match match_pattern p v with
+  | None -> error ~loc PatternMismatch
+  | Some us -> extends us env
+
+let top_extend_pattern ~loc p v env =
+  match match_pattern p v with
+  | None -> error ~loc PatternMismatch
+  | Some us -> extends us env, us
 
 let match_clauses ~loc env ps v =
   let rec fold = function
     | [] -> error ~loc PatternMismatch
     | (p, c) :: lst ->
        begin
-         match match_pattern env p v with
+         match match_pattern p v with
          | None -> fold lst
-         | Some env -> (env, c)
+         | Some us -> (extends us env, c)
        end
   in
   fold ps

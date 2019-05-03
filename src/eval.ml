@@ -35,12 +35,13 @@ and comp env {Location.data=c'; loc} =
      let v2 = expr env e2 in
      f v2
 
-  | Rsyntax.Sequence (c1, c2) ->
+  | Rsyntax.Let (p, c1, c2) ->
      begin
        match comp env c1 with
 
        | Runtime.Return v ->
-          comp (Runtime.extend v env) c2
+          let env = Runtime.extend_pattern ~loc p v env in
+          comp env c2
 
        | Runtime.Operation (op, u, k) ->
           Runtime.Operation (op, u, (fun v -> comp (Runtime.extend v env) c2))
@@ -52,15 +53,19 @@ let rec toplevel ~quiet env {Location.data=d'; loc} =
   | Rsyntax.TopLoad cs ->
      topfile ~quiet env cs
 
-  | Rsyntax.TopLet (x, ty, c) ->
+  | Rsyntax.TopLet (p, xts, c) ->
      let r = comp env c in
      let v = Runtime.as_value ~loc r in
+     let env, vs = Runtime.top_extend_pattern ~loc p v env in
      if not quiet then
-       Format.printf "@[<hov>val %t@ :@ %t@ =@ %t@]@."
-         (Name.print_ident x)
-         (Rsyntax.print_expr_ty ty)
-         (Runtime.print_value v) ;
-     Runtime.extend v env
+       List.iter2
+         (fun (x, ty) v ->
+           Format.printf "@[<hov>val %t@ :@ %t@ =@ %t@]@."
+             (Name.print_ident x)
+             (Rsyntax.print_expr_ty ty)
+             (Runtime.print_value v))
+         xts vs ;
+     env
 
   | Rsyntax.TopComp (c, ty) ->
      let r = comp env c in

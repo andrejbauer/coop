@@ -72,7 +72,7 @@ plain_topcomp:
 toplevel: mark_location(plain_toplevel) { $1 }
 plain_toplevel:
   | LOAD fn=QUOTED_STRING                                { Input.TopLoad fn }
-  | LET x=var_name EQUAL e=term                          { Input.TopLet (x, e) }
+  | LET p=pattern EQUAL e=term                           { Input.TopLet (p, e) }
   | OPERATION op=var_name COLON t1=simple_ty ARROW t2=ty { Input.DeclOperation (op, t1, t2) }
 
 (* Main syntax tree *)
@@ -80,7 +80,7 @@ term : mark_location(plain_term) { $1 }
 plain_term:
   | e=plain_infix_term                            { e }
   | FUN a=lambda_abstraction ARROW e=term         { Input.Lambda (a, e) }
-  | LET x=var_name EQUAL c1=infix_term IN c2=term { Input.Let (x, c1, c2) }
+  | LET p=pattern EQUAL c1=infix_term IN c2=term  { Input.Let (p, c1, c2) }
   | MATCH e=infix_term WITH lst=match_clauses END { Input.Match (e, lst) }
   | e=infix_term COLON t=ty                       { Input.Ascribe (e, t) }
 

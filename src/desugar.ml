@@ -135,7 +135,7 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Dsyntax.comp =
     | [] -> c
     | (x,c) :: ws ->
        let let_cs = fold ws in
-       locate (Dsyntax.Sequence (x, c, let_cs))
+       locate (Dsyntax.Let (locate (Dsyntax.PattVar x), c, let_cs))
     in
     fold ws
   in
@@ -156,10 +156,11 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Dsyntax.comp =
        let app = locate (Dsyntax.Apply (e1, e2)) in
        let_binds (ws1 @ ws2) app
 
-    | Input.Let (x, c1, c2) ->
+    | Input.Let (p, c1, c2) ->
        let c1 = comp ctx c1 in
-       let c2 = comp (extend x ctx) c2 in
-       locate (Dsyntax.Sequence (x, c1, c2))
+       let ctx', p = pattern ctx p in
+       let c2 = comp ctx' c2 in
+       locate (Dsyntax.Let (p, c1, c2))
 
     | Input.Ascribe (c, t) ->
        let c = comp ctx c in
@@ -208,10 +209,10 @@ let toplevel' ctx = function
        let ctx, cmds = load ctx fn in
        ctx, Dsyntax.TopLoad cmds
 
-    | Input.TopLet(x, c) ->
+    | Input.TopLet(p, c) ->
        let c = comp ctx c
-       and ctx = extend x ctx in
-       ctx, Dsyntax.TopLet (x, c)
+       and ctx, p = pattern ctx p in
+       ctx, Dsyntax.TopLet (p, c)
 
     | Input.TopComp c ->
        let c = comp ctx c in

@@ -23,7 +23,7 @@ and term' =
   | Match of term * (pattern * comp) list
   | Lambda of (Name.ident list * ty option) list * comp
   | Apply of term * term
-  | Let of Name.ident * comp * comp
+  | Let of pattern * comp * comp
   | Ascribe of term * ty
 
 and comp = term
@@ -32,6 +32,6 @@ and comp = term
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of string
-  | TopLet of Name.ident * term
+  | TopLet of pattern * term
   | TopComp of comp
   | DeclOperation of Name.ident * ty * ty
