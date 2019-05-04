@@ -18,4 +18,4 @@ val print_error : desugar_error -> Format.formatter -> unit
 val load : context -> string -> context * Dsyntax.toplevel list
 
 (** Desugar a toplevel. *)
-val toplevel : context -> Input.toplevel -> context * Dsyntax.toplevel
+val toplevel : context -> Sugared.toplevel -> context * Dsyntax.toplevel

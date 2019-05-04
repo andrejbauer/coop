@@ -36,13 +36,13 @@ let known x ctx = List.exists (Name.equal x) ctx
 (** Desugar a type, which at this stage is the same as an expressions. *)
 let rec ty = function
 
-  | Input.Int -> Dsyntax.Int
+  | Sugared.Int -> Dsyntax.Int
 
-  | Input.Product lst ->
+  | Sugared.Product lst ->
      let lst = List.map ty lst in
      Dsyntax.Product lst
 
-  | Input.Arrow (t1, t2) ->
+  | Sugared.Arrow (t1, t2) ->
      let t1 = ty t1
      and t2 = ty t2 in
      Dsyntax.Arrow (t1, t2)
@@ -56,17 +56,17 @@ let rec pattern ctx {Location.data=p'; loc} =
   let locate = Location.locate ~loc in
   match p' with
 
-  | Input.PattAnonymous ->
+  | Sugared.PattAnonymous ->
      ctx, locate (Dsyntax.PattAnonymous)
 
-  | Input.PattVar x ->
+  | Sugared.PattVar x ->
      let ctx = extend x ctx in
      ctx, locate (Dsyntax.PattVar x)
 
-  | Input.PattNumeral n ->
+  | Sugared.PattNumeral n ->
      ctx, locate (Dsyntax.PattNumeral n)
 
-  | Input.PattTuple lst ->
+  | Sugared.PattTuple lst ->
      let rec fold ctx qs = function
 
        | [] ->
@@ -84,16 +84,16 @@ let rec expr ctx ({Location.data=e'; Location.loc=loc} as e) =
   let locate x = Location.locate ~loc x in
   match e' with
 
-    | Input.Var x ->
+    | Sugared.Var x ->
        begin match known x ctx with
        | false -> error ~loc (UnknownIdentifier x)
        | true -> ([], locate (Dsyntax.Var x))
        end
 
-    | Input.Numeral n ->
+    | Sugared.Numeral n ->
        ([], locate (Dsyntax.Numeral n))
 
-    | Input.Tuple lst ->
+    | Sugared.Tuple lst ->
        let rec fold = function
          | [] -> [], []
          | t :: ts ->
@@ -104,7 +104,7 @@ let rec expr ctx ({Location.data=e'; Location.loc=loc} as e) =
        let ws, lst = fold lst in
        (ws, locate (Dsyntax.Tuple lst))
 
-    | Input.Lambda (a, c) ->
+    | Sugared.Lambda (a, c) ->
        let ctx, lst = lambda_abstraction ctx a in
        let c = comp ctx c in
        let rec fold = function
@@ -117,12 +117,12 @@ let rec expr ctx ({Location.data=e'; Location.loc=loc} as e) =
        in
        ([], fold lst)
 
-    | Input.Ascribe (e, t) ->
+    | Sugared.Ascribe (e, t) ->
        let w, e = expr ctx e in
        let t = ty t in
        (w, locate (Dsyntax.AscribeExpr (e, t)))
 
-    | (Input.Match _ | Input.Apply _ | Input.Let _) ->
+    | (Sugared.Match _ | Sugared.Apply _ | Sugared.Let _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Dsyntax.Var x))
@@ -140,29 +140,29 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Dsyntax.comp =
     fold ws
   in
   match c' with
-    | (Input.Var _ | Input.Numeral _ | Input.Lambda _ | Input.Tuple _) ->
+    | (Sugared.Var _ | Sugared.Numeral _ | Sugared.Lambda _ | Sugared.Tuple _) ->
        let ws, e = expr ctx c in
        let return_e = locate (Dsyntax.Return e) in
        let_binds ws return_e
 
-    | Input.Match (e, lst) ->
+    | Sugared.Match (e, lst) ->
        let w, e = expr ctx e in
        let lst = match_clauses ctx lst in
        let_binds w (locate (Dsyntax.Match (e, lst)))
 
-    | Input.Apply (e1, e2) ->
+    | Sugared.Apply (e1, e2) ->
        let ws1, e1 = expr ctx e1 in
        let ws2, e2 = expr ctx e2 in
        let app = locate (Dsyntax.Apply (e1, e2)) in
        let_binds (ws1 @ ws2) app
 
-    | Input.Let (p, c1, c2) ->
+    | Sugared.Let (p, c1, c2) ->
        let c1 = comp ctx c1 in
        let ctx', p = pattern ctx p in
        let c2 = comp ctx' c2 in
        locate (Dsyntax.Let (p, c1, c2))
 
-    | Input.Ascribe (c, t) ->
+    | Sugared.Ascribe (c, t) ->
        let c = comp ctx c in
        let t = ty t in
        locate (Dsyntax.AscribeComp (c, t))
@@ -205,20 +205,20 @@ let rec toplevel ctx {Location.data=c; Location.loc=loc} =
 (** Desugar a non-located toplevel. *)
 let toplevel' ctx = function
 
-    | Input.TopLoad fn ->
+    | Sugared.TopLoad fn ->
        let ctx, cmds = load ctx fn in
        ctx, Dsyntax.TopLoad cmds
 
-    | Input.TopLet(p, c) ->
+    | Sugared.TopLet(p, c) ->
        let c = comp ctx c
        and ctx, p = pattern ctx p in
        ctx, Dsyntax.TopLet (p, c)
 
-    | Input.TopComp c ->
+    | Sugared.TopComp c ->
        let c = comp ctx c in
        ctx, Dsyntax.TopComp c
 
-    | Input.DeclOperation (op, t1, t2) ->
+    | Sugared.DeclOperation (op, t1, t2) ->
        let t1 = ty t1
        and t2 = ty t2
        and ctx = extend op ctx in
