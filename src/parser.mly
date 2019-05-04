@@ -73,6 +73,7 @@ toplevel: mark_location(plain_toplevel) { $1 }
 plain_toplevel:
   | LOAD fn=QUOTED_STRING                                { Sugared.TopLoad fn }
   | LET p=pattern EQUAL e=term                           { Sugared.TopLet (p, e) }
+  | LET f=var_name a=lambda_abstraction EQUAL e=term     { Sugared.TopLetFun (f, a, e) }
   | OPERATION op=var_name COLON t1=simple_ty ARROW t2=ty { Sugared.DeclOperation (op, t1, t2) }
 
 (* Main syntax tree *)
@@ -81,6 +82,8 @@ plain_term:
   | e=plain_infix_term                            { e }
   | FUN a=lambda_abstraction ARROW e=term         { Sugared.Lambda (a, e) }
   | LET p=pattern EQUAL c1=infix_term IN c2=term  { Sugared.Let (p, c1, c2) }
+  | LET f=var_name a=lambda_abstraction EQUAL c1=infix_term IN c2=term
+                                                  { Sugared.LetFun (f, a, c1, c2) }
   | MATCH e=infix_term WITH lst=match_clauses END { Sugared.Match (e, lst) }
   | e=infix_term COLON t=ty                       { Sugared.Ascribe (e, t) }
 

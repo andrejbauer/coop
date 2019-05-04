@@ -21,17 +21,21 @@ and term' =
   | Numeral of int
   | Tuple of term list
   | Match of term * (pattern * comp) list
-  | Lambda of (Name.ident list * ty option) list * comp
+  | Lambda of abstraction * comp
   | Apply of term * term
   | Let of pattern * comp * comp
+  | LetFun of Name.ident * abstraction * comp * comp
   | Ascribe of term * ty
 
 and comp = term
+
+and abstraction = (Name.ident list * ty option) list
 
 (** Parsed top-level command. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of string
   | TopLet of pattern * term
+  | TopLetFun of Name.ident * abstraction * comp
   | TopComp of comp
   | DeclOperation of Name.ident * ty * ty

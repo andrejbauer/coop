@@ -105,27 +105,31 @@ let rec expr ctx ({Location.data=e'; Location.loc=loc} as e) =
        (ws, locate (Desugared.Tuple lst))
 
     | Sugared.Lambda (a, c) ->
-       let ctx, lst = lambda_abstraction ctx a in
-       let c = comp ctx c in
-       let rec fold = function
-         | [] -> assert false
-         | [(x,topt)] -> locate (Desugared.Lambda (x, topt, c))
-         | (x,topt) :: lst ->
-            let e = fold lst in
-            let c = locate (Desugared.Return e) in
-            locate (Desugared.Lambda (x, topt, c))
-       in
-       ([], fold lst)
+       ([], abstract ~loc ctx a c)
 
     | Sugared.Ascribe (e, t) ->
        let w, e = expr ctx e in
        let t = ty t in
        (w, locate (Desugared.AscribeExpr (e, t)))
 
-    | (Sugared.Match _ | Sugared.Apply _ | Sugared.Let _) ->
+    | (Sugared.Match _ | Sugared.Apply _ | Sugared.Let _ | Sugared.LetFun _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Desugared.Var x))
+
+and abstract ~loc ctx a c =
+  let locate x = Location.locate ~loc x in
+  let ctx, lst = lambda_abstraction ctx a in
+  let c = comp ctx c in
+  let rec fold = function
+    | [] -> assert false
+    | [(x,topt)] -> locate (Desugared.Lambda (x, topt, c))
+    | (x,topt) :: lst ->
+       let e = fold lst in
+       let c = locate (Desugared.Return e) in
+       locate (Desugared.Lambda (x, topt, c))
+  in
+  fold lst
 
 (** Desugar a computation *)
 and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
@@ -158,8 +162,16 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
 
     | Sugared.Let (p, c1, c2) ->
        let c1 = comp ctx c1 in
-       let ctx', p = pattern ctx p in
-       let c2 = comp ctx' c2 in
+       let ctx, p = pattern ctx p in
+       let c2 = comp ctx c2 in
+       locate (Desugared.Let (p, c1, c2))
+
+    | Sugared.LetFun (f, a, c1, c2) ->
+       let e = abstract ~loc ctx a c1 in
+       let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Return e) in
+       let ctx = extend f ctx in
+       let c2 = comp ctx c2 in
+       let p = locate (Desugared.PattVar f) in
        locate (Desugared.Let (p, c1, c2))
 
     | Sugared.Ascribe (c, t) ->
@@ -209,9 +221,16 @@ let toplevel' ctx = function
        let ctx, cmds = load ctx fn in
        ctx, Desugared.TopLoad cmds
 
-    | Sugared.TopLet(p, c) ->
+    | Sugared.TopLet (p, c) ->
        let c = comp ctx c
        and ctx, p = pattern ctx p in
+       ctx, Desugared.TopLet (p, c)
+
+    | Sugared.TopLetFun (f, a, c) ->
+       let e = abstract ~loc ctx a c in
+       let c = Location.locate ~loc:c.Location.loc (Desugared.Return e) in
+       let ctx = extend f ctx in
+       let p = Location.locate ~loc (Desugared.PattVar f) in
        ctx, Desugared.TopLet (p, c)
 
     | Sugared.TopComp c ->
