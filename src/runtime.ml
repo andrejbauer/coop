@@ -5,7 +5,7 @@ type value =
 
 and result =
   | Return of value
-  | Operation of Name.ident * value * closure
+  | Operation of Name.t * value * closure
 
 and closure = value -> result
 
@@ -13,7 +13,7 @@ type environment = value list
 
 type error =
   | InvalidDeBruijn of int
-  | UnhandledOperation of Name.ident
+  | UnhandledOperation of Name.t
   | FunctionExpected
   | PatternMismatch
 
@@ -28,7 +28,7 @@ let print_error err ppf =
      Format.fprintf ppf "invalid de Bruijn index %d, please report" i
 
   | UnhandledOperation op ->
-     Format.fprintf ppf "unhandled operation %t" (Name.print_ident op)
+     Format.fprintf ppf "unhandled operation %t" (Name.print op)
 
   | FunctionExpected ->
      Format.fprintf ppf "function expected, please report"
@@ -206,7 +206,7 @@ let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
        List.iter2
          (fun (x, ty) v ->
            Format.printf "@[<hov>val %t@ :@ %t@ =@ %t@]@."
-             (Name.print_ident x)
+             (Name.print x)
              (Syntax.print_expr_ty ty)
              (print_value v))
          xts vs ;
@@ -224,7 +224,7 @@ let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
   | Syntax.DeclOperation (op, ty1, ty2) ->
      if not quiet then
        Format.printf "@[<hov>operation@ %t@ :@ %t@ %s@ %t@]@."
-         (Name.print_ident op)
+         (Name.print op)
          (Syntax.print_expr_ty ty1)
          (Print.char_arrow ())
          (Syntax.print_comp_ty ty2) ;

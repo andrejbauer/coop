@@ -42,9 +42,9 @@ and comp' =
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
-  | TopLet of pattern * (Name.ident * expr_ty) list * comp
+  | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopComp of comp * comp_ty
-  | DeclOperation of Name.ident * expr_ty * comp_ty
+  | DeclOperation of Name.t * expr_ty * comp_ty
 
 (** Convert an expression type to a computation type. *)
 let purely ty = CompTy (ty, ())

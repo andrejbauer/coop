@@ -7,7 +7,7 @@
 
 (** Desugaring errors *)
 type desugar_error =
-  | UnknownIdentifier of Name.ident
+  | UnknownIdentifier of Name.t
 
 (** The exception signalling a desugaring error*)
 exception Error of desugar_error Location.located
@@ -18,11 +18,11 @@ let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
 (** Print desugaring error. *)
 let print_error err ppf =
   match err with
-  | UnknownIdentifier x -> Format.fprintf ppf "unknown identifier %t" (Name.print_ident x)
+  | UnknownIdentifier x -> Format.fprintf ppf "unknown identifier %t" (Name.print x)
 
 (** A desugaring context is a list of known identifiers, which is used to compute de
    Bruijn indices. *)
-type context = Name.ident list
+type context = Name.t list
 
 (** Initial empty context *)
 let initial = []
@@ -188,7 +188,7 @@ and match_clause ctx (patt, c) =
   (patt, c)
 
 (** Desugar a lambda abstraction. *)
-and lambda_abstraction ctx a : context * (Name.ident * Desugared.ty option) list =
+and lambda_abstraction ctx a : context * (Name.t * Desugared.ty option) list =
   let rec fold ctx = function
     | [] -> ctx, []
     | (xs, topt) :: lst ->
@@ -199,7 +199,7 @@ and lambda_abstraction ctx a : context * (Name.ident * Desugared.ty option) list
   fold ctx a
 
 (** Auxiliary function used to desugar lambda abstractions. *)
-and lambda_abstraction1 ctx xs topt : context * (Name.ident * Desugared.ty option) list =
+and lambda_abstraction1 ctx xs topt : context * (Name.t * Desugared.ty option) list =
   let topt = ty_opt topt in
   let rec fold ctx lst = function
     | [] -> ctx, List.rev lst

@@ -42,9 +42,9 @@ and comp' =
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
-  | TopLet of pattern * (Name.ident * expr_ty) list * comp
+  | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopComp of comp * comp_ty
-  | DeclOperation of Name.ident * expr_ty * comp_ty
+  | DeclOperation of Name.t * expr_ty * comp_ty
 
 (** Make a pure computation type *)
 val purely : expr_ty -> comp_ty
@@ -53,7 +53,7 @@ val purely : expr_ty -> comp_ty
 val purify : comp_ty -> expr_ty
 
 (** Add the operation the dirt of a computation type *)
-val pollute : comp_ty -> Name.ident -> comp_ty
+val pollute : comp_ty -> Name.t -> comp_ty
 
 (** Are expression types equal? *)
 val equal_expr_ty : expr_ty -> expr_ty -> bool

@@ -10,17 +10,17 @@ type ty =
 type pattern = pattern' Location.located
 and pattern' =
   | PattAnonymous
-  | PattVar of Name.ident
+  | PattVar of Name.t
   | PattNumeral of int
   | PattTuple of pattern list
 
 (** Expressions *)
 type expr = expr' Location.located
 and expr' =
-  | Var of Name.ident
+  | Var of Name.t
   | Numeral of int
   | Tuple of expr list
-  | Lambda of Name.ident * ty option * comp
+  | Lambda of Name.t * ty option * comp
   | AscribeExpr of expr * ty
 
 (** Computations *)
@@ -38,4 +38,4 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * comp
   | TopComp of comp
-  | DeclOperation of Name.ident * ty * ty
+  | DeclOperation of Name.t * ty * ty

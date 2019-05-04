@@ -2,10 +2,10 @@
 %}
 
 (* Infix operations a la OCaml *)
-%token <Name.ident Location.located> PREFIXOP INFIXOP0 INFIXOP1 INFIXOP2 INFIXOP3 INFIXOP4
+%token <Name.t Location.located> PREFIXOP INFIXOP0 INFIXOP1 INFIXOP2 INFIXOP3 INFIXOP4
 
 (* Names *)
-%token <Name.ident> NAME
+%token <Name.t> NAME
 %token UNDERSCORE
 
 (* Primitive types *)

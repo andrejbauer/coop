@@ -1,14 +1,14 @@
 (** Terminus type checking. *)
 
 (** Typing context *)
-type context = (Name.ident * Syntax.expr_ty) list
+type context = (Name.t * Syntax.expr_ty) list
 
 (** Initial typing context *)
 let initial = []
 
 (** Type errors *)
 type error =
-  | InvalidName of Name.ident
+  | InvalidName of Name.t
   | PattTypeMismatch of Syntax.expr_ty
   | ExprTypeMismatch of Syntax.expr_ty * Syntax.expr_ty
   | CompTypeMismatch of Syntax.comp_ty * Syntax.comp_ty
@@ -17,7 +17,7 @@ type error =
   | TupleTooShort of Syntax.expr_ty
   | TupleTooLong of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
-  | CannotInferArgument of Name.ident
+  | CannotInferArgument of Name.t
   | CannotInferMatch
 
 exception Error of error Location.located
@@ -28,7 +28,7 @@ let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
 let print_error err ppf =
   match err with
 
-  | InvalidName x -> Format.fprintf ppf "invalid name %t, please report" (Name.print_ident x)
+  | InvalidName x -> Format.fprintf ppf "invalid name %t, please report" (Name.print x)
 
   | PattTypeMismatch ty_expected ->
      Format.fprintf ppf "this pattern should have type@ %t"
@@ -65,7 +65,7 @@ let print_error err ppf =
                         (Syntax.print_expr_ty ty)
 
   | CannotInferArgument x ->
-     Format.fprintf ppf "cannot infer the type of@ %t" (Name.print_ident x)
+     Format.fprintf ppf "cannot infer the type of@ %t" (Name.print x)
 
   | CannotInferMatch ->
      Format.fprintf ppf "cannot infer the type of this match statement"
