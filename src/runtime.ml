@@ -140,3 +140,102 @@ let as_closure ~loc = function
 
   | Numeral _ | Tuple _ ->
      error ~loc FunctionExpected
+
+(*** Evaluation ***)
+
+let rec eval_expr env {Location.data=e'; loc} =
+  match e' with
+
+  | Rsyntax.Numeral k -> Numeral k
+
+  | Rsyntax.Var i -> lookup ~loc i env
+
+  | Rsyntax.Tuple lst ->
+     let lst = List.map (eval_expr env) lst in
+     Tuple lst
+
+  | Rsyntax.Lambda c ->
+     let f v =
+       let env = extend v env in
+       eval_comp env c
+     in
+     Closure f
+
+
+and eval_comp env {Location.data=c'; loc} =
+  match c' with
+
+  | Rsyntax.Return e ->
+     let v = eval_expr env e in
+     Return v
+
+  | Rsyntax.Match (e, lst) ->
+     let v = eval_expr env e in
+     let env, c = match_clauses ~loc env lst v in
+     eval_comp env c
+
+  | Rsyntax.Apply (e1, e2) ->
+     let v1 = eval_expr env e1 in
+     let f = as_closure ~loc v1 in
+     let v2 = eval_expr env e2 in
+     f v2
+
+  | Rsyntax.Let (p, c1, c2) ->
+     begin
+       match eval_comp env c1 with
+
+       | Return v ->
+          let env = extend_pattern ~loc p v env in
+          eval_comp env c2
+
+       | Operation (op, u, k) ->
+          Operation (op, u, (fun v -> eval_comp (extend v env) c2))
+     end
+
+let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
+  match d' with
+
+  | Rsyntax.TopLoad cs ->
+     eval_topfile ~quiet env cs
+
+  | Rsyntax.TopLet (p, xts, c) ->
+     let r = eval_comp env c in
+     let v = as_value ~loc r in
+     let env, vs = top_extend_pattern ~loc p v env in
+     if not quiet then
+       List.iter2
+         (fun (x, ty) v ->
+           Format.printf "@[<hov>val %t@ :@ %t@ =@ %t@]@."
+             (Name.print_ident x)
+             (Rsyntax.print_expr_ty ty)
+             (print_value v))
+         xts vs ;
+     env
+
+  | Rsyntax.TopComp (c, ty) ->
+     let r = eval_comp env c in
+     let v = as_value ~loc r in
+     if not quiet then
+       Format.printf "@[<hov>- :@ %t@ =@ %t@]@."
+         (Rsyntax.print_comp_ty ty)
+         (print_value v) ;
+     env
+
+  | Rsyntax.DeclOperation (op, ty1, ty2) ->
+     if not quiet then
+       Format.printf "@[<hov>operation@ %t@ :@ %t@ %s@ %t@]@."
+         (Name.print_ident op)
+         (Rsyntax.print_expr_ty ty1)
+         (Print.char_arrow ())
+         (Rsyntax.print_comp_ty ty2) ;
+     extend (generic op) env
+
+
+and eval_topfile ~quiet env lst =
+  let rec fold env = function
+    | [] -> env
+    | top_cmd :: lst ->
+       let env = eval_toplevel ~quiet env top_cmd in
+       fold env lst
+  in
+  fold env lst
