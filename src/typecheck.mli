@@ -14,7 +14,7 @@ val print_error : error -> Format.formatter -> unit
 val initial : context
 
 (** Type-check a top-level command. *)
-val toplevel : quiet:bool -> context -> Desugared.toplevel -> context * Rsyntax.toplevel
+val toplevel : quiet:bool -> context -> Desugared.toplevel -> context * Syntax.toplevel
 
 (** Type-check the contents of a file. *)
-val topfile : quiet:bool -> context -> Desugared.toplevel list -> context * Rsyntax.toplevel list
+val topfile : quiet:bool -> context -> Desugared.toplevel list -> context * Syntax.toplevel list

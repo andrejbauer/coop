@@ -24,8 +24,8 @@ val print_value : ?max_level:Level.t -> value -> Format.formatter -> unit
 
 (** Evaluate a toplevel command *)
 val eval_toplevel :
-  quiet:bool -> environment -> Rsyntax.toplevel -> environment
+  quiet:bool -> environment -> Syntax.toplevel -> environment
 
 (** Evaluate a list of toplevel commands *)
 val eval_topfile :
-  quiet:bool -> environment -> Rsyntax.toplevel list -> environment
+  quiet:bool -> environment -> Syntax.toplevel list -> environment

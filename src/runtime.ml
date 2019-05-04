@@ -57,21 +57,21 @@ let match_pattern p v =
   let rec fold us p v =
     match p, v with
 
-    | Rsyntax.PattAnonymous, _ -> Some us
+    | Syntax.PattAnonymous, _ -> Some us
 
-    | Rsyntax.PattVar, _ ->
+    | Syntax.PattVar, _ ->
        Some (v :: us)
 
-  | Rsyntax.PattNumeral m, Numeral n ->
+  | Syntax.PattNumeral m, Numeral n ->
      if m = n then Some us else None
 
-  | Rsyntax.PattTuple ps, Tuple vs ->
+  | Syntax.PattTuple ps, Tuple vs ->
      fold_tuple us ps vs
 
   | _, Closure _ -> None
 
-  | (Rsyntax.PattTuple _, Numeral _ |
-     Rsyntax.PattNumeral _, Tuple _) ->
+  | (Syntax.PattTuple _, Numeral _ |
+     Syntax.PattNumeral _, Tuple _) ->
      None
 
   and fold_tuple us ps vs =
@@ -146,15 +146,15 @@ let as_closure ~loc = function
 let rec eval_expr env {Location.data=e'; loc} =
   match e' with
 
-  | Rsyntax.Numeral k -> Numeral k
+  | Syntax.Numeral k -> Numeral k
 
-  | Rsyntax.Var i -> lookup ~loc i env
+  | Syntax.Var i -> lookup ~loc i env
 
-  | Rsyntax.Tuple lst ->
+  | Syntax.Tuple lst ->
      let lst = List.map (eval_expr env) lst in
      Tuple lst
 
-  | Rsyntax.Lambda c ->
+  | Syntax.Lambda c ->
      let f v =
        let env = extend v env in
        eval_comp env c
@@ -165,22 +165,22 @@ let rec eval_expr env {Location.data=e'; loc} =
 and eval_comp env {Location.data=c'; loc} =
   match c' with
 
-  | Rsyntax.Return e ->
+  | Syntax.Return e ->
      let v = eval_expr env e in
      Return v
 
-  | Rsyntax.Match (e, lst) ->
+  | Syntax.Match (e, lst) ->
      let v = eval_expr env e in
      let env, c = match_clauses ~loc env lst v in
      eval_comp env c
 
-  | Rsyntax.Apply (e1, e2) ->
+  | Syntax.Apply (e1, e2) ->
      let v1 = eval_expr env e1 in
      let f = as_closure ~loc v1 in
      let v2 = eval_expr env e2 in
      f v2
 
-  | Rsyntax.Let (p, c1, c2) ->
+  | Syntax.Let (p, c1, c2) ->
      begin
        match eval_comp env c1 with
 
@@ -195,10 +195,10 @@ and eval_comp env {Location.data=c'; loc} =
 let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
   match d' with
 
-  | Rsyntax.TopLoad cs ->
+  | Syntax.TopLoad cs ->
      eval_topfile ~quiet env cs
 
-  | Rsyntax.TopLet (p, xts, c) ->
+  | Syntax.TopLet (p, xts, c) ->
      let r = eval_comp env c in
      let v = as_value ~loc r in
      let env, vs = top_extend_pattern ~loc p v env in
@@ -207,27 +207,27 @@ let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
          (fun (x, ty) v ->
            Format.printf "@[<hov>val %t@ :@ %t@ =@ %t@]@."
              (Name.print_ident x)
-             (Rsyntax.print_expr_ty ty)
+             (Syntax.print_expr_ty ty)
              (print_value v))
          xts vs ;
      env
 
-  | Rsyntax.TopComp (c, ty) ->
+  | Syntax.TopComp (c, ty) ->
      let r = eval_comp env c in
      let v = as_value ~loc r in
      if not quiet then
        Format.printf "@[<hov>- :@ %t@ =@ %t@]@."
-         (Rsyntax.print_comp_ty ty)
+         (Syntax.print_comp_ty ty)
          (print_value v) ;
      env
 
-  | Rsyntax.DeclOperation (op, ty1, ty2) ->
+  | Syntax.DeclOperation (op, ty1, ty2) ->
      if not quiet then
        Format.printf "@[<hov>operation@ %t@ :@ %t@ %s@ %t@]@."
          (Name.print_ident op)
-         (Rsyntax.print_expr_ty ty1)
+         (Syntax.print_expr_ty ty1)
          (Print.char_arrow ())
-         (Rsyntax.print_comp_ty ty2) ;
+         (Syntax.print_comp_ty ty2) ;
      extend (generic op) env
 
 

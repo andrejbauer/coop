@@ -1,7 +1,7 @@
 (** Terminus type checking. *)
 
 (** Typing context *)
-type context = (Name.ident * Rsyntax.expr_ty) list
+type context = (Name.ident * Syntax.expr_ty) list
 
 (** Initial typing context *)
 let initial = []
@@ -9,14 +9,14 @@ let initial = []
 (** Type errors *)
 type error =
   | InvalidName of Name.ident
-  | PattTypeMismatch of Rsyntax.expr_ty
-  | ExprTypeMismatch of Rsyntax.expr_ty * Rsyntax.expr_ty
-  | CompTypeMismatch of Rsyntax.comp_ty * Rsyntax.comp_ty
-  | TypeExpectedButFunction of Rsyntax.expr_ty
-  | TypeExpectedButTuple of Rsyntax.expr_ty
-  | TupleTooShort of Rsyntax.expr_ty
-  | TupleTooLong of Rsyntax.expr_ty
-  | FunctionExpected of Rsyntax.expr_ty
+  | PattTypeMismatch of Syntax.expr_ty
+  | ExprTypeMismatch of Syntax.expr_ty * Syntax.expr_ty
+  | CompTypeMismatch of Syntax.comp_ty * Syntax.comp_ty
+  | TypeExpectedButFunction of Syntax.expr_ty
+  | TypeExpectedButTuple of Syntax.expr_ty
+  | TupleTooShort of Syntax.expr_ty
+  | TupleTooLong of Syntax.expr_ty
+  | FunctionExpected of Syntax.expr_ty
   | CannotInferArgument of Name.ident
   | CannotInferMatch
 
@@ -32,37 +32,37 @@ let print_error err ppf =
 
   | PattTypeMismatch ty_expected ->
      Format.fprintf ppf "this pattern should have type@ %t"
-                        (Rsyntax.print_expr_ty ty_expected)
+                        (Syntax.print_expr_ty ty_expected)
 
   | ExprTypeMismatch (ty_expected, ty_actual) ->
      Format.fprintf ppf "this expression should have type@ %t but has type@ %t"
-                        (Rsyntax.print_expr_ty ty_expected)
-                        (Rsyntax.print_expr_ty ty_actual)
+                        (Syntax.print_expr_ty ty_expected)
+                        (Syntax.print_expr_ty ty_actual)
 
   | CompTypeMismatch (ty_expected, ty_actual) ->
      Format.fprintf ppf "this expression should have type@ %t but has type@ %t"
-                        (Rsyntax.print_comp_ty ty_expected)
-                        (Rsyntax.print_comp_ty ty_actual)
+                        (Syntax.print_comp_ty ty_expected)
+                        (Syntax.print_comp_ty ty_actual)
 
   | TypeExpectedButFunction ty ->
      Format.fprintf ppf "this expression is a function but should have type@ %t"
-                        (Rsyntax.print_expr_ty ty)
+                        (Syntax.print_expr_ty ty)
 
   | TypeExpectedButTuple ty ->
      Format.fprintf ppf "this expression is a tuple but should have type@ %t"
-                        (Rsyntax.print_expr_ty ty)
+                        (Syntax.print_expr_ty ty)
 
   | TupleTooShort ty ->
      Format.fprintf ppf "this tuple has too few components, it should have type@ %t"
-                        (Rsyntax.print_expr_ty ty)
+                        (Syntax.print_expr_ty ty)
 
   | TupleTooLong ty ->
      Format.fprintf ppf "this tuple has too many components, it should have type@ %t"
-                        (Rsyntax.print_expr_ty ty)
+                        (Syntax.print_expr_ty ty)
 
   | FunctionExpected ty ->
      Format.fprintf ppf "this expression should be a function but has type@ %t"
-                        (Rsyntax.print_expr_ty ty)
+                        (Syntax.print_expr_ty ty)
 
   | CannotInferArgument x ->
      Format.fprintf ppf "cannot infer the type of@ %t" (Name.print_ident x)
@@ -91,18 +91,18 @@ let lookup ~loc x ctx =
 (** Check that a type is valid. Retrn the processed type. *)
 let rec expr_ty = function
 
-  | Desugared.Int -> Rsyntax.Int
+  | Desugared.Int -> Syntax.Int
 
   | Desugared.Product lst ->
      let lst = List.map expr_ty lst in
-     Rsyntax.Product lst
+     Syntax.Product lst
 
   | Desugared.Arrow (t1, t2) ->
      let t1 = expr_ty t1
      and t2 = comp_ty t2 in
-     Rsyntax.Arrow (t1, t2)
+     Syntax.Arrow (t1, t2)
 
-and comp_ty ty = Rsyntax.purely (expr_ty ty)
+and comp_ty ty = Syntax.purely (expr_ty ty)
 
 (** Typecheck a pattern, return processed pattern and the list of identifiers
    and types bound by the pattern *)
@@ -111,31 +111,31 @@ let check_pattern patt ty =
     match p', t with
 
     | Desugared.PattAnonymous, _ ->
-       Rsyntax.PattAnonymous, xts
+       Syntax.PattAnonymous, xts
 
     | Desugared.PattVar x, _ ->
-       Rsyntax.PattVar, (x, t) :: xts
+       Syntax.PattVar, (x, t) :: xts
 
-    | Desugared.PattNumeral n, Rsyntax.Int ->
-       Rsyntax.PattNumeral n, xts
+    | Desugared.PattNumeral n, Syntax.Int ->
+       Syntax.PattNumeral n, xts
 
-    | Desugared.PattTuple ps, Rsyntax.Product ts ->
+    | Desugared.PattTuple ps, Syntax.Product ts ->
        fold_tuple ~loc xts [] ps ts
 
-    | ((Desugared.PattTuple _, (Rsyntax.Int | Rsyntax.Arrow _)) |
-         (Desugared.PattNumeral _, (Rsyntax.Product _ | Rsyntax.Arrow _))) ->
+    | ((Desugared.PattTuple _, (Syntax.Int | Syntax.Arrow _)) |
+         (Desugared.PattNumeral _, (Syntax.Product _ | Syntax.Arrow _))) ->
        error ~loc (PattTypeMismatch ty)
 
   and fold_tuple ~loc xts ps' ps ts =
     match ps, ts with
     | [], [] ->
        let ps' = List.rev ps' in
-       Rsyntax.PattTuple ps', xts
+       Syntax.PattTuple ps', xts
     | p :: ps, t :: ts ->
        let p', xts = fold xts p t in
        fold_tuple ~loc xts (p' :: ps') ps ts
     | ([], _::_ | _::_, []) ->
-       error ~loc (PattTypeMismatch (Rsyntax.Product ts))
+       error ~loc (PattTypeMismatch (Syntax.Product ts))
   in
 
   let p, xts = fold [] patt ty in
@@ -161,20 +161,20 @@ let rec infer_expr (ctx : context) {Location.data=e'; loc} =
   match e' with
   | Desugared.Var x ->
      let k, ty = lookup ~loc x ctx in
-     locate (Rsyntax.Var k), ty
+     locate (Syntax.Var k), ty
 
   | Desugared.Numeral n ->
-     locate (Rsyntax.Numeral n), Rsyntax.Int
+     locate (Syntax.Numeral n), Syntax.Int
 
   | Desugared.Tuple lst ->
      let lst = List.map (infer_expr ctx) lst in
-     locate (Rsyntax.Tuple (List.map fst lst)),  Rsyntax.Product (List.map snd lst)
+     locate (Syntax.Tuple (List.map fst lst)),  Syntax.Product (List.map snd lst)
 
   | Desugared.Lambda (x, Some t, c) ->
      let t = expr_ty t in
      let ctx = extend x t ctx in
      let c, c_ty = infer_comp ctx c in
-     locate (Rsyntax.Lambda c), Rsyntax.Arrow (t, c_ty)
+     locate (Syntax.Lambda c), Syntax.Arrow (t, c_ty)
 
   | Desugared.Lambda (x, None, _) ->
      error ~loc (CannotInferArgument x)
@@ -192,28 +192,28 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
 
   | Desugared.Return e ->
      let e, e_ty = infer_expr ctx e in
-     locate (Rsyntax.Return e), Rsyntax.purely e_ty
+     locate (Syntax.Return e), Syntax.purely e_ty
 
   | Desugared.Let (p, c1, c2) ->
      let c1, c1_ty = infer_comp ctx c1 in
-     let ctx, p = extend_pattern ctx p (Rsyntax.purify c1_ty) in
+     let ctx, p = extend_pattern ctx p (Syntax.purify c1_ty) in
      let c2, c2_ty = infer_comp ctx c2 in
-     locate (Rsyntax.Let (p, c1, c2)), c2_ty
+     locate (Syntax.Let (p, c1, c2)), c2_ty
 
   | Desugared.Match (e, lst) ->
      let e, e_ty = infer_expr ctx e in
      let lst, ty = infer_match_clauses ~loc ctx e_ty lst in
-     locate (Rsyntax.Match (e, lst)), ty
+     locate (Syntax.Match (e, lst)), ty
 
   | Desugared.Apply (e1, e2) ->
      let e1, t1 = infer_expr ctx e1 in
      begin
        match t1 with
-       | Rsyntax.Arrow (u1, u2) ->
+       | Syntax.Arrow (u1, u2) ->
           let e2 = check_expr ctx e2 u1 in
-          locate (Rsyntax.Apply (e1, e2)), u2
+          locate (Syntax.Apply (e1, e2)), u2
 
-       | (Rsyntax.Int | Rsyntax.Product _) ->
+       | (Syntax.Int | Syntax.Product _) ->
           error ~loc:(e1.Location.loc) (FunctionExpected t1)
      end
 
@@ -240,22 +240,22 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
   | Desugared.Lambda (x, None, e) ->
      begin
        match ty with
-       | Rsyntax.Arrow (t, u) ->
+       | Syntax.Arrow (t, u) ->
           let c = check_comp (extend x t ctx) e u in
-          locate (Rsyntax.Lambda c)
-       | (Rsyntax.Int | Rsyntax.Product _) ->
+          locate (Syntax.Lambda c)
+       | (Syntax.Int | Syntax.Product _) ->
           error ~loc (TypeExpectedButFunction ty)
      end
 
   | Desugared.Tuple es ->
      begin
        match ty with
-       | Rsyntax.Product ts ->
+       | Syntax.Product ts ->
           let rec fold es ts es' =
             match es, ts with
             | [], [] ->
                let es' = List.rev es' in
-               locate (Rsyntax.Tuple es')
+               locate (Syntax.Tuple es')
             | e :: es, t :: ts ->
                let e' = check_expr ctx e t in
                fold es ts (e' :: es')
@@ -264,13 +264,13 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
           in
           fold es ts []
 
-       | (Rsyntax.Int | Rsyntax.Arrow _) ->
+       | (Syntax.Int | Syntax.Arrow _) ->
           error ~loc (TypeExpectedButTuple ty)
      end
 
   | (Desugared.Numeral _ | Desugared.Lambda (_, Some _, _) | Desugared.Var _ | Desugared.AscribeExpr _) ->
      let e, ty' = infer_expr ctx e in
-     if Rsyntax.equal_expr_ty ty ty'
+     if Syntax.equal_expr_ty ty ty'
      then
        e
      else
@@ -283,24 +283,24 @@ and check_comp ctx ({Location.data=c'; loc} as c) ty =
   match c' with
 
   | Desugared.Return e ->
-    let (Rsyntax.CompTy (ty, _)) = ty in
+    let (Syntax.CompTy (ty, _)) = ty in
     let e = check_expr ctx e ty in
-    locate (Rsyntax.Return e)
+    locate (Syntax.Return e)
 
   | Desugared.Match (e, lst) ->
      let e, e_ty = infer_expr ctx e in
      let lst = check_match_clauses ctx e_ty ty lst in
-     locate (Rsyntax.Match (e, lst))
+     locate (Syntax.Match (e, lst))
 
   | Desugared.Let (p, c1, c2) ->
      let c1, t1 = infer_comp ctx c1 in
-     let ctx, p = extend_pattern ctx p (Rsyntax.purify t1) in
+     let ctx, p = extend_pattern ctx p (Syntax.purify t1) in
      let c2 = check_comp ctx c2 ty in
-     locate (Rsyntax.Let (p, c1, c2))
+     locate (Syntax.Let (p, c1, c2))
 
   | (Desugared.Apply _ | Desugared.AscribeComp _) ->
      let c, ty' = infer_comp ctx c in
-     if Rsyntax.equal_comp_ty ty ty'
+     if Syntax.equal_comp_ty ty ty'
      then
        c
      else
@@ -320,22 +320,22 @@ and toplevel ~quiet ctx {Location.data=d'; loc} =
 
     | Desugared.TopLoad lst ->
        let ctx, lst = topfile ~quiet ctx lst in
-       ctx, Rsyntax.TopLoad lst
+       ctx, Syntax.TopLoad lst
 
     | Desugared.TopLet (p, c) ->
        let c, ty = infer_comp ctx c in
-       let ctx, p, xts = top_extend_pattern ctx p (Rsyntax.purify ty) in
-       ctx, Rsyntax.TopLet (p, xts, c)
+       let ctx, p, xts = top_extend_pattern ctx p (Syntax.purify ty) in
+       ctx, Syntax.TopLet (p, xts, c)
 
     | Desugared.TopComp c ->
        let c, ty = infer_comp ctx c in
-       ctx, Rsyntax.TopComp (c, ty)
+       ctx, Syntax.TopComp (c, ty)
 
     | Desugared.DeclOperation (op, ty1, ty2) ->
        let ty1 = expr_ty ty1
-       and ty2 = Rsyntax.pollute (Rsyntax.purely (expr_ty ty2)) op in
-       let ctx = extend op (Rsyntax.Arrow (ty1, ty2)) ctx in
-       ctx, Rsyntax.DeclOperation (op, ty1, ty2)
+       and ty2 = Syntax.pollute (Syntax.purely (expr_ty ty2)) op in
+       let ctx = extend op (Syntax.Arrow (ty1, ty2)) ctx in
+       ctx, Syntax.DeclOperation (op, ty1, ty2)
 
   in
   ctx, Location.locate ~loc d'
