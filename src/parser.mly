@@ -13,19 +13,20 @@
 
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
-%token COLON ARROW SEMISEMI COMMA STAR
+%token LBRACE RBRACE
+%token COLON SEMI ARROW SEMISEMI COMMA STAR
 
 (* Expressions and computations *)
 %token <int> NUMERAL
 %token FUN
 %token LET EQUAL IN
 %token MATCH WITH BAR END
+%token COMODEL
 
 (* Toplevel commands *)
 
 %token <string> QUOTED_STRING
 %token LOAD
-%token OPERATION
 
 (* End of input token *)
 %token EOF
@@ -74,18 +75,19 @@ plain_toplevel:
   | LOAD fn=QUOTED_STRING                                { Sugared.TopLoad fn }
   | LET p=pattern EQUAL e=term                           { Sugared.TopLet (p, e) }
   | LET f=var_name a=lambda_abstraction EQUAL e=term     { Sugared.TopLetFun (f, a, e) }
-  | OPERATION op=var_name COLON t1=simple_ty ARROW t2=ty { Sugared.DeclOperation (op, t1, t2) }
 
 (* Main syntax tree *)
 term : mark_location(plain_term) { $1 }
 plain_term:
   | e=plain_infix_term                            { e }
+  | e=infix_term COLON t=ty                       { Sugared.Ascribe (e, t) }
   | FUN a=lambda_abstraction ARROW e=term         { Sugared.Lambda (a, e) }
   | LET p=pattern EQUAL c1=infix_term IN c2=term  { Sugared.Let (p, c1, c2) }
   | LET f=var_name a=lambda_abstraction EQUAL c1=infix_term IN c2=term
                                                   { Sugared.LetFun (f, a, c1, c2) }
   | MATCH e=infix_term WITH lst=match_clauses END { Sugared.Match (e, lst) }
-  | e=infix_term COLON t=ty                       { Sugared.Ascribe (e, t) }
+  | COMODEL lst=comodel_clauses END               { Sugared.Comodel lst }
+
 
 infix_term: mark_location(plain_infix_term) { $1 }
 plain_infix_term:
@@ -142,6 +144,12 @@ match_clauses:
 match_clause:
   | p=pattern ARROW e=term   { (p, e) }
 
+comodel_clauses:
+  | BAR? lst=separated_list(BAR, comodel_clause)  { lst }
+
+comodel_clause:
+  | op=var_name a=lambda_abstraction ARROW e=term  { (op, a, e) }
+
 lambda_abstraction:
   | xs=nonempty_list(var_name)               { [(xs, None)] }
   | lst=nonempty_list(typed_binder)          { List.map (fun (xs, t) -> (xs, Some t)) lst }
@@ -170,8 +178,12 @@ prod_ty:
                   { Sugared.Product (t :: ts) }
 
 simple_ty:
-  | LPAREN t=ty RPAREN  { t }
-  | INT                 { Sugared.Int }
+  | LPAREN t=ty RPAREN                             { t }
+  | LBRACE lst=separated_list(SEMI, op_ty) RBRACE  { Sugared.ComodelTy lst }
+  | INT                                            { Sugared.Int }
+
+op_ty:
+  | op=var_name COLON t1=simple_ty ARROW t2=ty { (op, t1, t2) }
 
 
 mark_location(X):

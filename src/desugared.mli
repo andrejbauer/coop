@@ -5,6 +5,7 @@ type ty =
   | Int
   | Arrow of ty * ty
   | Product of ty list
+  | ComodelTy of (Name.t * ty * ty) list
 
 (** Patterns *)
 type pattern = pattern' Location.located
@@ -20,7 +21,8 @@ and expr' =
   | Var of Name.t
   | Numeral of int
   | Tuple of expr list
-  | Lambda of Name.t * ty option * comp
+  | Lambda of abstraction * comp
+  | Comodel of comodel_clause list
   | AscribeExpr of expr * ty
 
 (** Computations *)
@@ -31,6 +33,10 @@ and comp' =
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr
   | AscribeComp of comp * ty
+
+and abstraction = Name.t * ty option
+
+and comodel_clause = Name.t * abstraction * comp
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located

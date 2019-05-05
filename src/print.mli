@@ -9,8 +9,9 @@ val print :
   ?at_level:Level.t -> ?max_level:Level.t ->
   Format.formatter -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 
-(** Unicode or ascii arrow. *)
+(** Unicode or ASCII versions of characters, depending on configuration. *)
 val char_arrow : unit -> string
+val char_times : unit -> string
 
 (** Print a sequence. *)
 val sequence :

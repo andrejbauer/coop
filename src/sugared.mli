@@ -5,6 +5,7 @@ type ty =
   | Int
   | Product of ty list
   | Arrow of ty * ty
+  | ComodelTy of (Name.t * ty * ty) list
 
 (** Pattern *)
 type pattern = pattern' Location.located
@@ -26,10 +27,13 @@ and term' =
   | Let of pattern * comp * comp
   | LetFun of Name.t * abstraction * comp * comp
   | Ascribe of term * ty
+  | Comodel of comodel_clause list
 
 and comp = term
 
 and abstraction = (Name.t list * ty option) list
+
+and comodel_clause = Name.t * abstraction * term
 
 (** Parsed top-level command. *)
 type toplevel = toplevel' Location.located
@@ -38,4 +42,3 @@ and toplevel' =
   | TopLet of pattern * term
   | TopLetFun of Name.t * abstraction * comp
   | TopComp of comp
-  | DeclOperation of Name.t * ty * ty

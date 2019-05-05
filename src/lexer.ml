@@ -2,6 +2,7 @@
 
 (** Reserved words. *)
 let reserved = [
+  ("comodel", Parser.COMODEL) ;
   ("end", Parser.END) ;
   ("fun", Parser.FUN) ;
   ("int", Parser.INT) ;
@@ -9,7 +10,6 @@ let reserved = [
   ("match", Parser.MATCH) ;
   ("in", Parser.IN) ;
   ("load", Parser.LOAD) ;
-  ("operation", Parser.OPERATION) ;
   ("with", Parser.WITH) ;
 ]
 
@@ -73,9 +73,12 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | '_'                      -> f (); Parser.UNDERSCORE
   | '('                      -> f (); Parser.LPAREN
   | ')'                      -> f (); Parser.RPAREN
-  | '*'                      -> f (); Parser.STAR
+  | '{'                      -> f (); Parser.LBRACE
+  | '}'                      -> f (); Parser.RBRACE
+  | '*' | 215                -> f (); Parser.STAR
   | ','                      -> f (); Parser.COMMA
   | ':'                      -> f (); Parser.COLON
+  | ';'                      -> f (); Parser.SEMI
   | ";;"                     -> f (); Parser.SEMISEMI
   | '='                      -> f (); Parser.EQUAL
   | "->" | 8594 | 10230      -> f (); Parser.ARROW

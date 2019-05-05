@@ -2,6 +2,7 @@ type value =
   | Numeral of int
   | Tuple of value list
   | Closure of closure
+  | Comodel of closure list
 
 and result =
   | Return of value
@@ -70,6 +71,8 @@ let match_pattern p v =
 
   | _, Closure _ -> None
 
+  | _, Comodel _ -> None
+
   | (Syntax.PattTuple _, Numeral _ |
      Syntax.PattNumeral _, Tuple _) ->
      None
@@ -127,6 +130,8 @@ let rec print_value ?max_level v ppf =
 
   | Closure _ -> Format.fprintf ppf "<fun>"
 
+  | Comodel lst -> Format.fprintf ppf "<comodel>"
+
 let as_value ~loc = function
 
   | Return v -> v
@@ -138,7 +143,7 @@ let as_closure ~loc = function
 
   | Closure f -> f
 
-  | Numeral _ | Tuple _ ->
+  | Numeral _ | Tuple _ | Comodel _ ->
      error ~loc FunctionExpected
 
 (*** Evaluation ***)
@@ -161,6 +166,9 @@ let rec eval_expr env {Location.data=e'; loc} =
      in
      Closure f
 
+  | Syntax.Comodel lst ->
+     let lst = List.map (fun (_, c) v -> eval_comp (extend v env) c) lst in
+     Comodel lst
 
 and eval_comp env {Location.data=c'; loc} =
   match c' with

@@ -8,6 +8,7 @@ type expr_ty =
   | Int
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
+  | ComodelTy of (Name.t * expr_ty * comp_ty) list
 
 (** Computation type *)
 and comp_ty = CompTy of expr_ty * dirt
@@ -29,6 +30,7 @@ and expr' =
   | Numeral of int
   | Tuple of expr list
   | Lambda of comp
+  | Comodel of (Name.t * comp) list
 
 (** Computations *)
 and comp = comp' Location.located

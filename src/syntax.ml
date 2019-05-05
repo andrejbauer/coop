@@ -8,6 +8,7 @@ type expr_ty =
   | Int
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
+  | ComodelTy of (Name.t * expr_ty * comp_ty) list
 
 (** Computation type *)
 and comp_ty = CompTy of expr_ty * dirt
@@ -29,6 +30,7 @@ and expr' =
   | Numeral of int
   | Tuple of expr list
   | Lambda of comp
+  | Comodel of (Name.t * comp) list
 
 (** Computations *)
 and comp = comp' Location.located
@@ -71,14 +73,26 @@ let rec print_expr_ty ?max_level ty ppf =
   | Int -> Format.fprintf ppf "int"
 
   | Product lst ->
+     let st = " " ^ Print.char_times () in
      Print.print ?max_level ~at_level:Level.product ppf "%t"
-       (Print.sequence (print_expr_ty ~max_level:Level.product_arg) " *" lst)
+       (Print.sequence (print_expr_ty ~max_level:Level.product_arg) st lst)
 
   | Arrow (t1, t2) ->
      Print.print ?max_level ~at_level:Level.arr ppf "%t@ %s@ %t"
        (print_expr_ty ~max_level:Level.arr_left t1)
        (Print.char_arrow ())
        (print_comp_ty ~max_level:Level.arr_right t2)
+
+  | ComodelTy lst ->
+     Print.print ?max_level ~at_level:Level.no_parens ppf "{%t}"
+        (Print.sequence (print_op_type ~max_level:Level.no_parens) ";" lst)
+
+and print_op_type ?max_level (op, ty1, ty2) ppf =
+  Print.print ?max_level ~at_level:Level.no_parens ppf "%t@ :@ %t@ %s@ %t"
+    (Name.print op)
+    (print_expr_ty ~max_level:Level.arr_left ty1)
+    (Print.char_arrow ())
+    (print_comp_ty ~max_level:Level.arr_right ty2)
 
 (** Pretty-print a computation type *)
 and print_comp_ty ?max_level ty ppf =

@@ -31,4 +31,5 @@ let sequence print_u separator us ppf =
 
 (** Unicode and ascii versions of symbols. *)
 
-let char_arrow ()  = if !Config.ascii then "->" else "→"
+let char_arrow () = if !Config.ascii then "->" else "→"
+let char_times () = if !Config.ascii then "*" else "×"

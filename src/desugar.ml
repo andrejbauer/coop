@@ -47,6 +47,10 @@ let rec ty = function
      and t2 = ty t2 in
      Desugared.Arrow (t1, t2)
 
+  | Sugared.ComodelTy lst ->
+     let lst = List.map (fun (op, t1, t2) -> (op, ty t1, ty t2)) lst in
+     Desugared.ComodelTy lst
+
 let ty_opt = function
   | None -> None
   | Some t -> Some (ty t)
@@ -90,6 +94,11 @@ let rec expr ctx ({Location.data=e'; Location.loc=loc} as e) =
        | true -> ([], locate (Desugared.Var x))
        end
 
+    | Sugared.Ascribe (e, t) ->
+       let w, e = expr ctx e in
+       let t = ty t in
+       (w, locate (Desugared.AscribeExpr (e, t)))
+
     | Sugared.Numeral n ->
        ([], locate (Desugared.Numeral n))
 
@@ -107,10 +116,9 @@ let rec expr ctx ({Location.data=e'; Location.loc=loc} as e) =
     | Sugared.Lambda (a, c) ->
        ([], abstract ~loc ctx a c)
 
-    | Sugared.Ascribe (e, t) ->
-       let w, e = expr ctx e in
-       let t = ty t in
-       (w, locate (Desugared.AscribeExpr (e, t)))
+    | Sugared.Comodel lst ->
+       let lst = comodel_clauses ctx lst in
+       ([], locate (Desugared.Comodel lst))
 
     | (Sugared.Match _ | Sugared.Apply _ | Sugared.Let _ | Sugared.LetFun _) ->
        let c = comp ctx e in
@@ -123,13 +131,27 @@ and abstract ~loc ctx a c =
   let c = comp ctx c in
   let rec fold = function
     | [] -> assert false
-    | [(x,topt)] -> locate (Desugared.Lambda (x, topt, c))
-    | (x,topt) :: lst ->
+    | [(x, topt)] -> locate (Desugared.Lambda ((x, topt), c))
+    | (x, topt) :: lst ->
        let e = fold lst in
        let c = locate (Desugared.Return e) in
-       locate (Desugared.Lambda (x, topt, c))
+       locate (Desugared.Lambda ((x, topt), c))
   in
   fold lst
+
+and comodel_clauses ctx lst = List.map (comodel_clause ctx) lst
+
+and comodel_clause ctx (op, a, c) =
+  let ctx, a = lambda_abstraction ctx a in
+  let c = comp ctx c in
+  match a with
+  | [] -> assert false
+  | [xt] -> (op, xt, c)
+  | xt :: a ->
+     let locate x = Location.locate ~loc:c.Location.loc x in
+     let lambda xt c = locate (Desugared.Return (locate (Desugared.Lambda (xt, c)))) in
+     let c = List.fold_right lambda a c in
+     (op, xt, c)
 
 (** Desugar a computation *)
 and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
@@ -144,7 +166,7 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
     fold ws
   in
   match c' with
-    | (Sugared.Var _ | Sugared.Numeral _ | Sugared.Lambda _ | Sugared.Tuple _) ->
+    | (Sugared.Var _ | Sugared.Numeral _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _) ->
        let ws, e = expr ctx c in
        let return_e = locate (Desugared.Return e) in
        let_binds ws return_e
@@ -236,12 +258,6 @@ let toplevel' ctx = function
     | Sugared.TopComp c ->
        let c = comp ctx c in
        ctx, Desugared.TopComp c
-
-    | Sugared.DeclOperation (op, t1, t2) ->
-       let t1 = ty t1
-       and t2 = ty t2
-       and ctx = extend op ctx in
-       ctx, Desugared.DeclOperation (op, t1, t2)
 
   in
   let ctx, c = toplevel' ctx c in

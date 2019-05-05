@@ -19,6 +19,7 @@ type error =
   | FunctionExpected of Syntax.expr_ty
   | CannotInferArgument of Name.t
   | CannotInferMatch
+  | DulicateOperation of Name.t
 
 exception Error of error Location.located
 
@@ -70,6 +71,9 @@ let print_error err ppf =
   | CannotInferMatch ->
      Format.fprintf ppf "cannot infer the type of this match statement"
 
+  | DulicateOperation op ->
+     Format.fprintf ppf "operation %t is defined twice" (Name.print op)
+
 
 (** Extend the context with the type of deBruijn index 0 *)
 let extend x ty ctx = (x, ty) :: ctx
@@ -102,6 +106,10 @@ let rec expr_ty = function
      and t2 = comp_ty t2 in
      Syntax.Arrow (t1, t2)
 
+  | Desugared.ComodelTy lst ->
+     let lst = List.map (fun (op, t1, t2) -> (op, expr_ty t1, comp_ty t2)) lst in
+     Syntax.ComodelTy lst
+
 and comp_ty ty = Syntax.purely (expr_ty ty)
 
 (** Typecheck a pattern, return processed pattern and the list of identifiers
@@ -122,8 +130,8 @@ let check_pattern patt ty =
     | Desugared.PattTuple ps, Syntax.Product ts ->
        fold_tuple ~loc xts [] ps ts
 
-    | ((Desugared.PattTuple _, (Syntax.Int | Syntax.Arrow _)) |
-         (Desugared.PattNumeral _, (Syntax.Product _ | Syntax.Arrow _))) ->
+    | ((Desugared.PattTuple _, (Syntax.Int | Syntax.Arrow _ | Syntax.ComodelTy _)) |
+       (Desugared.PattNumeral _, (Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _))) ->
        error ~loc (PattTypeMismatch ty)
 
   and fold_tuple ~loc xts ps' ps ts =
@@ -163,6 +171,11 @@ let rec infer_expr (ctx : context) {Location.data=e'; loc} =
      let k, ty = lookup ~loc x ctx in
      locate (Syntax.Var k), ty
 
+  | Desugared.AscribeExpr (e, t) ->
+     let t = expr_ty t in
+     let e = check_expr ctx e t in
+     e, t
+
   | Desugared.Numeral n ->
      locate (Syntax.Numeral n), Syntax.Int
 
@@ -170,19 +183,20 @@ let rec infer_expr (ctx : context) {Location.data=e'; loc} =
      let lst = List.map (infer_expr ctx) lst in
      locate (Syntax.Tuple (List.map fst lst)),  Syntax.Product (List.map snd lst)
 
-  | Desugared.Lambda (x, Some t, c) ->
+  | Desugared.Lambda ((x, Some t), c) ->
      let t = expr_ty t in
      let ctx = extend x t ctx in
      let c, c_ty = infer_comp ctx c in
      locate (Syntax.Lambda c), Syntax.Arrow (t, c_ty)
 
-  | Desugared.Lambda (x, None, _) ->
+  | Desugared.Lambda ((x, None), _) ->
      error ~loc (CannotInferArgument x)
 
-  | Desugared.AscribeExpr (e, t) ->
-     let t = expr_ty t in
-     let e = check_expr ctx e t in
-     e, t
+  | Desugared.Comodel lst ->
+     let op_cs_tys = infer_comodel ~loc ctx lst in
+     let op_cs = List.map (fun (op, c, _) -> (op, c)) op_cs_tys
+     and op_tys = List.map (fun (op, _, (ty1, ty2)) -> (op, ty1, ty2)) op_cs_tys in
+     locate (Syntax.Comodel op_cs), Syntax.ComodelTy op_tys
 
 (** [infer_comp ctx c] infers the type [ty] of a computation [c]. It returns
     the processed computation [c] and its type [ty].  *)
@@ -193,6 +207,11 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
   | Desugared.Return e ->
      let e, e_ty = infer_expr ctx e in
      locate (Syntax.Return e), Syntax.purely e_ty
+
+  | Desugared.AscribeComp (c, t) ->
+     let t = comp_ty t in
+     let c = check_comp ctx c t in
+     c, t
 
   | Desugared.Let (p, c1, c2) ->
      let c1, c1_ty = infer_comp ctx c1 in
@@ -213,14 +232,9 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
           let e2 = check_expr ctx e2 u1 in
           locate (Syntax.Apply (e1, e2)), u2
 
-       | (Syntax.Int | Syntax.Product _) ->
+       | (Syntax.Int | Syntax.Product _ | Syntax.ComodelTy _) ->
           error ~loc:(e1.Location.loc) (FunctionExpected t1)
      end
-
-  | Desugared.AscribeComp (c, t) ->
-     let t = comp_ty t in
-     let c = check_comp ctx c t in
-     c, t
 
 and infer_match_clauses ~loc ctx patt_ty lst =
   match lst with
@@ -231,19 +245,41 @@ and infer_match_clauses ~loc ctx patt_ty lst =
      let lst = check_match_clauses ctx patt_ty c_ty lst in
      ((p, c) :: lst), c_ty
 
+and infer_comodel ~loc ctx lst =
+  let rec fold op_cs_tys = function
+
+    | [] ->
+       List.rev op_cs_tys
+
+    | (op, (x, None), c) :: _ ->
+       error ~loc (CannotInferArgument x)
+
+    | (op, (x, Some ty), c) :: lst ->
+       if List.exists (fun (op', _, _) -> Name.equal op op') op_cs_tys then
+         error ~loc (DulicateOperation op)
+       else
+         let ty1 = expr_ty ty in
+         let ctx = extend x ty1 ctx in
+         let c, ty2 = infer_comp ctx c in
+         let op_cs_tys = (op, c, (ty1, ty2)) :: op_cs_tys in
+         fold op_cs_tys lst
+  in
+  fold [] lst
+
+
 (** [check_expr ctx e ty] checks that expression [e] has type [ty] in context [ctx].
     It returns the processed expression [e]. *)
 and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
   let locate = Location.locate ~loc in
   match e' with
 
-  | Desugared.Lambda (x, None, e) ->
+  | Desugared.Lambda ((x, None), e) ->
      begin
        match ty with
        | Syntax.Arrow (t, u) ->
           let c = check_comp (extend x t ctx) e u in
           locate (Syntax.Lambda c)
-       | (Syntax.Int | Syntax.Product _) ->
+       | (Syntax.Int | Syntax.Product _ | Syntax.ComodelTy _) ->
           error ~loc (TypeExpectedButFunction ty)
      end
 
@@ -264,11 +300,12 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
           in
           fold es ts []
 
-       | (Syntax.Int | Syntax.Arrow _) ->
+       | (Syntax.Int | Syntax.Arrow _ | Syntax.ComodelTy _) ->
           error ~loc (TypeExpectedButTuple ty)
      end
 
-  | (Desugared.Numeral _ | Desugared.Lambda (_, Some _, _) | Desugared.Var _ | Desugared.AscribeExpr _) ->
+  | (Desugared.Numeral _ | Desugared.Lambda ((_, Some _), _) | Desugared.Var _ |
+     Desugared.AscribeExpr _ | Desugared.Comodel _) ->
      let e, ty' = infer_expr ctx e in
      if Syntax.equal_expr_ty ty ty'
      then
