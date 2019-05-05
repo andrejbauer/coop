@@ -10,6 +10,7 @@ let reserved = [
   ("match", Parser.MATCH) ;
   ("in", Parser.IN) ;
   ("load", Parser.LOAD) ;
+  ("unit", Parser.UNIT) ;
   ("with", Parser.WITH) ;
 ]
 

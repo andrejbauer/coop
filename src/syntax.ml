@@ -72,6 +72,8 @@ let rec print_expr_ty ?max_level ty ppf =
 
   | Int -> Format.fprintf ppf "int"
 
+  | Product [] -> Format.fprintf ppf "unit"
+
   | Product lst ->
      let st = " " ^ Print.char_times () in
      Print.print ?max_level ~at_level:Level.product ppf "%t"

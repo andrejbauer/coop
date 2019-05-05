@@ -9,7 +9,7 @@
 %token UNDERSCORE
 
 (* Primitive types *)
-%token INT
+%token INT UNIT
 
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
@@ -117,11 +117,10 @@ plain_prefix_term:
 plain_simple_term:
   | n=NUMERAL   { Sugared.Numeral n }
   | x=var_name  { Sugared.Var x }
-  | LPAREN es=separated_nonempty_list(COMMA, term) RPAREN
+  | LPAREN es=separated_list(COMMA, term) RPAREN
                 { match es with
-                  | [] -> assert false
                   | [e] -> e.Location.data
-                  | _::_ -> Sugared.Tuple es }
+                  | [] | _::_ -> Sugared.Tuple es }
 
 var_name:
   | NAME                     { $1 }
@@ -162,11 +161,10 @@ plain_pattern:
   | UNDERSCORE  { Sugared.PattAnonymous }
   | x=var_name  { Sugared.PattVar x }
   | k=NUMERAL   { Sugared.PattNumeral k }
-  | LPAREN lst=separated_nonempty_list(COMMA, pattern) RPAREN
+  | LPAREN lst=separated_list(COMMA, pattern) RPAREN
                 { match lst with
-                  | [] -> assert false
                   | [p] -> p.Location.data
-                  | _::_ -> Sugared.PattTuple lst }
+                  | [] | _::_ -> Sugared.PattTuple lst }
 
 ty:
   | t=prod_ty               { t }
@@ -178,9 +176,10 @@ prod_ty:
                   { Sugared.Product (t :: ts) }
 
 simple_ty:
+  | INT                                            { Sugared.Int }
+  | UNIT                                           { Sugared.Product [] }
   | LPAREN t=ty RPAREN                             { t }
   | LBRACE lst=separated_list(SEMI, op_ty) RBRACE  { Sugared.ComodelTy lst }
-  | INT                                            { Sugared.Int }
 
 op_ty:
   | op=var_name COLON t1=simple_ty ARROW t2=ty { (op, t1, t2) }
