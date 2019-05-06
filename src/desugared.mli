@@ -33,7 +33,7 @@ and expr' =
 and comp = comp' Location.located
 and comp' =
   | AscribeComp of comp * ty
-  | Return of expr
+  | Val of expr
   | Let of pattern * comp * comp
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr

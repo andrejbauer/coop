@@ -7,7 +7,7 @@ type value =
 and world = World of value
 
 and result =
-  | Return of value
+  | Val of value
   | Operation of Name.t * value * closure
 
 and closure = value -> result
@@ -151,7 +151,7 @@ let as_closure ~loc = function
   | Numeral _ | Tuple _ | Comodel _ -> error ~loc FunctionExpected
 
 let as_value ~loc = function
-  | Return v -> v
+  | Val v -> v
   | Operation (op, _, _) -> error ~loc (UnhandledOperation op)
 
 let as_comodel ~loc = function
@@ -161,7 +161,7 @@ let as_comodel ~loc = function
 (** The result monad *)
 let rec bind r k =
   match r with
-  | Return v -> k v
+  | Val v -> k v
   | Operation (op, u, l) -> Operation (op, u, fun x -> let r = l x in bind r k)
 
 (*** Evaluation ***)
@@ -206,9 +206,9 @@ let rec eval_expr env {Location.data=e'; loc} =
 and eval_comp env {Location.data=c'; loc} =
   match c' with
 
-  | Syntax.Return e ->
+  | Syntax.Val e ->
      let v = eval_expr env e in
-     Return v
+     Val v
 
   | Syntax.Match (e, lst) ->
      let v = eval_expr env e in
@@ -228,7 +228,7 @@ and eval_comp env {Location.data=c'; loc} =
 
   | Syntax.Operation (op, u) ->
      let u = eval_expr env u in
-     Operation (op, u, (fun v -> Return v))
+     Operation (op, u, (fun v -> Val v))
 
   | Syntax.Using (cmdl, c, fin) ->
      let (w, cmdl) = as_comodel ~loc (eval_expr env cmdl)
@@ -246,7 +246,7 @@ and using ~loc env cmdl w r fin =
   let rec tensor w r =
     match r with
 
-    | Return v -> fin (v, w)
+    | Val v -> fin (v, w)
 
     | Operation (op, u, k) ->
        begin

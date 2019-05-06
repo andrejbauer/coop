@@ -37,7 +37,7 @@ and expr' =
 (** Computations *)
 and comp = comp' Location.located
 and comp' =
-  | Return of expr
+  | Val of expr
   | Let of pattern * comp * comp
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr

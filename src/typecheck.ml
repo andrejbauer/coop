@@ -252,9 +252,9 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
   let locate = Location.locate ~loc in
   match c' with
 
-  | Desugared.Return e ->
+  | Desugared.Val e ->
      let e, e_ty = infer_expr ctx e in
-     locate (Syntax.Return e), Syntax.pure e_ty
+     locate (Syntax.Val e), Syntax.pure e_ty
 
   | Desugared.AscribeComp (c, t) ->
      let t = comp_ty t in
@@ -396,9 +396,9 @@ and check_comp ctx ({Location.data=c'; loc} as c) check_ty =
   let locate = Location.locate ~loc in
   match c' with
 
-  | Desugared.Return e ->
+  | Desugared.Val e ->
     let e = check_expr ctx e check_ty' in
-    locate (Syntax.Return e)
+    locate (Syntax.Val e)
 
   | Desugared.Match (e, lst) ->
      let e, e_ty = infer_expr ctx e in

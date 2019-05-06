@@ -170,7 +170,7 @@ and abstract ~loc ctx a c =
     | [(x, topt)] -> locate (Desugared.Lambda ((x, topt), c))
     | (x, topt) :: lst ->
        let e = fold lst in
-       let c = locate (Desugared.Return e) in
+       let c = locate (Desugared.Val e) in
        locate (Desugared.Lambda ((x, topt), c))
   in
   fold lst
@@ -201,7 +201,7 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
   match c' with
     | (Sugared.Var _ | Sugared.Numeral _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _) ->
        let ws, e = expr ctx c in
-       let return_e = locate (Desugared.Return e) in
+       let return_e = locate (Desugared.Val e) in
        let_binds ws return_e
 
     | Sugared.Ascribe (c, t) ->
@@ -239,7 +239,7 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
 
     | Sugared.LetFun (f, a, c1, c2) ->
        let e = abstract ~loc ctx a c1 in
-       let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Return e) in
+       let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Val e) in
        let ctx = extend f Variable ctx in
        let c2 = comp ctx c2 in
        let p = locate (Desugared.PattVar f) in
@@ -306,7 +306,7 @@ let toplevel' ctx = function
 
     | Sugared.TopLetFun (f, a, c) ->
        let e = abstract ~loc ctx a c in
-       let c = Location.locate ~loc:c.Location.loc (Desugared.Return e) in
+       let c = Location.locate ~loc:c.Location.loc (Desugared.Val e) in
        let ctx = extend f Variable ctx in
        let p = Location.locate ~loc (Desugared.PattVar f) in
        ctx, Desugared.TopLet (p, c)
