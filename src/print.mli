@@ -11,6 +11,7 @@ val print :
 
 (** Unicode or ASCII versions of characters, depending on configuration. *)
 val char_arrow : unit -> string
+val char_darrow : unit -> string
 val char_times : unit -> string
 
 (** Print a sequence. *)

@@ -1,17 +1,19 @@
 (** Type-checked syntax of Terminus. *)
 
-(** For now dirt is trivial *)
-type dirt = unit
+type signature = Name.Set.t
 
 (** Expression type *)
 type expr_ty =
   | Int
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
-  | ComodelTy of (Name.t * expr_ty * comp_ty) list
+  | ComodelTy of comodel_ty
 
 (** Computation type *)
-and comp_ty = CompTy of expr_ty * dirt
+and comp_ty = CompTy of expr_ty * signature
+
+(** Comodel *)
+and comodel_ty = signature * expr_ty * signature
 
 (** Patterns *)
 type pattern =
@@ -30,7 +32,7 @@ and expr' =
   | Numeral of int
   | Tuple of expr list
   | Lambda of comp
-  | Comodel of (Name.t * comp) list
+  | Comodel of expr * (Name.t * pattern * pattern * comp) list
 
 (** Computations *)
 and comp = comp' Location.located
@@ -39,32 +41,66 @@ and comp' =
   | Let of pattern * comp * comp
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr
+  | Operation of Name.t * expr
+  | Using of expr * comp * finally
+
+and finally = pattern * pattern * comp
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * comp
-  | TopComp of comp * comp_ty
-  | DeclOperation of Name.t * expr_ty * comp_ty
+  | TopComp of comp * expr_ty
+  | DeclOperation of Name.t * expr_ty * expr_ty
 
-(** Convert an expression type to a computation type. *)
-let purely ty = CompTy (ty, ())
+(** The unit type *)
+let unit_ty = Product []
 
-(** Compute the expression-type part of a computation type *)
-let purify (CompTy (ty, ())) = ty
+(** The empty signature *)
+let empty_signature = Name.Set.empty
 
-(** Add an operation to the dirt *)
-let pollute ty op = ty
+(** Make a pure computation type *)
+let pure t = CompTy (t, empty_signature)
 
-let equal_dirt d1 d2 = (d1 = d2)
+let op_ty t op =
+  let sgn = Name.Set.add op Name.Set.empty in
+  CompTy (t, sgn)
 
-(** Compare two expression types for equality. *)
-let equal_expr_ty t1 t2 = (t1 = t2)
+let pollute (CompTy (t, sgn1)) sgn2 =
+  CompTy (t, Name.Set.union sgn1 sgn2)
 
-(** Compare two computation types for equality. *)
-let equal_comp_ty (CompTy (t1, d1)) (CompTy (t2, d2)) =
-  equal_expr_ty t1 t2 && equal_dirt d1 d2
+let rec expr_subty t u =
+  match t, u with
+
+  | Int, Int -> true
+
+  | Product ts, Product us ->
+     let rec fold ts us =
+       match ts, us with
+       | [], [] -> true
+       | t :: ts, u :: us -> expr_subty t u && fold ts us
+       | [], _::_ | _::_, [] -> false
+     in
+     fold ts us
+
+  | Arrow (t1, t2), Arrow (u1, u2) ->
+     expr_subty u1 t1 && comp_subty t2 u2
+
+  | ComodelTy (tsgn1, t, tsgn2), ComodelTy (usgn1, u, usgn2) ->
+     Name.Set.subset usgn1 tsgn1 && expr_eqtype t u && Name.Set.subset tsgn2 usgn2
+
+  | Int,         (Product _ | Arrow _ | ComodelTy _)
+  | Product _,   (Int | Arrow _ | ComodelTy _)
+  | Arrow _,     (Int | Product _ | ComodelTy _)
+  | ComodelTy _, (Int | Product _ | Arrow _) ->
+     false
+
+and comp_subty (CompTy (t1, drt1)) (CompTy (t2, drt2)) =
+  Name.Set.subset drt1 drt2 && expr_subty t1 t2
+
+and expr_eqtype t u =
+  expr_subty t u && expr_subty u t
 
 (** Pretty-print an expresion type *)
 let rec print_expr_ty ?max_level ty ppf =
@@ -85,20 +121,20 @@ let rec print_expr_ty ?max_level ty ppf =
        (Print.char_arrow ())
        (print_comp_ty ~max_level:Level.arr_right t2)
 
-  | ComodelTy lst ->
-     Print.print ?max_level ~at_level:Level.no_parens ppf "{%t}"
-        (Print.sequence (print_op_type ~max_level:Level.no_parens) ";" lst)
+  | ComodelTy cmdl_ty -> print_comodel_ty cmdl_ty ppf
 
-and print_op_type ?max_level (op, ty1, ty2) ppf =
-  Print.print ?max_level ~at_level:Level.no_parens ppf "%t@ :@ %t@ %s@ %t"
-    (Name.print op)
-    (print_expr_ty ~max_level:Level.arr_left ty1)
-    (Print.char_arrow ())
-    (print_comp_ty ~max_level:Level.arr_right ty2)
+and print_comp_ty ?max_level (CompTy (t, sgn)) ppf =
+  Print.print ?max_level ~at_level:Level.comp_ty ppf "%t@ !@ %t"
+    (print_expr_ty ~max_level:Level.comp_ty_left t)
+    (print_signature sgn)
 
-(** Pretty-print a computation type *)
-and print_comp_ty ?max_level ty ppf =
-  match ty with
+and print_comodel_ty (sgn1, w_ty, sgn2) ppf =
+  Format.fprintf ppf "%t@ @@@ %t %s@ %t"
+    (print_signature sgn1)
+    (print_expr_ty ~max_level:Level.comodel_ty_world w_ty)
+    (Print.char_darrow ())
+    (print_signature sgn2)
 
-  | CompTy (ty, ()) ->
-     print_expr_ty ?max_level ty ppf
+and print_signature sgn ppf =
+  let lst = List.sort Pervasives.compare (Name.Set.elements sgn) in
+  Format.fprintf ppf "{%t}" (Print.sequence (Name.print ~parentheses:true) "," lst)

@@ -1,11 +1,15 @@
 (** Concrete syntax as parsed by the parser. *)
 
+type signature = Name.t list
+
 (** Parsed type. *)
-type ty =
+type ty = ty' Location.located
+and ty' =
   | Int
   | Product of ty list
   | Arrow of ty * ty
-  | ComodelTy of (Name.t * ty * ty) list
+  | ComodelTy of signature * ty * signature
+  | CompTy of ty * signature
 
 (** Pattern *)
 type pattern = pattern' Location.located
@@ -21,24 +25,26 @@ and term' =
   | Var of Name.t
   | Numeral of int
   | Tuple of term list
-  | Match of term * (pattern * comp) list
-  | Lambda of abstraction * comp
+  | Match of term * (pattern * term) list
+  | Lambda of abstraction * term
   | Apply of term * term
-  | Let of pattern * comp * comp
-  | LetFun of Name.t * abstraction * comp * comp
+  | Let of pattern * term * term
+  | LetFun of Name.t * abstraction * term * term
   | Ascribe of term * ty
-  | Comodel of comodel_clause list
-
-and comp = term
+  | Comodel of term * comodel_clause list
+  | Using of term * term * finally
 
 and abstraction = (Name.t list * ty option) list
 
-and comodel_clause = Name.t * abstraction * term
+and comodel_clause = Name.t * pattern * pattern * term
+
+and finally = pattern * pattern * term
 
 (** Parsed top-level command. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of string
   | TopLet of pattern * term
-  | TopLetFun of Name.t * abstraction * comp
-  | TopComp of comp
+  | TopLetFun of Name.t * abstraction * term
+  | TopComp of term
+  | DeclOperation of Name.t * ty * ty

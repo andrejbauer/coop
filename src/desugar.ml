@@ -8,6 +8,9 @@
 (** Desugaring errors *)
 type desugar_error =
   | UnknownIdentifier of Name.t
+  | UnknownOperation of Name.t
+  | OperationExpected of Name.t
+  | BareOperation
 
 (** The exception signalling a desugaring error*)
 exception Error of desugar_error Location.located
@@ -19,41 +22,71 @@ let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
 let print_error err ppf =
   match err with
   | UnknownIdentifier x -> Format.fprintf ppf "unknown identifier %t" (Name.print x)
+  | UnknownOperation op -> Format.fprintf ppf "unknown operation %t" (Name.print op)
+  | OperationExpected x -> Format.fprintf ppf "%t is not an operation" (Name.print x)
+  | BareOperation -> Format.fprintf ppf "this operation should be applied to an argument"
 
-(** A desugaring context is a list of known identifiers, which is used to compute de
-   Bruijn indices. *)
-type context = Name.t list
+(** A desugaring context resolves names to their kinds. *)
+type ident_kind = Variable | Operation
+
+type context = ident_kind Name.Map.t
 
 (** Initial empty context *)
-let initial = []
+let initial = Name.Map.empty
 
-(** Add a new identifier to the context. *)
-let extend x ctx = x :: ctx
+(** Add a new identifier of the given kind to the context. *)
+let extend = Name.Map.add
 
-(** Is [x] a known identifier? *)
-let known x ctx = List.exists (Name.equal x) ctx
+let is_operation op ctx =
+  match Name.Map.find op ctx with
+  | Some Operation -> true
+  | Some Variable | None -> false
+
+let signature ~loc ctx lst =
+  let rec fold sgn = function
+    | [] -> sgn
+    | op :: ops ->
+       begin
+         match Name.Map.find op ctx with
+         | None -> error ~loc (UnknownOperation op)
+         | Some Variable -> error ~loc (OperationExpected op)
+         | Some Operation -> fold (Name.Set.add op sgn) ops
+       end
+  in
+  fold Name.Set.empty lst
 
 (** Desugar a type, which at this stage is the same as an expressions. *)
-let rec ty = function
+let rec ty ctx {Location.data=t'; loc} =
+  let t' =
+    match t' with
 
-  | Sugared.Int -> Desugared.Int
+    | Sugared.Int -> Desugared.Int
 
-  | Sugared.Product lst ->
-     let lst = List.map ty lst in
-     Desugared.Product lst
+    | Sugared.Product lst ->
+       let lst = List.map (ty ctx) lst in
+       Desugared.Product lst
 
-  | Sugared.Arrow (t1, t2) ->
-     let t1 = ty t1
-     and t2 = ty t2 in
-     Desugared.Arrow (t1, t2)
+    | Sugared.Arrow (t1, t2) ->
+       let t1 = ty ctx t1
+       and t2 = ty ctx t2 in
+       Desugared.Arrow (t1, t2)
 
-  | Sugared.ComodelTy lst ->
-     let lst = List.map (fun (op, t1, t2) -> (op, ty t1, ty t2)) lst in
-     Desugared.ComodelTy lst
+    | Sugared.ComodelTy (sgn1, t, sgn2) ->
+       let sgn1 = signature ~loc ctx sgn1
+       and t = ty ctx t
+       and sgn2 = signature ~loc ctx sgn2 in
+       Desugared.ComodelTy (sgn1, t, sgn2)
 
-let ty_opt = function
+    | Sugared.CompTy (t, sgn) ->
+       let t = ty ctx t
+       and sgn = signature ~loc ctx sgn in
+       Desugared.CompTy (t, sgn)
+  in
+  Location.locate ~loc t'
+
+let ty_opt ctx = function
   | None -> None
-  | Some t -> Some (ty t)
+  | Some t -> Some (ty ctx t)
 
 (** Desugar a pattern *)
 let rec pattern ctx {Location.data=p'; loc} =
@@ -64,7 +97,7 @@ let rec pattern ctx {Location.data=p'; loc} =
      ctx, locate (Desugared.PattAnonymous)
 
   | Sugared.PattVar x ->
-     let ctx = extend x ctx in
+     let ctx = extend x Variable ctx in
      ctx, locate (Desugared.PattVar x)
 
   | Sugared.PattNumeral n ->
@@ -84,19 +117,20 @@ let rec pattern ctx {Location.data=p'; loc} =
      fold ctx [] lst
 
 (** Desugar an expression *)
-let rec expr ctx ({Location.data=e'; Location.loc=loc} as e) =
+let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
   let locate x = Location.locate ~loc x in
   match e' with
-
     | Sugared.Var x ->
-       begin match known x ctx with
-       | false -> error ~loc (UnknownIdentifier x)
-       | true -> ([], locate (Desugared.Var x))
+       begin
+         match Name.Map.find x ctx with
+         | None -> error ~loc (UnknownIdentifier x)
+         | Some Variable -> ([], locate (Desugared.Var x))
+         | Some Operation -> error ~loc BareOperation
        end
 
     | Sugared.Ascribe (e, t) ->
        let w, e = expr ctx e in
-       let t = ty t in
+       let t = ty ctx t in
        (w, locate (Desugared.AscribeExpr (e, t)))
 
     | Sugared.Numeral n ->
@@ -116,11 +150,12 @@ let rec expr ctx ({Location.data=e'; Location.loc=loc} as e) =
     | Sugared.Lambda (a, c) ->
        ([], abstract ~loc ctx a c)
 
-    | Sugared.Comodel lst ->
-       let lst = comodel_clauses ctx lst in
-       ([], locate (Desugared.Comodel lst))
+    | Sugared.Comodel (e, lst) ->
+       let ws, e = expr ctx e in
+       let lst = comodel_clauses ~loc ctx lst in
+       (ws, locate (Desugared.Comodel (e, lst)))
 
-    | (Sugared.Match _ | Sugared.Apply _ | Sugared.Let _ | Sugared.LetFun _) ->
+    | (Sugared.Match _ | Sugared.Apply _ | Sugared.Let _ | Sugared.LetFun _ | Sugared.Using _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Desugared.Var x))
@@ -139,19 +174,16 @@ and abstract ~loc ctx a c =
   in
   fold lst
 
-and comodel_clauses ctx lst = List.map (comodel_clause ctx) lst
+and comodel_clauses ~loc ctx lst = List.map (comodel_clause ~loc ctx) lst
 
-and comodel_clause ctx (op, a, c) =
-  let ctx, a = lambda_abstraction ctx a in
-  let c = comp ctx c in
-  match a with
-  | [] -> assert false
-  | [xt] -> (op, xt, c)
-  | xt :: a ->
-     let locate x = Location.locate ~loc:c.Location.loc x in
-     let lambda xt c = locate (Desugared.Return (locate (Desugared.Lambda (xt, c)))) in
-     let c = List.fold_right lambda a c in
-     (op, xt, c)
+and comodel_clause ~loc ctx (op, px, pw, c) =
+  if not (is_operation op ctx) then
+    error ~loc (UnknownOperation op)
+  else
+    let ctx, px = pattern ctx px in
+    let ctx, pw = pattern ctx pw in
+    let c = comp ctx c in
+    (op, px, pw, c)
 
 (** Desugar a computation *)
 and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
@@ -159,9 +191,9 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
   let let_binds ws c =
     let rec fold = function
     | [] -> c
-    | (x,c) :: ws ->
+    | (x, cx) :: ws ->
        let let_cs = fold ws in
-       locate (Desugared.Let (locate (Desugared.PattVar x), c, let_cs))
+       locate (Desugared.Let (locate (Desugared.PattVar x), cx, let_cs))
     in
     fold ws
   in
@@ -171,10 +203,20 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
        let return_e = locate (Desugared.Return e) in
        let_binds ws return_e
 
+    | Sugared.Ascribe (c, t) ->
+       let c = comp ctx c in
+       let t = ty ctx t in
+       locate (Desugared.AscribeComp (c, t))
+
     | Sugared.Match (e, lst) ->
        let w, e = expr ctx e in
        let lst = match_clauses ctx lst in
        let_binds w (locate (Desugared.Match (e, lst)))
+
+    | Sugared.Apply ({Location.data=Sugared.Var op; loc}, e) when is_operation op ctx ->
+       let ws, e = expr ctx e in
+       let c = locate (Desugared.Operation (op, e)) in
+       let_binds ws c
 
     | Sugared.Apply (e1, e2) ->
        let ws1, e1 = expr ctx e1 in
@@ -191,15 +233,16 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
     | Sugared.LetFun (f, a, c1, c2) ->
        let e = abstract ~loc ctx a c1 in
        let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Return e) in
-       let ctx = extend f ctx in
+       let ctx = extend f Variable ctx in
        let c2 = comp ctx c2 in
        let p = locate (Desugared.PattVar f) in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.Ascribe (c, t) ->
+    | Sugared.Using (cmdl, c, fs) ->
+       let ws, cmdl = expr ctx cmdl in
        let c = comp ctx c in
-       let t = ty t in
-       locate (Desugared.AscribeComp (c, t))
+       let fs = finally ctx fs in
+       let_binds ws (locate (Desugared.Using (cmdl, c, fs)))
 
 and match_clauses ctx lst =
   List.map (match_clause ctx) lst
@@ -208,6 +251,12 @@ and match_clause ctx (patt, c) =
   let ctx, patt = pattern ctx patt in
   let c = comp ctx c in
   (patt, c)
+
+and finally ctx (px, pw, c) =
+  let ctx, px = pattern ctx px in
+  let ctx, pw = pattern ctx pw in
+  let c = comp ctx c in
+  (px, pw, c)
 
 (** Desugar a lambda abstraction. *)
 and lambda_abstraction ctx a : context * (Name.t * Desugared.ty option) list =
@@ -222,11 +271,11 @@ and lambda_abstraction ctx a : context * (Name.t * Desugared.ty option) list =
 
 (** Auxiliary function used to desugar lambda abstractions. *)
 and lambda_abstraction1 ctx xs topt : context * (Name.t * Desugared.ty option) list =
-  let topt = ty_opt topt in
+  let topt = ty_opt ctx topt in
   let rec fold ctx lst = function
     | [] -> ctx, List.rev lst
     | x :: xs ->
-       let ctx = extend x ctx
+       let ctx = extend x Variable ctx
        and lst = (x, topt) :: lst in
        fold ctx lst xs
   in
@@ -251,13 +300,19 @@ let toplevel' ctx = function
     | Sugared.TopLetFun (f, a, c) ->
        let e = abstract ~loc ctx a c in
        let c = Location.locate ~loc:c.Location.loc (Desugared.Return e) in
-       let ctx = extend f ctx in
+       let ctx = extend f Variable ctx in
        let p = Location.locate ~loc (Desugared.PattVar f) in
        ctx, Desugared.TopLet (p, c)
 
     | Sugared.TopComp c ->
        let c = comp ctx c in
        ctx, Desugared.TopComp c
+
+    | Sugared.DeclOperation (op, t1, t2) ->
+       let t1 = ty ctx t1
+       and t2 = ty ctx t2
+       and ctx = extend op Operation ctx in
+       ctx, Desugared.DeclOperation (op, t1, t2)
 
   in
   let ctx, c = toplevel' ctx c in

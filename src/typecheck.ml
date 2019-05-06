@@ -1,25 +1,35 @@
 (** Terminus type checking. *)
 
 (** Typing context *)
-type context = (Name.t * Syntax.expr_ty) list
+type context =
+  { ctx_ops : (Syntax.expr_ty * Syntax.expr_ty) Name.Map.t
+  ; ctx_idents : (Name.t * Syntax.expr_ty) list
+  }
 
 (** Initial typing context *)
-let initial = []
+let initial =
+  { ctx_ops = Name.Map.empty
+  ; ctx_idents = []
+  }
 
 (** Type errors *)
 type error =
   | InvalidName of Name.t
+  | InvalidOperation of Name.t
   | PattTypeMismatch of Syntax.expr_ty
   | ExprTypeMismatch of Syntax.expr_ty * Syntax.expr_ty
+  | ExprTypeExpected
   | CompTypeMismatch of Syntax.comp_ty * Syntax.comp_ty
   | TypeExpectedButFunction of Syntax.expr_ty
   | TypeExpectedButTuple of Syntax.expr_ty
   | TupleTooShort of Syntax.expr_ty
   | TupleTooLong of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
+  | ComodelExpected of Syntax.expr_ty
   | CannotInferArgument of Name.t
   | CannotInferMatch
-  | DulicateOperation of Name.t
+  | DuplicateOperation of Name.t
+  | UnhandledOperation of Name.t
 
 exception Error of error Location.located
 
@@ -31,6 +41,8 @@ let print_error err ppf =
 
   | InvalidName x -> Format.fprintf ppf "invalid name %t, please report" (Name.print x)
 
+  | InvalidOperation op -> Format.fprintf ppf "invalid operation %t, please report" (Name.print op)
+
   | PattTypeMismatch ty_expected ->
      Format.fprintf ppf "this pattern should have type@ %t"
                         (Syntax.print_expr_ty ty_expected)
@@ -41,9 +53,12 @@ let print_error err ppf =
                         (Syntax.print_expr_ty ty_actual)
 
   | CompTypeMismatch (ty_expected, ty_actual) ->
-     Format.fprintf ppf "this expression should have type@ %t but has type@ %t"
+     Format.fprintf ppf "this computation should have type@ %t but has type@ %t"
                         (Syntax.print_comp_ty ty_expected)
                         (Syntax.print_comp_ty ty_actual)
+
+  | ExprTypeExpected ->
+     Format.fprintf ppf "this type should be pure"
 
   | TypeExpectedButFunction ty ->
      Format.fprintf ppf "this expression is a function but should have type@ %t"
@@ -65,18 +80,26 @@ let print_error err ppf =
      Format.fprintf ppf "this expression should be a function but has type@ %t"
                         (Syntax.print_expr_ty ty)
 
+  | ComodelExpected ty ->
+     Format.fprintf ppf "this expression should be a comodel but has type@ %t"
+                        (Syntax.print_expr_ty ty)
+
   | CannotInferArgument x ->
      Format.fprintf ppf "cannot infer the type of@ %t" (Name.print x)
 
   | CannotInferMatch ->
      Format.fprintf ppf "cannot infer the type of this match statement"
 
-  | DulicateOperation op ->
+  | DuplicateOperation op ->
      Format.fprintf ppf "operation %t is defined twice" (Name.print op)
 
+  | UnhandledOperation op ->
+     Format.fprintf ppf "uhnadled operation %t" (Name.print op)
 
 (** Extend the context with the type of deBruijn index 0 *)
-let extend x ty ctx = (x, ty) :: ctx
+let extend x ty ctx = { ctx with ctx_idents = (x, ty) :: ctx.ctx_idents }
+
+let declare_operation op ty1 ty2 ctx = { ctx with ctx_ops = Name.Map.add op (ty1, ty2) ctx.ctx_ops }
 
 let rec extends xts ctx =
   match xts with
@@ -84,16 +107,22 @@ let rec extends xts ctx =
   | (x, t) :: xts -> extends xts (extend x t ctx)
 
 (** Lookup the index and the type of a name *)
-let lookup ~loc x ctx =
+let lookup ~loc x {ctx_idents;_} =
   let rec fold k = function
     | [] -> error ~loc (InvalidName x)
-    | (y,t) :: ctx when Name.equal x y -> (k, t)
-    | _ :: ctx -> fold (k+1) ctx
+    | (y,t) :: _ when Name.equal x y -> (k, t)
+    | _ :: lst -> fold (k+1) lst
   in
-  fold 0 ctx
+  fold 0 ctx_idents
+
+let lookup_operation ~loc op {ctx_ops;_} =
+  match Name.Map.find op ctx_ops with
+  | None -> error ~loc (InvalidOperation op)
+  | Some (ty1, ty2) -> (ty1, ty2)
 
 (** Check that a type is valid. Retrn the processed type. *)
-let rec expr_ty = function
+let rec expr_ty {Location.data=t'; loc} =
+  match t' with
 
   | Desugared.Int -> Syntax.Int
 
@@ -106,11 +135,24 @@ let rec expr_ty = function
      and t2 = comp_ty t2 in
      Syntax.Arrow (t1, t2)
 
-  | Desugared.ComodelTy lst ->
-     let lst = List.map (fun (op, t1, t2) -> (op, expr_ty t1, comp_ty t2)) lst in
-     Syntax.ComodelTy lst
+  | Desugared.ComodelTy (sgn1, t, sgn2) ->
+     let t = expr_ty t in
+     Syntax.ComodelTy (sgn1, t, sgn2)
 
-and comp_ty ty = Syntax.purely (expr_ty ty)
+  | Desugared.CompTy _ ->
+     error ~loc ExprTypeExpected
+
+and comp_ty ({Location.data=t'; loc} as t) =
+  match t' with
+
+  | Desugared.CompTy (t, sgn) ->
+     let t = expr_ty t in
+     Syntax.CompTy (t, sgn)
+
+  | (Desugared.Int | Desugared.Product _ | Desugared.Arrow _ | Desugared.ComodelTy _) ->
+     let t = expr_ty t in
+     Syntax.CompTy (t, Syntax.empty_signature)
+
 
 (** Typecheck a pattern, return processed pattern and the list of identifiers
    and types bound by the pattern *)
@@ -162,6 +204,13 @@ let top_extend_pattern ctx p t =
   let ctx = extends xts ctx in
   ctx, p, xts
 
+(** Make sure that the dirt of [ty] is a subsignature of [sgn], or report an error. *)
+let check_dirt ~loc (Syntax.CompTy (_, sgn1)) sgn2 =
+  match Name.Set.choose_diff sgn1 sgn2 with
+  | None -> ()
+  | Some op -> error ~loc (UnhandledOperation op)
+
+
 (** [infer_expr ctx e] infers the expression type [ty] of an expression [e]. It
    returns the processed expression [e] and its type [ty]. *)
 let rec infer_expr (ctx : context) {Location.data=e'; loc} =
@@ -192,11 +241,10 @@ let rec infer_expr (ctx : context) {Location.data=e'; loc} =
   | Desugared.Lambda ((x, None), _) ->
      error ~loc (CannotInferArgument x)
 
-  | Desugared.Comodel lst ->
-     let op_cs_tys = infer_comodel ~loc ctx lst in
-     let op_cs = List.map (fun (op, c, _) -> (op, c)) op_cs_tys
-     and op_tys = List.map (fun (op, _, (ty1, ty2)) -> (op, ty1, ty2)) op_cs_tys in
-     locate (Syntax.Comodel op_cs), Syntax.ComodelTy op_tys
+  | Desugared.Comodel (e, coops) ->
+     let e, e_ty = infer_expr ctx e in
+     let coops, sgn1, sgn2 = infer_coops ~loc ctx e_ty coops in
+     locate (Syntax.Comodel (e, coops)), Syntax.ComodelTy (sgn1, e_ty, sgn2)
 
 (** [infer_comp ctx c] infers the type [ty] of a computation [c]. It returns
     the processed computation [c] and its type [ty].  *)
@@ -206,7 +254,7 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
 
   | Desugared.Return e ->
      let e, e_ty = infer_expr ctx e in
-     locate (Syntax.Return e), Syntax.purely e_ty
+     locate (Syntax.Return e), Syntax.pure e_ty
 
   | Desugared.AscribeComp (c, t) ->
      let t = comp_ty t in
@@ -214,9 +262,10 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
      c, t
 
   | Desugared.Let (p, c1, c2) ->
-     let c1, c1_ty = infer_comp ctx c1 in
-     let ctx, p = extend_pattern ctx p (Syntax.purify c1_ty) in
+     let c1, (Syntax.CompTy (c1_ty, c1_sgn)) = infer_comp ctx c1 in
+     let ctx, p = extend_pattern ctx p c1_ty in
      let c2, c2_ty = infer_comp ctx c2 in
+     let c2_ty = Syntax.pollute c2_ty c1_sgn in
      locate (Syntax.Let (p, c1, c2)), c2_ty
 
   | Desugared.Match (e, lst) ->
@@ -236,6 +285,21 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
           error ~loc:(e1.Location.loc) (FunctionExpected t1)
      end
 
+  | Desugared.Operation (op, e) ->
+     let ty1, ty2 = lookup_operation ~loc op ctx in
+     let e = check_expr ctx e ty1 in
+     let e_ty = Syntax.op_ty ty2 op in
+     locate (Syntax.Operation (op, e)), e_ty
+
+  | Desugared.Using (cmdl, c, (px, pw, fin)) ->
+     let cmdl, (sig1, w_ty, sig2) = infer_comodel ctx cmdl in
+     let c, (Syntax.CompTy (c_ty', _) as c_ty) = infer_comp ctx c in
+     check_dirt ~loc c_ty sig1 ;
+     let ctx, px = extend_pattern ctx px c_ty' in
+     let ctx, pw = extend_pattern ctx pw w_ty in
+     let fin, fin_ty = infer_comp ctx fin in
+     locate (Syntax.Using (cmdl, c, (px, pw, fin))), fin_ty
+
 and infer_match_clauses ~loc ctx patt_ty lst =
   match lst with
   | [] -> error ~loc CannotInferMatch
@@ -245,27 +309,39 @@ and infer_match_clauses ~loc ctx patt_ty lst =
      let lst = check_match_clauses ctx patt_ty c_ty lst in
      ((p, c) :: lst), c_ty
 
-and infer_comodel ~loc ctx lst =
-  let rec fold op_cs_tys = function
+and infer_coops ~loc ctx w_ty lst =
+  let rec fold coops sgn1 sgn2 = function
 
     | [] ->
-       List.rev op_cs_tys
+       let coops = List.rev coops in
+       coops, sgn1, sgn2
 
-    | (op, (x, None), c) :: _ ->
-       error ~loc (CannotInferArgument x)
-
-    | (op, (x, Some ty), c) :: lst ->
-       if List.exists (fun (op', _, _) -> Name.equal op op') op_cs_tys then
-         error ~loc (DulicateOperation op)
+    | (op, px, pw, c) :: lst ->
+       if Name.Set.mem op sgn1 then
+         error ~loc (DuplicateOperation op)
        else
-         let ty1 = expr_ty ty in
-         let ctx = extend x ty1 ctx in
-         let c, ty2 = infer_comp ctx c in
-         let op_cs_tys = (op, c, (ty1, ty2)) :: op_cs_tys in
-         fold op_cs_tys lst
+         let (x_ty, op_ty) = lookup_operation ~loc op ctx in
+         let ctx, px = extend_pattern ctx px x_ty in
+         let ctx, pw = extend_pattern ctx pw w_ty in
+         let c, (Syntax.CompTy (_, c_sgn) as c_ty) = infer_comp ctx c in
+         let c_required = Syntax.pure (Syntax.Product [op_ty; w_ty]) in
+         if not (Syntax.comp_subty c_required c_ty) then
+           error ~loc (CompTypeMismatch (c_required, c_ty)) ;
+         let coops = (op, px, pw, c) :: coops
+         and sgn1 = Name.Set.add op sgn1
+         and sgn2 = Name.Set.union sgn2 c_sgn in
+         fold coops sgn1 sgn2 lst
   in
-  fold [] lst
+  fold [] Name.Set.empty Name.Set.empty lst
 
+and infer_comodel ctx cmdl =
+  let e, e_ty = infer_expr ctx cmdl in
+  match e_ty with
+
+  | Syntax.ComodelTy (sgn1, t, sgn2) -> e, (sgn1, t, sgn2)
+
+  | Syntax.Int | Syntax.Product _ | Syntax.Arrow _ ->
+     error ~loc:cmdl.Location.loc (ComodelExpected e_ty)
 
 (** [check_expr ctx e ty] checks that expression [e] has type [ty] in context [ctx].
     It returns the processed expression [e]. *)
@@ -307,41 +383,51 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
   | (Desugared.Numeral _ | Desugared.Lambda ((_, Some _), _) | Desugared.Var _ |
      Desugared.AscribeExpr _ | Desugared.Comodel _) ->
      let e, ty' = infer_expr ctx e in
-     if Syntax.equal_expr_ty ty ty'
+     if Syntax.expr_subty ty' ty
      then
        e
      else
        error ~loc (ExprTypeMismatch (ty, ty'))
 
-(** [check_comp ctx c ty] checks that computation [c] has type [ty] in context [ctx].
+(** [check_comp ctx c ty] checks that computation [c] has computation type [ty] in context [ctx].
     It returns the processed computation [c]. *)
-and check_comp ctx ({Location.data=c'; loc} as c) ty =
+and check_comp ctx ({Location.data=c'; loc} as c) check_ty =
+  let (Syntax.CompTy (check_ty', check_sgn)) = check_ty in
   let locate = Location.locate ~loc in
   match c' with
 
   | Desugared.Return e ->
-    let (Syntax.CompTy (ty, _)) = ty in
-    let e = check_expr ctx e ty in
+    let e = check_expr ctx e check_ty' in
     locate (Syntax.Return e)
 
   | Desugared.Match (e, lst) ->
      let e, e_ty = infer_expr ctx e in
-     let lst = check_match_clauses ctx e_ty ty lst in
+     let lst = check_match_clauses ctx e_ty check_ty lst in
      locate (Syntax.Match (e, lst))
 
   | Desugared.Let (p, c1, c2) ->
-     let c1, t1 = infer_comp ctx c1 in
-     let ctx, p = extend_pattern ctx p (Syntax.purify t1) in
-     let c2 = check_comp ctx c2 ty in
+     let c1, (Syntax.CompTy (c1_ty', _) as c1_ty) = infer_comp ctx c1 in
+     check_dirt ~loc c1_ty check_sgn ;
+     let ctx, p = extend_pattern ctx p c1_ty' in
+     let c2 = check_comp ctx c2 check_ty in
      locate (Syntax.Let (p, c1, c2))
 
-  | (Desugared.Apply _ | Desugared.AscribeComp _) ->
-     let c, ty' = infer_comp ctx c in
-     if Syntax.equal_comp_ty ty ty'
+  | Desugared.Using (cmdl, c, (px, pw, fin)) ->
+     let cmdl, (sig1, w_ty, sig2) = infer_comodel ctx cmdl in
+     let c, (Syntax.CompTy (c_ty', _) as c_ty) = infer_comp ctx c in
+     check_dirt ~loc c_ty sig1 ;
+     let ctx, px = extend_pattern ctx px c_ty' in
+     let ctx, pw = extend_pattern ctx pw w_ty in
+     let fin = check_comp ctx fin check_ty in
+     locate (Syntax.Using (cmdl, c, (px, pw, fin)))
+
+  | (Desugared.Apply _ | Desugared.AscribeComp _ | Desugared.Operation _) ->
+     let c, c_ty = infer_comp ctx c in
+     if Syntax.comp_subty c_ty check_ty
      then
        c
      else
-       error ~loc (CompTypeMismatch (ty, ty'))
+       error ~loc (CompTypeMismatch (check_ty, c_ty))
 
 and check_match_clauses ctx patt_ty ty lst =
   List.map (check_match_clause ctx patt_ty ty) lst
@@ -360,18 +446,20 @@ and toplevel ~quiet ctx {Location.data=d'; loc} =
        ctx, Syntax.TopLoad lst
 
     | Desugared.TopLet (p, c) ->
-       let c, ty = infer_comp ctx c in
-       let ctx, p, xts = top_extend_pattern ctx p (Syntax.purify ty) in
+       let c, (Syntax.CompTy (c_ty', _) as c_ty) = infer_comp ctx c in
+       check_dirt ~loc c_ty Syntax.empty_signature ;
+       let ctx, p, xts = top_extend_pattern ctx p c_ty' in
        ctx, Syntax.TopLet (p, xts, c)
 
     | Desugared.TopComp c ->
-       let c, ty = infer_comp ctx c in
-       ctx, Syntax.TopComp (c, ty)
+       let c, (Syntax.CompTy (c_ty', _) as c_ty) = infer_comp ctx c in
+       check_dirt ~loc c_ty Syntax.empty_signature ;
+       ctx, Syntax.TopComp (c, c_ty')
 
     | Desugared.DeclOperation (op, ty1, ty2) ->
        let ty1 = expr_ty ty1
-       and ty2 = Syntax.pollute (Syntax.purely (expr_ty ty2)) op in
-       let ctx = extend op (Syntax.Arrow (ty1, ty2)) ctx in
+       and ty2 = expr_ty ty2 in
+       let ctx = declare_operation op ty1 ty2 ctx in
        ctx, Syntax.DeclOperation (op, ty1, ty2)
 
   in

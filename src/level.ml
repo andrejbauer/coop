@@ -26,16 +26,21 @@ let infix = function
   | Infix1 -> (500, 499, 500)
   | Infix0 -> (600, 600, 599)
 
-let comp_ty = 700
+let tuple = no_parens
+let tuple_arg = no_parens
+
+(* Type levels *)
+
+let comp_ty = 800
 let comp_ty_left = comp_ty - 1
 let comp_ty_right = no_parens
 
-let arr = 800
+let arr = 900
 let arr_left = arr - 1
 let arr_right = arr
 
-let product = 750
+let product = 700
 let product_arg = product - 1
 
-let tuple = no_parens
-let tuple_arg = no_parens
+let comodel_ty = 750
+let comodel_ty_world = product

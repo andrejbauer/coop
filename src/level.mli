@@ -38,6 +38,10 @@ val arr : t
 val arr_left : t
 val arr_right : t
 
+(** The level of a comodel type and its world argument *)
+val comodel_ty : t
+val comodel_ty_world : t
+
 (** The level of a computation type with its dirt *)
 val comp_ty : t
 val comp_ty_left : t

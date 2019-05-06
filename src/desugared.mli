@@ -1,11 +1,15 @@
 (** Desugared syntax of Terminus. *)
 
+type signature = Name.Set.t
+
 (** Types. *)
-type ty =
+type ty = ty' Location.located
+and ty' =
   | Int
   | Arrow of ty * ty
   | Product of ty list
-  | ComodelTy of (Name.t * ty * ty) list
+  | ComodelTy of signature * ty * signature
+  | CompTy of ty * signature
 
 (** Patterns *)
 type pattern = pattern' Location.located
@@ -18,25 +22,29 @@ and pattern' =
 (** Expressions *)
 type expr = expr' Location.located
 and expr' =
+  | AscribeExpr of expr * ty
   | Var of Name.t
   | Numeral of int
   | Tuple of expr list
   | Lambda of abstraction * comp
-  | Comodel of comodel_clause list
-  | AscribeExpr of expr * ty
+  | Comodel of expr * comodel_clause list
 
 (** Computations *)
 and comp = comp' Location.located
 and comp' =
+  | AscribeComp of comp * ty
   | Return of expr
   | Let of pattern * comp * comp
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr
-  | AscribeComp of comp * ty
+  | Operation of Name.t * expr
+  | Using of expr * comp * finally
 
 and abstraction = Name.t * ty option
 
-and comodel_clause = Name.t * abstraction * comp
+and comodel_clause = Name.t * pattern * pattern * comp
+
+and finally = pattern * pattern * comp
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located

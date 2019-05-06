@@ -4,13 +4,17 @@
 let reserved = [
   ("comodel", Parser.COMODEL) ;
   ("end", Parser.END) ;
+  ("finally", Parser.FINALLY) ;
   ("fun", Parser.FUN) ;
+  ("in", Parser.IN) ;
   ("int", Parser.INT) ;
   ("let", Parser.LET) ;
-  ("match", Parser.MATCH) ;
-  ("in", Parser.IN) ;
   ("load", Parser.LOAD) ;
+  ("match", Parser.MATCH) ;
+  ("operation", Parser.OPERATION) ;
   ("unit", Parser.UNIT) ;
+  ("using", Parser.USING) ;
+  ("val", Parser.VAL) ;
   ("with", Parser.WITH) ;
 ]
 
@@ -76,13 +80,15 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | ')'                      -> f (); Parser.RPAREN
   | '{'                      -> f (); Parser.LBRACE
   | '}'                      -> f (); Parser.RBRACE
+  | '@'                      -> f (); Parser.AT
+  | '!'                      -> f (); Parser.BANG
   | '*' | 215                -> f (); Parser.STAR
   | ','                      -> f (); Parser.COMMA
   | ':'                      -> f (); Parser.COLON
-  | ';'                      -> f (); Parser.SEMI
   | ";;"                     -> f (); Parser.SEMISEMI
   | '='                      -> f (); Parser.EQUAL
   | "->" | 8594 | 10230      -> f (); Parser.ARROW
+  | "=>" | 8658              -> f (); Parser.DARROW
 
   (* We record the location of operators here because menhir cannot handle %infix and
      mark_location simultaneously, it seems. *)

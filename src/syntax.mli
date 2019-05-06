@@ -1,17 +1,21 @@
 (** Type-checked syntax of Terminus. *)
 
-(** For now dirt is trivial *)
-type dirt = unit
+(** A signature is a set of operation names. We need not carry the types of the
+   operations because those are declared globally. *)
+type signature = Name.Set.t
 
 (** Expression type *)
 type expr_ty =
   | Int
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
-  | ComodelTy of (Name.t * expr_ty * comp_ty) list
+  | ComodelTy of comodel_ty
 
 (** Computation type *)
-and comp_ty = CompTy of expr_ty * dirt
+and comp_ty = CompTy of expr_ty * signature
+
+(** Comodel *)
+and comodel_ty = signature * expr_ty * signature
 
 (** Patterns *)
 type pattern =
@@ -30,7 +34,7 @@ and expr' =
   | Numeral of int
   | Tuple of expr list
   | Lambda of comp
-  | Comodel of (Name.t * comp) list
+  | Comodel of expr * (Name.t * pattern * pattern * comp) list
 
 (** Computations *)
 and comp = comp' Location.located
@@ -39,29 +43,39 @@ and comp' =
   | Let of pattern * comp * comp
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr
+  | Operation of Name.t * expr
+  | Using of expr * comp * finally
+
+and finally = pattern * pattern * comp
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * comp
-  | TopComp of comp * comp_ty
-  | DeclOperation of Name.t * expr_ty * comp_ty
+  | TopComp of comp * expr_ty
+  | DeclOperation of Name.t * expr_ty * expr_ty
+
+(** The unit type *)
+val unit_ty : expr_ty
+
+(** The empty signature *)
+val empty_signature : signature
 
 (** Make a pure computation type *)
-val purely : expr_ty -> comp_ty
+val pure : expr_ty -> comp_ty
 
-(** The expression type associated with the given computation type *)
-val purify : comp_ty -> expr_ty
+(** Add more dirt to a computation type *)
+val pollute : comp_ty -> signature -> comp_ty
 
-(** Add the operation the dirt of a computation type *)
-val pollute : comp_ty -> Name.t -> comp_ty
+(** Add an operation to a computation type *)
+val op_ty : expr_ty -> Name.t -> comp_ty
 
-(** Are expression types equal? *)
-val equal_expr_ty : expr_ty -> expr_ty -> bool
+(** Is the first expression type a subtype of the second one? *)
+val expr_subty : expr_ty -> expr_ty -> bool
 
-(** Are computation types equal? *)
-val equal_comp_ty : comp_ty -> comp_ty -> bool
+(** Is the first computation type a subtype of the second one? *)
+val comp_subty : comp_ty -> comp_ty -> bool
 
 (** Print an expression type *)
 val print_expr_ty : ?max_level:Level.t -> expr_ty -> Format.formatter -> unit

@@ -8,6 +8,31 @@ type fixity =
 (** An identifier. *)
 type t = Ident of string * fixity
 
+(** A set of identifiers. *)
+module Set :
+sig
+  type elt = t
+  type t
+
+  val empty : t
+  val add : elt -> t -> t
+  val mem : elt -> t -> bool
+  val elements : t -> elt list
+  val subset : t -> t -> bool
+  val union : t -> t -> t
+  val choose_diff : t -> t -> elt option
+end
+
+(** A map from identifiers. *)
+module Map :
+sig
+  type key = t
+  type 'a t
+  val empty : 'a t
+  val add : key -> 'a -> 'a t -> 'a t
+  val find : key -> 'a t -> 'a option
+end
+
 (** Are the given identifiers equal? *)
 val equal : t -> t -> bool
 

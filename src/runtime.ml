@@ -2,7 +2,9 @@ type value =
   | Numeral of int
   | Tuple of value list
   | Closure of closure
-  | Comodel of closure list
+  | Comodel of world * cooperation Name.Map.t
+
+and world = World of value
 
 and result =
   | Return of value
@@ -10,12 +12,16 @@ and result =
 
 and closure = value -> result
 
+and cooperation = value * world -> value * world
+
 type environment = value list
 
 type error =
   | InvalidDeBruijn of int
   | UnhandledOperation of Name.t
   | FunctionExpected
+  | ComodelExpected
+  | PairExpected
   | PatternMismatch
 
 exception Error of error Location.located
@@ -33,6 +39,12 @@ let print_error err ppf =
 
   | FunctionExpected ->
      Format.fprintf ppf "function expected, please report"
+
+  | ComodelExpected ->
+     Format.fprintf ppf "comodel expected, please report"
+
+  | PairExpected ->
+     Format.fprintf ppf "pair expected, please report"
 
   | PatternMismatch ->
      Format.fprintf ppf "pattern mismatch"
@@ -116,9 +128,6 @@ let match_clauses ~loc env ps v =
   in
   fold ps
 
-let generic op =
-  Closure (fun u -> Operation (op, u, (fun u -> Return u)))
-
 let rec print_value ?max_level v ppf =
   match v with
 
@@ -130,21 +139,30 @@ let rec print_value ?max_level v ppf =
 
   | Closure _ -> Format.fprintf ppf "<fun>"
 
-  | Comodel lst -> Format.fprintf ppf "<comodel>"
+  | Comodel _ -> Format.fprintf ppf "<comodel>"
 
-let as_value ~loc = function
-
-  | Return v -> v
-
-  | Operation (op, _, _) ->
-     error ~loc (UnhandledOperation op)
+let as_pair ~loc = function
+  | Tuple [v1; v2] -> (v1, v2)
+  | Closure _ | Numeral _ | Tuple ([] | [_] | _::_::_::_) | Comodel _ ->
+     error ~loc PairExpected
 
 let as_closure ~loc = function
-
   | Closure f -> f
+  | Numeral _ | Tuple _ | Comodel _ -> error ~loc FunctionExpected
 
-  | Numeral _ | Tuple _ | Comodel _ ->
-     error ~loc FunctionExpected
+let as_value ~loc = function
+  | Return v -> v
+  | Operation (op, _, _) -> error ~loc (UnhandledOperation op)
+
+let as_comodel ~loc = function
+  | Comodel (w, cmdl) -> (w, cmdl)
+  | Numeral _ | Tuple _ | Closure _ -> error ~loc ComodelExpected
+
+(** The result monad *)
+let rec bind r k =
+  match r with
+  | Return v -> k v
+  | Operation (op, u, l) -> Operation (op, u, fun x -> let r = l x in bind r k)
 
 (*** Evaluation ***)
 
@@ -166,9 +184,24 @@ let rec eval_expr env {Location.data=e'; loc} =
      in
      Closure f
 
-  | Syntax.Comodel lst ->
-     let lst = List.map (fun (_, c) v -> eval_comp (extend v env) c) lst in
-     Comodel lst
+  | Syntax.Comodel (e, lst) ->
+     let w = eval_expr env e in
+     let coop px pw c =
+       let loc = c.Location.loc in
+       fun (u, World w) ->
+       let env = extend_pattern ~loc px u env in
+       let env = extend_pattern ~loc pw w env in
+       let r = eval_comp env c in
+       let (v, w) = as_pair ~loc (as_value ~loc r) in
+       (v, World w)
+     in
+     let cmdl =
+       List.fold_left
+         (fun cmdl (op, px, pw, c) -> Name.Map.add op (coop px pw c) cmdl)
+         Name.Map.empty
+         lst
+     in
+     Comodel (World w, cmdl)
 
 and eval_comp env {Location.data=c'; loc} =
   match c' with
@@ -189,16 +222,42 @@ and eval_comp env {Location.data=c'; loc} =
      f v2
 
   | Syntax.Let (p, c1, c2) ->
-     begin
-       match eval_comp env c1 with
+     let r = eval_comp env c1 in
+     let k v = eval_comp (extend_pattern ~loc p v env) c2 in
+     bind r k
 
-       | Return v ->
-          let env = extend_pattern ~loc p v env in
-          eval_comp env c2
+  | Syntax.Operation (op, u) ->
+     let u = eval_expr env u in
+     Operation (op, u, (fun v -> Return v))
 
-       | Operation (op, u, k) ->
-          Operation (op, u, (fun v -> eval_comp (extend v env) c2))
-     end
+  | Syntax.Using (cmdl, c, fin) ->
+     let (w, cmdl) = as_comodel ~loc (eval_expr env cmdl)
+     and r = eval_comp env c
+     and fin = eval_finally ~loc env fin in
+     using ~loc env cmdl w r fin
+
+and eval_finally ~loc env (px, pw, c) =
+  fun (v, World w) ->
+  let env = extend_pattern ~loc px v env in
+  let env = extend_pattern ~loc pw w env in
+  eval_comp env c
+
+and using ~loc env cmdl w r fin =
+  let rec tensor w r =
+    match r with
+
+    | Return v -> fin (v, w)
+
+    | Operation (op, u, k) ->
+       begin
+         match Name.Map.find op cmdl with
+         | None -> error ~loc (UnhandledOperation op)
+         | Some coop ->
+            let (v, w') = coop (u, w) in
+            tensor w' (k v)
+       end
+  in
+  tensor w r
 
 let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
   match d' with
@@ -225,19 +284,18 @@ let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
      let v = as_value ~loc r in
      if not quiet then
        Format.printf "@[<hov>- :@ %t@ =@ %t@]@."
-         (Syntax.print_comp_ty ty)
+         (Syntax.print_expr_ty ty)
          (print_value v) ;
      env
 
   | Syntax.DeclOperation (op, ty1, ty2) ->
      if not quiet then
-       Format.printf "@[<hov>operation@ %t@ :@ %t@ %s@ %t@]@."
+       Format.printf "@[<hov>operation %t@ :@ %t@ %s@ %t@."
          (Name.print op)
          (Syntax.print_expr_ty ty1)
          (Print.char_arrow ())
-         (Syntax.print_comp_ty ty2) ;
-     extend (generic op) env
-
+         (Syntax.print_expr_ty ty2) ;
+     env
 
 and eval_topfile ~quiet env lst =
   let rec fold env = function

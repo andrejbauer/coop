@@ -14,19 +14,21 @@
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
 %token LBRACE RBRACE
-%token COLON SEMI ARROW SEMISEMI COMMA STAR
+%token COLON ARROW DARROW SEMISEMI COMMA STAR BANG AT
 
 (* Expressions and computations *)
 %token <int> NUMERAL
 %token FUN
+%token COMODEL
 %token LET EQUAL IN
 %token MATCH WITH BAR END
-%token COMODEL
+%token USING FINALLY VAL
 
 (* Toplevel commands *)
 
 %token <string> QUOTED_STRING
 %token LOAD
+%token OPERATION
 
 (* End of input token *)
 %token EOF
@@ -75,6 +77,7 @@ plain_toplevel:
   | LOAD fn=QUOTED_STRING                                { Sugared.TopLoad fn }
   | LET p=pattern EQUAL e=term                           { Sugared.TopLet (p, e) }
   | LET f=var_name a=lambda_abstraction EQUAL e=term     { Sugared.TopLetFun (f, a, e) }
+  | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty   { Sugared.DeclOperation (op, t1, t2) }
 
 (* Main syntax tree *)
 term : mark_location(plain_term) { $1 }
@@ -86,8 +89,10 @@ plain_term:
   | LET f=var_name a=lambda_abstraction EQUAL c1=infix_term IN c2=term
                                                   { Sugared.LetFun (f, a, c1, c2) }
   | MATCH e=infix_term WITH lst=match_clauses END { Sugared.Match (e, lst) }
-  | COMODEL lst=comodel_clauses END               { Sugared.Comodel lst }
-
+  | COMODEL e=infix_term WITH lst=comodel_clauses END
+                                                  { Sugared.Comodel (e, lst) }
+  | USING cmdl=infix_term IN c=term FINALLY fin=finally END
+      { Sugared.Using (cmdl, c, fin) }
 
 infix_term: mark_location(plain_infix_term) { $1 }
 plain_infix_term:
@@ -147,11 +152,14 @@ comodel_clauses:
   | BAR? lst=separated_list(BAR, comodel_clause)  { lst }
 
 comodel_clause:
-  | op=var_name a=lambda_abstraction ARROW e=term  { (op, a, e) }
+  | op=var_name px=pattern AT pw=pattern ARROW e=term  { (op, px, pw, e) }
 
 lambda_abstraction:
   | xs=nonempty_list(var_name)               { [(xs, None)] }
   | lst=nonempty_list(typed_binder)          { List.map (fun (xs, t) -> (xs, Some t)) lst }
+
+finally:
+  | VAL px=pattern AT pw=pattern ARROW t=term { (px, pw, t) }
 
 typed_binder:
   | LPAREN xs=nonempty_list(var_name) COLON t=ty RPAREN { (xs, t) }
@@ -165,25 +173,32 @@ plain_pattern:
                 { match lst with
                   | [p] -> p.Location.data
                   | [] | _::_ -> Sugared.PattTuple lst }
+ty: mark_location(plain_ty) { $1 }
+plain_ty:
+  | t=plain_comp_ty        { t }
+  | t1=comp_ty ARROW t2=ty { Sugared.Arrow (t1, t2) }
+  | sgn1=signature AT tw=comp_ty DARROW sgn2=signature
+                           { Sugared.ComodelTy (sgn1, tw, sgn2) }
 
-ty:
-  | t=prod_ty               { t }
-  | t1=prod_ty ARROW t2=ty  { Sugared.Arrow (t1, t2) }
+comp_ty: mark_location(plain_comp_ty) { $1 }
+plain_comp_ty:
+  | t=prod_ty BANG lst=signature  { Sugared.CompTy (t, lst) }
+  | plain_prod_ty                 { $1 }
 
-prod_ty:
-  | t=simple_ty   { t }
+prod_ty: mark_location(plain_prod_ty) { $1 }
+plain_prod_ty:
+  | t=plain_simple_ty   { t }
   | t=simple_ty STAR ts=separated_nonempty_list(STAR, simple_ty)
-                  { Sugared.Product (t :: ts) }
+                        { Sugared.Product (t :: ts) }
 
-simple_ty:
-  | INT                                            { Sugared.Int }
-  | UNIT                                           { Sugared.Product [] }
-  | LPAREN t=ty RPAREN                             { t }
-  | LBRACE lst=separated_list(SEMI, op_ty) RBRACE  { Sugared.ComodelTy lst }
+simple_ty: mark_location(plain_simple_ty) { $1 }
+plain_simple_ty:
+  | INT                      { Sugared.Int }
+  | UNIT                     { Sugared.Product [] }
+  | LPAREN t=plain_ty RPAREN { t }
 
-op_ty:
-  | op=var_name COLON t1=simple_ty ARROW t2=ty { (op, t1, t2) }
-
+signature:
+  | LBRACE lst=separated_list(COMMA, var_name) RBRACE  { lst }
 
 mark_location(X):
   x=X
