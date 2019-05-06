@@ -321,6 +321,11 @@ let toplevel' ctx = function
        and ctx = extend op Operation ctx in
        ctx, Desugared.DeclOperation (op, t1, t2)
 
+    | Sugared.External (x, t, s) ->
+       let t = ty ctx t in
+       let ctx = extend x Variable ctx in
+       ctx, Desugared.External (x, t, s)
+
   in
   let ctx, c = toplevel' ctx c in
   ctx, Location.locate ~loc c

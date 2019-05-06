@@ -1,24 +1,9 @@
-type value =
-  | Numeral of int
-  | Tuple of value list
-  | Closure of closure
-  | Comodel of world * cooperation Name.Map.t
-
-and world = World of value
-
-and result =
-  | Val of value
-  | Operation of Name.t * value * closure
-
-and closure = value -> result
-
-and cooperation = value * world -> value * world
-
-type environment = value list
+type environment = Value.t list
 
 type error =
   | InvalidDeBruijn of int
   | UnhandledOperation of Name.t
+  | UnknownExternal of string
   | FunctionExpected
   | ComodelExpected
   | PairExpected
@@ -36,6 +21,9 @@ let print_error err ppf =
 
   | UnhandledOperation op ->
      Format.fprintf ppf "unhandled operation %t" (Name.print op)
+
+  | UnknownExternal s ->
+     Format.fprintf ppf "unknown external %s" s
 
   | FunctionExpected ->
      Format.fprintf ppf "function expected, please report"
@@ -75,18 +63,18 @@ let match_pattern p v =
     | Syntax.PattVar, _ ->
        Some (v :: us)
 
-  | Syntax.PattNumeral m, Numeral n ->
+  | Syntax.PattNumeral m, Value.Numeral n ->
      if m = n then Some us else None
 
-  | Syntax.PattTuple ps, Tuple vs ->
+  | Syntax.PattTuple ps, Value.Tuple vs ->
      fold_tuple us ps vs
 
-  | _, Closure _ -> None
+  | _, Value.Closure _ -> None
 
-  | _, Comodel _ -> None
+  | _, Value.Comodel _ -> None
 
-  | (Syntax.PattTuple _, Numeral _ |
-     Syntax.PattNumeral _, Tuple _) ->
+  | (Syntax.PattTuple _, Value.Numeral _ |
+     Syntax.PattNumeral _, Value.Tuple _) ->
      None
 
   and fold_tuple us ps vs =
@@ -128,72 +116,59 @@ let match_clauses ~loc env ps v =
   in
   fold ps
 
-let rec print_value ?max_level v ppf =
-  match v with
-
-  | Numeral k -> Format.fprintf ppf "%d" k
-
-  | Tuple lst ->
-     Format.fprintf ppf "(%t)"
-       (Print.sequence (print_value ~max_level:Level.tuple_arg) "," lst)
-
-  | Closure _ -> Format.fprintf ppf "<fun>"
-
-  | Comodel _ -> Format.fprintf ppf "<comodel>"
-
 let as_pair ~loc = function
-  | Tuple [v1; v2] -> (v1, v2)
-  | Closure _ | Numeral _ | Tuple ([] | [_] | _::_::_::_) | Comodel _ ->
+  | Value.Tuple [v1; v2] -> (v1, v2)
+  | Value.Closure _ | Value.Numeral _ | Value.Tuple ([] | [_] | _::_::_::_) | Value.Comodel _ ->
      error ~loc PairExpected
 
 let as_closure ~loc = function
-  | Closure f -> f
-  | Numeral _ | Tuple _ | Comodel _ -> error ~loc FunctionExpected
+  | Value.Closure f -> f
+  | Value.Numeral _ | Value.Tuple _ | Value.Comodel _ -> error ~loc FunctionExpected
 
 let as_value ~loc = function
-  | Val v -> v
-  | Operation (op, _, _) -> error ~loc (UnhandledOperation op)
+  | Value.Val v -> v
+  | Value.Operation (op, _, _) -> error ~loc (UnhandledOperation op)
 
 let as_comodel ~loc = function
-  | Comodel (w, cmdl) -> (w, cmdl)
-  | Numeral _ | Tuple _ | Closure _ -> error ~loc ComodelExpected
+  | Value.Comodel (w, cmdl) -> (w, cmdl)
+  | Value.Numeral _ | Value.Tuple _ | Value.Closure _ -> error ~loc ComodelExpected
 
 (** The result monad *)
 let rec bind r k =
   match r with
-  | Val v -> k v
-  | Operation (op, u, l) -> Operation (op, u, fun x -> let r = l x in bind r k)
+  | Value.Val v -> k v
+  | Value.Operation (op, u, l) -> Value.Operation (op, u, fun x -> let r = l x in bind r k)
 
 (*** Evaluation ***)
 
 let rec eval_expr env {Location.data=e'; loc} =
   match e' with
 
-  | Syntax.Numeral k -> Numeral k
+  | Syntax.Numeral k -> Value.Numeral k
 
   | Syntax.Var i -> lookup ~loc i env
 
   | Syntax.Tuple lst ->
      let lst = List.map (eval_expr env) lst in
-     Tuple lst
+     Value.Tuple lst
 
   | Syntax.Lambda c ->
      let f v =
        let env = extend v env in
        eval_comp env c
      in
-     Closure f
+     Value.Closure f
 
   | Syntax.Comodel (e, lst) ->
      let w = eval_expr env e in
      let coop px pw c =
        let loc = c.Location.loc in
-       fun (u, World w) ->
+       fun (u, Value.World w) ->
        let env = extend_pattern ~loc px u env in
        let env = extend_pattern ~loc pw w env in
        let r = eval_comp env c in
        let (v, w) = as_pair ~loc (as_value ~loc r) in
-       (v, World w)
+       (v, Value.World w)
      in
      let cmdl =
        List.fold_left
@@ -201,14 +176,14 @@ let rec eval_expr env {Location.data=e'; loc} =
          Name.Map.empty
          lst
      in
-     Comodel (World w, cmdl)
+     Value.Comodel (Value.World w, cmdl)
 
 and eval_comp env {Location.data=c'; loc} =
   match c' with
 
   | Syntax.Val e ->
      let v = eval_expr env e in
-     Val v
+     Value.Val v
 
   | Syntax.Match (e, lst) ->
      let v = eval_expr env e in
@@ -228,7 +203,7 @@ and eval_comp env {Location.data=c'; loc} =
 
   | Syntax.Operation (op, u) ->
      let u = eval_expr env u in
-     Operation (op, u, (fun v -> Val v))
+     Value.Operation (op, u, (fun v -> Value.Val v))
 
   | Syntax.Using (cmdl, c, fin) ->
      let (w, cmdl) = as_comodel ~loc (eval_expr env cmdl)
@@ -237,7 +212,7 @@ and eval_comp env {Location.data=c'; loc} =
      using ~loc env cmdl w r fin
 
 and eval_finally ~loc env (px, pw, c) =
-  fun (v, World w) ->
+  fun (v, Value.World w) ->
   let env = extend_pattern ~loc px v env in
   let env = extend_pattern ~loc pw w env in
   eval_comp env c
@@ -246,9 +221,9 @@ and using ~loc env cmdl w r fin =
   let rec tensor w r =
     match r with
 
-    | Val v -> fin (v, w)
+    | Value.Val v -> fin (v, w)
 
-    | Operation (op, u, k) ->
+    | Value.Operation (op, u, k) ->
        begin
          match Name.Map.find op cmdl with
          | None -> error ~loc (UnhandledOperation op)
@@ -275,7 +250,7 @@ let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
            Format.printf "@[<hov>val %t@ :@ %t@ =@ %t@]@."
              (Name.print x)
              (Syntax.print_expr_ty ty)
-             (print_value v))
+             (Value.print v))
          xts vs ;
      env
 
@@ -285,7 +260,7 @@ let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
      if not quiet then
        Format.printf "@[<hov>- :@ %t@ =@ %t@]@."
          (Syntax.print_expr_ty ty)
-         (print_value v) ;
+         (Value.print v) ;
      env
 
   | Syntax.DeclOperation (op, ty1, ty2) ->
@@ -296,6 +271,20 @@ let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
          (Print.char_arrow ())
          (Syntax.print_expr_ty ty2) ;
      env
+
+  | Syntax.External (x, t, s) ->
+     begin
+       match External.lookup s with
+       | None -> error ~loc (UnknownExternal s)
+       | Some v ->
+          let env = extend v env in
+          if not quiet then
+            Format.printf "@[<hov>external %t@ :@ %t = \"%s\"@]@."
+              (Name.print x)
+              (Syntax.print_expr_ty t)
+              s ;
+          env
+     end
 
 and eval_topfile ~quiet env lst =
   let rec fold env = function

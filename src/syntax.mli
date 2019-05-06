@@ -55,6 +55,7 @@ and toplevel' =
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopComp of comp * expr_ty
   | DeclOperation of Name.t * expr_ty * expr_ty
+  | External of Name.t * expr_ty * string
 
 (** The unit type *)
 val unit_ty : expr_ty

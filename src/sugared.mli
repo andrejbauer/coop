@@ -49,3 +49,4 @@ and toplevel' =
   | TopLetFun of Name.t * abstraction * term
   | TopComp of term
   | DeclOperation of Name.t * ty * ty
+  | External of Name.t * ty * string

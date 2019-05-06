@@ -53,3 +53,4 @@ and toplevel' =
   | TopLet of pattern * comp
   | TopComp of comp
   | DeclOperation of Name.t * ty * ty
+  | External of Name.t * ty * string

@@ -1,2 +1,5 @@
 (* Pervasives loaded at startup. *)
 
+(* Arithmetic *)
+external ( + ) : int -> int -> int = "+"
+

@@ -462,6 +462,11 @@ and toplevel ~quiet ctx {Location.data=d'; loc} =
        let ctx = declare_operation op ty1 ty2 ctx in
        ctx, Syntax.DeclOperation (op, ty1, ty2)
 
+    | Desugared.External (x, t, s) ->
+       let t = expr_ty t in
+       let ctx = extend x t ctx in
+       ctx, Syntax.External (x, t, s)
+
   in
   ctx, Location.locate ~loc d'
 

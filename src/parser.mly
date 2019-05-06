@@ -29,6 +29,7 @@
 %token <string> QUOTED_STRING
 %token LOAD
 %token OPERATION
+%token EXTERNAL
 
 (* End of input token *)
 %token EOF
@@ -110,6 +111,8 @@ toplevel_:
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
     { Sugared.DeclOperation (op, t1, t2) }
 
+  | EXTERNAL x=var_name COLON t=ty EQUAL s=QUOTED_STRING
+    { Sugared.External (x, t, s) }
 
 (* Main syntax tree *)
 term : mark_location(term_) { $1 }

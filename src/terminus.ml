@@ -79,6 +79,10 @@ let interactive_shell state =
            (Runtime.print_error err) ;
          state
 
+      | External.Error msg ->
+         Print.error "@[<hov>Error in external function: %s@]@." msg ;
+         state
+
       | Sys.Break ->
          Print.error "Interrupted." ;
          state
@@ -164,6 +168,9 @@ let main =
          Print.error "@[<hov>Runtime error at %t:@ %t@]@."
            (Location.print loc)
            (Runtime.print_error err)
+
+      | External.Error msg ->
+         Print.error "@[<hov>Error in external function: %s@]@." msg
   in
 
   run_code Toplevel.initial !files

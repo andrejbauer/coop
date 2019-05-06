@@ -4,6 +4,7 @@
 let reserved = [
   ("comodel", Parser.COMODEL) ;
   ("end", Parser.END) ;
+  ("external", Parser.EXTERNAL) ;
   ("finally", Parser.FINALLY) ;
   ("fun", Parser.FUN) ;
   ("in", Parser.IN) ;
