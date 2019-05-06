@@ -10,6 +10,7 @@ type infix =
   | Infix2
   | Infix3
   | Infix4
+  | Infix5
 
 let highest = 1000
 let least = 0
@@ -20,11 +21,12 @@ let prefix = 50
 let prefix_arg = 50
 
 let infix = function
-  | Infix4 -> (200, 199, 200)
-  | Infix3 -> (300, 300, 299)
-  | Infix2 -> (400, 400, 399)
-  | Infix1 -> (500, 499, 500)
-  | Infix0 -> (600, 600, 599)
+  | Infix5 -> (200, 199, 200)
+  | Infix4 -> (300, 300, 299)
+  | Infix3 -> (400, 400, 399)
+  | Infix2 -> (500, 499, 500)
+  | Infix1 -> (600, 600, 599)
+  | Infix0 -> (650, 649, 649)
 
 let tuple = no_parens
 let tuple_arg = no_parens

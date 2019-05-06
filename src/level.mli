@@ -8,7 +8,7 @@ type t
 val parenthesize : at_level:'a -> max_level:'a -> bool
 
 (** Following OCaml syntax, there are five levels of infix operators *)
-type infix = Infix0 | Infix1 | Infix2 | Infix3 | Infix4
+type infix = Infix0 | Infix1 | Infix2 | Infix3 | Infix4 | Infix5
 
 (** The highest possible level *)
 val highest : t

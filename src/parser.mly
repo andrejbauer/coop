@@ -2,7 +2,7 @@
 %}
 
 (* Infix operations a la OCaml *)
-%token <Name.t Location.located> PREFIXOP INFIXOP0 INFIXOP1 INFIXOP2 INFIXOP3 INFIXOP4
+%token <Name.t Location.located> PREFIXOP INFIXOP0 INFIXOP1 INFIXOP2 INFIXOP3 INFIXOP4 INFIXOP5 STAR BANG AT
 
 (* Names *)
 %token <Name.t> NAME
@@ -14,7 +14,7 @@
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
 %token LBRACE RBRACE
-%token COLON ARROW DARROW SEMI SEMISEMI COMMA STAR BANG AT
+%token COLON ARROW DARROW SEMI SEMISEMI COMMA
 
 (* Expressions and computations *)
 %token <int> NUMERAL
@@ -34,11 +34,12 @@
 %token EOF
 
 (* Precedence and fixity of infix operators *)
-%left     INFIXOP0
-%right    INFIXOP1
-%left     INFIXOP2
+%nonassoc INFIXOP0
+%left     INFIXOP1
+%right    INFIXOP2 AT
 %left     INFIXOP3
-%right    INFIXOP4
+%left     INFIXOP4 STAR
+%right    INFIXOP5
 
 %start <Sugared.toplevel list> file
 %start <Sugared.toplevel> commandline
@@ -193,12 +194,15 @@ var_name:
   | op=INFIXOP0    { op }
   | op=INFIXOP1    { op }
   | op=INFIXOP2    { op }
+  | op=AT          { op }
   | op=INFIXOP3    { op }
   | op=INFIXOP4    { op }
+  | op=STAR        { op }
+  | op=INFIXOP5    { op }
 
 %inline prefix:
-  | op=PREFIXOP
-    { op }
+  | op=PREFIXOP    { op }
+  | op=BANG        { op }
 
 match_clauses:
   | BAR? lst=separated_list(BAR, match_clause)

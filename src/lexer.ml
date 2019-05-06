@@ -30,11 +30,12 @@ let numeral = [%sedlex.regexp? Opt '-', Plus digit]
 let symbolchar = [%sedlex.regexp?  ('!' | '$' | '%' | '&' | '*' | '+' | '-' | '.' | '/' | ':' | '<' | '=' | '>' | '?' | '@' | '^' | '|' | '~')]
 
 let prefixop = [%sedlex.regexp? ('~' | '?' | '!'), Star symbolchar ]
-let infixop0 = [%sedlex.regexp? ('=' | '<' | '>' | '|' | '&' | '$'), Star symbolchar]
-let infixop1 = [%sedlex.regexp? ('@' | '^'), Star symbolchar ]
-let infixop2 = [%sedlex.regexp? ('+' | '-'), Star symbolchar ]
-let infixop3 = [%sedlex.regexp? ('*' | '/' | '%'), Star symbolchar ]
-let infixop4 = [%sedlex.regexp? "**", Star symbolchar ]
+let infixop0 = [%sedlex.regexp? ":=" | "<-" ]
+let infixop1 = [%sedlex.regexp? ('=' | '<' | '>' | '|' | '&' | '$'), Star symbolchar]
+let infixop2 = [%sedlex.regexp? ('@' | '^'), Star symbolchar ]
+let infixop3 = [%sedlex.regexp? ('+' | '-'), Star symbolchar ]
+let infixop4 = [%sedlex.regexp? ('*' | '/' | '%'), Star symbolchar ]
+let infixop5 = [%sedlex.regexp? "**", Star symbolchar ]
 
 let start_longcomment = [%sedlex.regexp? "(*"]
 let end_longcomment= [%sedlex.regexp? "*)"]
@@ -80,9 +81,9 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | ')'                      -> f (); Parser.RPAREN
   | '{'                      -> f (); Parser.LBRACE
   | '}'                      -> f (); Parser.RBRACE
-  | '@'                      -> f (); Parser.AT
-  | '!'                      -> f (); Parser.BANG
-  | '*' | 215                -> f (); Parser.STAR
+  | '@'                      -> f (); Parser.AT (Location.locate ~loc:(loc_of lexbuf) (Name.Ident("@", Name.Infix Level.Infix2)))
+  | '!'                      -> f (); Parser.BANG (Location.locate ~loc:(loc_of lexbuf) (Name.Ident("!", Name.Prefix)))
+  | '*' | 215                -> f (); Parser.STAR (Location.locate ~loc:(loc_of lexbuf) (Name.Ident(Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix4)))
   | ','                      -> f (); Parser.COMMA
   | ':'                      -> f (); Parser.COLON
   | ';'                      -> f (); Parser.SEMI
@@ -105,13 +106,16 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | infixop2                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix2) in
                                       let op = Location.locate ~loc:(loc_of lexbuf) op in
                                       Parser.INFIXOP2 op
-  (* Comes before infixop3 because ** matches the infixop3 pattern too *)
-  | infixop4                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix4) in
-                                      let op = Location.locate ~loc:(loc_of lexbuf) op in
-                                      Parser.INFIXOP4 op
   | infixop3                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix3) in
                                       let op = Location.locate ~loc:(loc_of lexbuf) op in
                                       Parser.INFIXOP3 op
+  (* Comes before infixop4 because ** matches the infixop4 pattern too *)
+  | infixop5                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix5) in
+                                      let op = Location.locate ~loc:(loc_of lexbuf) op in
+                                      Parser.INFIXOP5 op
+  | infixop4                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix4) in
+                                      let op = Location.locate ~loc:(loc_of lexbuf) op in
+                                      Parser.INFIXOP4 op
 
   | eof                      -> f (); Parser.EOF
   | name                     -> f ();
