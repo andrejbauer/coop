@@ -48,62 +48,103 @@
 (* Toplevel syntax *)
 
 file:
-  | f=filecontents EOF            { f }
+  | f=filecontents EOF
+    { f }
+
 
 filecontents:
-  |                                         { [] }
-  | d=topcomp                               { [d] }
-  | d=toplevel SEMISEMI ds=filecontents     { d :: ds }
-  | d=topcomp  SEMISEMI ds=filecontents     { d :: ds }
-  | d=toplevel ds=filecontents_top          { d :: ds }
+  |
+    { [] }
+
+  | d=topcomp
+    { [d] }
+
+  | d=toplevel SEMISEMI ds=filecontents
+    { d :: ds }
+
+  | d=topcomp  SEMISEMI ds=filecontents
+    { d :: ds }
+
+  | d=toplevel ds=filecontents_top
+    { d :: ds }
+
 
 filecontents_top:
-  |                                         { [] }
-  | d=toplevel SEMISEMI ds=filecontents     { d :: ds }
-  | d=toplevel ds=filecontents_top          { d :: ds }
+  |
+    { [] }
+
+  | d=toplevel SEMISEMI ds=filecontents
+    { d :: ds }
+
+  | d=toplevel ds=filecontents_top
+    { d :: ds }
+
 
 commandline:
-  | t=toplevel EOF     { t }
-  | t=topcomp EOF      { t }
+  | t=toplevel EOF
+    { t }
+
+  | t=topcomp EOF
+    { t }
+
 
 (* Toplevel computation *)
-topcomp: mark_location(plain_topcomp) { $1 }
-plain_topcomp:
-  | c=term             { Sugared.TopComp c }
+topcomp: mark_location(topcomp_) { $1 }
+topcomp_:
+  | c=term
+    { Sugared.TopComp c }
 
 (* Things that can be done at the toplevel, except for a computation. *)
-toplevel: mark_location(plain_toplevel) { $1 }
-plain_toplevel:
-  | LOAD fn=QUOTED_STRING                                { Sugared.TopLoad fn }
-  | LET p=pattern EQUAL e=term                           { Sugared.TopLet (p, e) }
-  | LET f=var_name a=lambda_abstraction EQUAL e=term     { Sugared.TopLetFun (f, a, e) }
-  | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty   { Sugared.DeclOperation (op, t1, t2) }
+toplevel: mark_location(toplevel_) { $1 }
+toplevel_:
+  | LOAD fn=QUOTED_STRING
+    { Sugared.TopLoad fn }
+
+  | LET p=pattern EQUAL e=term
+    { Sugared.TopLet (p, e) }
+
+  | LET f=var_name a=lambda_abstraction EQUAL e=term
+    { Sugared.TopLetFun (f, a, e) }
+
+  | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
+    { Sugared.DeclOperation (op, t1, t2) }
+
 
 (* Main syntax tree *)
-term : mark_location(plain_term) { $1 }
-plain_term:
-  | e=plain_infix_term
+term : mark_location(term_) { $1 }
+term_:
+  | e=infix_term_
     { e }
+
   | e=infix_term COLON t=ty
     { Sugared.Ascribe (e, t) }
+
   | FUN a=lambda_abstraction ARROW e=term
     { Sugared.Lambda (a, e) }
+
   | LET p=pattern EQUAL c1=infix_term IN c2=term
     { Sugared.Let (p, c1, c2) }
+
   | LET f=var_name a=lambda_abstraction EQUAL c1=infix_term IN c2=term
     { Sugared.LetFun (f, a, c1, c2) }
+
   | e1=infix_term SEMI e2=term
     { Sugared.Sequence (e1, e2) }
+
   | MATCH e=infix_term WITH lst=match_clauses END
     { Sugared.Match (e, lst) }
+
   | COMODEL e=infix_term WITH lst=comodel_clauses END
     { Sugared.Comodel (e, lst) }
+
   | USING cmdl=infix_term IN c=term FINALLY fin=finally END
     { Sugared.Using (cmdl, c, fin) }
 
-infix_term: mark_location(plain_infix_term) { $1 }
-plain_infix_term:
-  | e=plain_app_term { e }
+infix_term: mark_location(infix_term_) { $1 }
+infix_term_:
+  | e=app_term_
+    { e }
+
   | e2=infix_term oploc=infix e3=infix_term
     { let {Location.data=op; loc} = oploc in
       let op = Location.locate ~loc (Sugared.Var op) in
@@ -111,24 +152,33 @@ plain_infix_term:
       Sugared.Apply (e1, e3)
     }
 
-app_term: mark_location(plain_app_term) { $1 }
-plain_app_term:
-  | e=plain_prefix_term          { e }
-  | e1=app_term e2=prefix_term   { Sugared.Apply (e1, e2) }
+app_term: mark_location(app_term_) { $1 }
+app_term_:
+  | e=prefix_term_
+    { e }
 
-prefix_term: mark_location(plain_prefix_term) { $1 }
-plain_prefix_term:
-  | e=plain_simple_term                       { e }
+  | e1=app_term e2=prefix_term
+    { Sugared.Apply (e1, e2) }
+
+prefix_term: mark_location(prefix_term_) { $1 }
+prefix_term_:
+  | e=simple_term_
+    { e }
+
   | oploc=prefix e2=prefix_term
     { let {Location.data=op; loc} = oploc in
       let op = Location.locate ~loc (Sugared.Var op) in
       Sugared.Apply (op, e2)
     }
 
-(* simple_term : mark_location(plain_simple_term) { $1 } *)
-plain_simple_term:
-  | n=NUMERAL   { Sugared.Numeral n }
-  | x=var_name  { Sugared.Var x }
+(* simple_term : mark_location(simple_term_) { $1 } *)
+simple_term_:
+  | n=NUMERAL
+    { Sugared.Numeral n }
+
+  | x=var_name
+    { Sugared.Var x }
+
   | LPAREN es=separated_list(COMMA, term) RPAREN
                 { match es with
                   | [e] -> e.Location.data
@@ -147,65 +197,105 @@ var_name:
   | op=INFIXOP4    { op }
 
 %inline prefix:
-  | op=PREFIXOP { op }
+  | op=PREFIXOP
+    { op }
 
 match_clauses:
-  | BAR? lst=separated_list(BAR, match_clause)  { lst }
+  | BAR? lst=separated_list(BAR, match_clause)
+    { lst }
 
 match_clause:
-  | p=pattern ARROW e=term   { (p, e) }
+  | p=pattern ARROW e=term
+    { (p, e) }
 
 comodel_clauses:
-  | BAR? lst=separated_list(BAR, comodel_clause)  { lst }
+  | BAR? lst=separated_list(BAR, comodel_clause)
+    { lst }
 
 comodel_clause:
-  | op=var_name px=pattern AT pw=pattern ARROW e=term  { (op, px, pw, e) }
+  | op=var_name px=pattern AT pw=pattern ARROW e=term
+    { (op, px, pw, e) }
 
 lambda_abstraction:
-  | xs=nonempty_list(var_name)               { [(xs, None)] }
-  | lst=nonempty_list(typed_binder)          { List.map (fun (xs, t) -> (xs, Some t)) lst }
+  | xs=nonempty_list(var_name)
+    { [(xs, None)] }
+
+  | lst=nonempty_list(typed_binder)
+    { List.map (fun (xs, t) -> (xs, Some t)) lst }
+
 
 finally:
-  | VAL px=pattern AT pw=pattern ARROW t=term { (px, pw, t) }
+  | VAL px=pattern AT pw=pattern ARROW t=term
+    { (px, pw, t) }
+
 
 typed_binder:
-  | LPAREN xs=nonempty_list(var_name) COLON t=ty RPAREN { (xs, t) }
+  | LPAREN xs=nonempty_list(var_name) COLON t=ty RPAREN
+    { (xs, t) }
 
-pattern : mark_location(plain_pattern) { $1 }
-plain_pattern:
-  | UNDERSCORE  { Sugared.PattAnonymous }
-  | x=var_name  { Sugared.PattVar x }
-  | k=NUMERAL   { Sugared.PattNumeral k }
+
+pattern : mark_location(pattern_) { $1 }
+pattern_:
+  | UNDERSCORE
+    { Sugared.PattAnonymous }
+
+  | x=var_name
+    { Sugared.PattVar x }
+
+  | k=NUMERAL
+    { Sugared.PattNumeral k }
+
   | LPAREN lst=separated_list(COMMA, pattern) RPAREN
                 { match lst with
                   | [p] -> p.Location.data
                   | [] | _::_ -> Sugared.PattTuple lst }
-ty: mark_location(plain_ty) { $1 }
-plain_ty:
-  | t=plain_comp_ty        { t }
-  | t1=comp_ty ARROW t2=ty { Sugared.Arrow (t1, t2) }
+
+
+ty: mark_location(ty_) { $1 }
+ty_:
+  | t=comp_ty_
+    { t }
+
+  | t1=comp_ty ARROW t2=ty
+    { Sugared.Arrow (t1, t2) }
+
   | sgn1=signature AT tw=comp_ty DARROW sgn2=signature
-                           { Sugared.ComodelTy (sgn1, tw, sgn2) }
+    { Sugared.ComodelTy (sgn1, tw, sgn2) }
 
-comp_ty: mark_location(plain_comp_ty) { $1 }
-plain_comp_ty:
-  | t=prod_ty BANG lst=signature  { Sugared.CompTy (t, lst) }
-  | plain_prod_ty                 { $1 }
 
-prod_ty: mark_location(plain_prod_ty) { $1 }
-plain_prod_ty:
-  | t=plain_simple_ty   { t }
+comp_ty: mark_location(comp_ty_) { $1 }
+comp_ty_:
+  | t=prod_ty BANG lst=signature
+    { Sugared.CompTy (t, lst) }
+
+  | prod_ty_
+    { $1 }
+
+
+prod_ty: mark_location(prod_ty_) { $1 }
+prod_ty_:
+  | t=simple_ty_
+    { t }
+
   | t=simple_ty STAR ts=separated_nonempty_list(STAR, simple_ty)
-                        { Sugared.Product (t :: ts) }
+    { Sugared.Product (t :: ts) }
 
-simple_ty: mark_location(plain_simple_ty) { $1 }
-plain_simple_ty:
-  | INT                      { Sugared.Int }
-  | UNIT                     { Sugared.Product [] }
-  | LPAREN t=plain_ty RPAREN { t }
+
+simple_ty: mark_location(simple_ty_) { $1 }
+simple_ty_:
+  | INT
+    { Sugared.Int }
+
+  | UNIT
+    { Sugared.Product [] }
+
+  | LPAREN t=ty_ RPAREN
+    { t }
+
 
 signature:
-  | LBRACE lst=separated_list(COMMA, var_name) RBRACE  { lst }
+  | LBRACE lst=separated_list(COMMA, var_name) RBRACE
+    { lst }
 
 mark_location(X):
   x=X
