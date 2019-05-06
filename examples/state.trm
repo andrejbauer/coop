@@ -8,10 +8,11 @@ let state (w : int) =
   end
 
 let demo =
-  using state 100 in
+  using state 1 in
     let a = get () in
-    let _ = put 2000 in
+    put 2 ;
     let b = get () in
+    put 3 ;
     (a, b)
   finally
     val x @ w -> (x, w)

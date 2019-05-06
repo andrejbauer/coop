@@ -29,6 +29,7 @@ and term' =
   | Lambda of abstraction * term
   | Apply of term * term
   | Let of pattern * term * term
+  | Sequence of term * term
   | LetFun of Name.t * abstraction * term * term
   | Ascribe of term * ty
   | Comodel of term * comodel_clause list

@@ -85,6 +85,7 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | '*' | 215                -> f (); Parser.STAR
   | ','                      -> f (); Parser.COMMA
   | ':'                      -> f (); Parser.COLON
+  | ';'                      -> f (); Parser.SEMI
   | ";;"                     -> f (); Parser.SEMISEMI
   | '='                      -> f (); Parser.EQUAL
   | "->" | 8594 | 10230      -> f (); Parser.ARROW

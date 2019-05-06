@@ -155,7 +155,8 @@ let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
        let lst = comodel_clauses ~loc ctx lst in
        (ws, locate (Desugared.Comodel (e, lst)))
 
-    | (Sugared.Match _ | Sugared.Apply _ | Sugared.Let _ | Sugared.LetFun _ | Sugared.Using _) ->
+    | (Sugared.Match _ | Sugared.Apply _ | Sugared.Let _ | Sugared.Sequence _ |
+       Sugared.LetFun _ | Sugared.Using _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Desugared.Var x))
@@ -228,6 +229,12 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
        let c1 = comp ctx c1 in
        let ctx, p = pattern ctx p in
        let c2 = comp ctx c2 in
+       locate (Desugared.Let (p, c1, c2))
+
+    | Sugared.Sequence (c1, c2) ->
+       let c1 = comp ctx c1 in
+       let c2 = comp ctx c2 in
+       let p = locate Desugared.PattAnonymous in
        locate (Desugared.Let (p, c1, c2))
 
     | Sugared.LetFun (f, a, c1, c2) ->

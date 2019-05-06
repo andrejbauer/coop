@@ -14,7 +14,7 @@
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
 %token LBRACE RBRACE
-%token COLON ARROW DARROW SEMISEMI COMMA STAR BANG AT
+%token COLON ARROW DARROW SEMI SEMISEMI COMMA STAR BANG AT
 
 (* Expressions and computations *)
 %token <int> NUMERAL
@@ -82,17 +82,24 @@ plain_toplevel:
 (* Main syntax tree *)
 term : mark_location(plain_term) { $1 }
 plain_term:
-  | e=plain_infix_term                            { e }
-  | e=infix_term COLON t=ty                       { Sugared.Ascribe (e, t) }
-  | FUN a=lambda_abstraction ARROW e=term         { Sugared.Lambda (a, e) }
-  | LET p=pattern EQUAL c1=infix_term IN c2=term  { Sugared.Let (p, c1, c2) }
+  | e=plain_infix_term
+    { e }
+  | e=infix_term COLON t=ty
+    { Sugared.Ascribe (e, t) }
+  | FUN a=lambda_abstraction ARROW e=term
+    { Sugared.Lambda (a, e) }
+  | LET p=pattern EQUAL c1=infix_term IN c2=term
+    { Sugared.Let (p, c1, c2) }
   | LET f=var_name a=lambda_abstraction EQUAL c1=infix_term IN c2=term
-                                                  { Sugared.LetFun (f, a, c1, c2) }
-  | MATCH e=infix_term WITH lst=match_clauses END { Sugared.Match (e, lst) }
+    { Sugared.LetFun (f, a, c1, c2) }
+  | e1=infix_term SEMI e2=term
+    { Sugared.Sequence (e1, e2) }
+  | MATCH e=infix_term WITH lst=match_clauses END
+    { Sugared.Match (e, lst) }
   | COMODEL e=infix_term WITH lst=comodel_clauses END
-                                                  { Sugared.Comodel (e, lst) }
+    { Sugared.Comodel (e, lst) }
   | USING cmdl=infix_term IN c=term FINALLY fin=finally END
-      { Sugared.Using (cmdl, c, fin) }
+    { Sugared.Using (cmdl, c, fin) }
 
 infix_term: mark_location(plain_infix_term) { $1 }
 plain_infix_term:
