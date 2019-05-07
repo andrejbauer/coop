@@ -2,4 +2,8 @@
 
 (* Arithmetic *)
 external ( + ) : int -> int -> int = "+"
+external ( - ) : int -> int -> int = "-"
+external ( * ) : int -> int -> int = "*"
+external ( / ) : int -> int -> int = "/"
+external ( % ) : int -> int -> int = "%"
 
