@@ -152,9 +152,9 @@ let rec eval_expr env {Location.data=e'; loc} =
      let lst = List.map (eval_expr env) lst in
      Value.Tuple lst
 
-  | Syntax.Lambda c ->
+  | Syntax.Lambda (p, c) ->
      let f v =
-       let env = extend v env in
+       let env = extend_pattern ~loc p v env in
        eval_comp env c
      in
      Value.Closure f

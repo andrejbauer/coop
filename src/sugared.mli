@@ -35,7 +35,7 @@ and term' =
   | Comodel of term * comodel_clause list
   | Using of term * term * finally
 
-and abstraction = (Name.t list * ty option) list
+and abstraction = (pattern * ty option) list
 
 and comodel_clause = Name.t * pattern * pattern * term
 

@@ -26,7 +26,7 @@ type error =
   | TupleTooLong of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
   | ComodelExpected of Syntax.expr_ty
-  | CannotInferArgument of Name.t
+  | CannotInferArgument
   | CannotInferMatch
   | DuplicateOperation of Name.t
   | UnhandledOperation of Name.t
@@ -84,8 +84,8 @@ let print_error err ppf =
      Format.fprintf ppf "this expression should be a comodel but has type@ %t"
                         (Syntax.print_expr_ty ty)
 
-  | CannotInferArgument x ->
-     Format.fprintf ppf "cannot infer the type of@ %t" (Name.print x)
+  | CannotInferArgument ->
+     Format.fprintf ppf "cannot infer the type of this argument"
 
   | CannotInferMatch ->
      Format.fprintf ppf "cannot infer the type of this match statement"
@@ -232,14 +232,14 @@ let rec infer_expr (ctx : context) {Location.data=e'; loc} =
      let lst = List.map (infer_expr ctx) lst in
      locate (Syntax.Tuple (List.map fst lst)),  Syntax.Product (List.map snd lst)
 
-  | Desugared.Lambda ((x, Some t), c) ->
+  | Desugared.Lambda ((p, Some t), c) ->
      let t = expr_ty t in
-     let ctx = extend x t ctx in
+     let ctx, p = extend_pattern ctx p t in
      let c, c_ty = infer_comp ctx c in
-     locate (Syntax.Lambda c), Syntax.Arrow (t, c_ty)
+     locate (Syntax.Lambda (p, c)), Syntax.Arrow (t, c_ty)
 
-  | Desugared.Lambda ((x, None), _) ->
-     error ~loc (CannotInferArgument x)
+  | Desugared.Lambda ((p, None), _) ->
+     error ~loc:p.Location.loc CannotInferArgument
 
   | Desugared.Comodel (e, coops) ->
      let e, e_ty = infer_expr ctx e in
@@ -349,12 +349,13 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
   let locate = Location.locate ~loc in
   match e' with
 
-  | Desugared.Lambda ((x, None), e) ->
+  | Desugared.Lambda ((p, None), e) ->
      begin
        match ty with
        | Syntax.Arrow (t, u) ->
-          let c = check_comp (extend x t ctx) e u in
-          locate (Syntax.Lambda c)
+          let ctx, p = extend_pattern ctx p t in
+          let c = check_comp ctx e u in
+          locate (Syntax.Lambda (p, c))
        | (Syntax.Int | Syntax.Product _ | Syntax.ComodelTy _) ->
           error ~loc (TypeExpectedButFunction ty)
      end

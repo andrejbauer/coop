@@ -105,7 +105,7 @@ toplevel_:
   | LET p=pattern EQUAL e=term
     { Sugared.TopLet (p, e) }
 
-  | LET f=var_name a=lambda_abstraction EQUAL e=term
+  | LET f=var_name a=binding+ EQUAL e=term
     { Sugared.TopLetFun (f, a, e) }
 
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
@@ -123,13 +123,13 @@ term_:
   | e=infix_term COLON t=ty
     { Sugared.Ascribe (e, t) }
 
-  | FUN a=lambda_abstraction ARROW e=term
+  | FUN a=binding+ ARROW e=term
     { Sugared.Lambda (a, e) }
 
   | LET p=pattern EQUAL c1=infix_term IN c2=term
     { Sugared.Let (p, c1, c2) }
 
-  | LET f=var_name a=lambda_abstraction EQUAL c1=infix_term IN c2=term
+  | LET f=var_name a=binding+ EQUAL c1=infix_term IN c2=term
     { Sugared.LetFun (f, a, c1, c2) }
 
   | e1=infix_term SEMI e2=term
@@ -223,22 +223,16 @@ comodel_clause:
   | op=var_name px=pattern AT pw=pattern ARROW e=term
     { (op, px, pw, e) }
 
-lambda_abstraction:
-  | xs=nonempty_list(var_name)
-    { [(xs, None)] }
+binding:
+  | p=pattern
+    { (p, None) }
 
-  | lst=nonempty_list(typed_binder)
-    { List.map (fun (xs, t) -> (xs, Some t)) lst }
-
+  | LPAREN p=pattern COLON t=ty RPAREN
+    { (p, Some t) }
 
 finally:
   | VAL px=pattern AT pw=pattern ARROW t=term
     { (px, pw, t) }
-
-
-typed_binder:
-  | LPAREN xs=nonempty_list(var_name) COLON t=ty RPAREN
-    { (xs, t) }
 
 
 pattern : mark_location(pattern_) { $1 }

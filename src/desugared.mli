@@ -40,7 +40,7 @@ and comp' =
   | Operation of Name.t * expr
   | Using of expr * comp * finally
 
-and abstraction = Name.t * ty option
+and abstraction = pattern * ty option
 
 and comodel_clause = Name.t * pattern * pattern * comp
 

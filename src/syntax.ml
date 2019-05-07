@@ -31,7 +31,7 @@ and expr' =
   | Var of index
   | Numeral of int
   | Tuple of expr list
-  | Lambda of comp
+  | Lambda of pattern * comp
   | Comodel of expr * (Name.t * pattern * pattern * comp) list
 
 (** Computations *)

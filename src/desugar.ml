@@ -163,7 +163,7 @@ let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
 
 and abstract ~loc ctx a c =
   let locate x = Location.locate ~loc x in
-  let ctx, lst = lambda_abstraction ctx a in
+  let ctx, lst = binders ctx a in
   let c = comp ctx c in
   let rec fold = function
     | [] -> assert false
@@ -266,28 +266,15 @@ and finally ctx (px, pw, c) =
   (px, pw, c)
 
 (** Desugar a lambda abstraction. *)
-and lambda_abstraction ctx a : context * (Name.t * Desugared.ty option) list =
-  let rec fold ctx = function
-    | [] -> ctx, []
-    | (xs, topt) :: lst ->
-       let ctx, xts = lambda_abstraction1 ctx xs topt in
-       let ctx, yts = fold ctx lst in
-       ctx, xts @ yts
+and binders ctx a =
+  let rec fold ctx pts = function
+    | [] -> ctx, List.rev pts
+    | (p, topt) :: lst ->
+       let ctx, p = pattern ctx p in
+       let topt = ty_opt ctx topt in
+       fold ctx ((p, topt) :: pts) lst
   in
-  fold ctx a
-
-(** Auxiliary function used to desugar lambda abstractions. *)
-and lambda_abstraction1 ctx xs topt : context * (Name.t * Desugared.ty option) list =
-  let topt = ty_opt ctx topt in
-  let rec fold ctx lst = function
-    | [] -> ctx, List.rev lst
-    | x :: xs ->
-       let ctx = extend x Variable ctx
-       and lst = (x, topt) :: lst in
-       fold ctx lst xs
-  in
-  fold ctx [] xs
-
+  fold ctx [] a
 
 (** Desugar a toplevel. *)
 let rec toplevel ctx {Location.data=c; Location.loc=loc} =
