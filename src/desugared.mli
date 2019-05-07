@@ -26,8 +26,8 @@ and expr' =
   | Var of Name.t
   | Numeral of int
   | Tuple of expr list
-  | Lambda of abstraction * comp
-  | Comodel of expr * comodel_clause list
+  | Lambda of binder * comp
+  | Comodel of ty * comodel_clause list
 
 (** Computations *)
 and comp = comp' Location.located
@@ -35,16 +35,16 @@ and comp' =
   | AscribeComp of comp * ty
   | Val of expr
   | Let of pattern * comp * comp
-  | Match of expr * (pattern * comp) list
+  | Match of expr * (binder * comp) list
   | Apply of expr * expr
   | Operation of Name.t * expr
-  | Using of expr * comp * finally
+  | Using of expr * expr * comp * finally
 
-and abstraction = pattern * ty option
+and binder = pattern * ty option
 
-and comodel_clause = Name.t * pattern * pattern * comp
+and comodel_clause = Name.t * binder * binder * comp
 
-and finally = pattern * pattern * comp
+and finally = binder * binder * comp
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located

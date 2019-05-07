@@ -105,7 +105,7 @@ toplevel_:
   | LET p=pattern EQUAL e=term
     { Sugared.TopLet (p, e) }
 
-  | LET f=var_name a=binding+ EQUAL e=term
+  | LET f=var_name a=binder+ EQUAL e=term
     { Sugared.TopLetFun (f, a, e) }
 
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
@@ -123,13 +123,13 @@ term_:
   | e=infix_term COLON t=ty
     { Sugared.Ascribe (e, t) }
 
-  | FUN a=binding+ ARROW e=term
+  | FUN a=binder+ ARROW e=term
     { Sugared.Lambda (a, e) }
 
   | LET p=pattern EQUAL c1=infix_term IN c2=term
     { Sugared.Let (p, c1, c2) }
 
-  | LET f=var_name a=binding+ EQUAL c1=infix_term IN c2=term
+  | LET f=var_name a=binder+ EQUAL c1=infix_term IN c2=term
     { Sugared.LetFun (f, a, c1, c2) }
 
   | e1=infix_term SEMI e2=term
@@ -138,11 +138,11 @@ term_:
   | MATCH e=infix_term WITH lst=match_clauses END
     { Sugared.Match (e, lst) }
 
-  | COMODEL e=infix_term WITH lst=comodel_clauses END
-    { Sugared.Comodel (e, lst) }
+  | COMODEL t=ty WITH lst=comodel_clauses END
+    { Sugared.Comodel (t, lst) }
 
-  | USING cmdl=infix_term IN c=term FINALLY fin=finally END
-    { Sugared.Using (cmdl, c, fin) }
+  | USING cmdl=infix_term AT w=infix_term IN c=term FINALLY fin=finally END
+    { Sugared.Using (cmdl, w, c, fin) }
 
 infix_term: mark_location(infix_term_) { $1 }
 infix_term_:
@@ -212,7 +212,7 @@ match_clauses:
     { lst }
 
 match_clause:
-  | p=pattern ARROW e=term
+  | p=binder ARROW e=term
     { (p, e) }
 
 comodel_clauses:
@@ -220,10 +220,10 @@ comodel_clauses:
     { lst }
 
 comodel_clause:
-  | op=var_name px=pattern AT pw=pattern ARROW e=term
+  | op=var_name px=binder AT pw=binder ARROW e=term
     { (op, px, pw, e) }
 
-binding:
+binder:
   | p=pattern
     { (p, None) }
 
@@ -231,7 +231,7 @@ binding:
     { (p, Some t) }
 
 finally:
-  | VAL px=pattern AT pw=pattern ARROW t=term
+  | VAL px=binder AT pw=binder ARROW t=term
     { (px, pw, t) }
 
 

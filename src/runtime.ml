@@ -130,7 +130,7 @@ let as_value ~loc = function
   | Value.Operation (op, _, _) -> error ~loc (UnhandledOperation op)
 
 let as_comodel ~loc = function
-  | Value.Comodel (w, cmdl) -> (w, cmdl)
+  | Value.Comodel cmdl -> cmdl
   | Value.Numeral _ | Value.Tuple _ | Value.Closure _ -> error ~loc ComodelExpected
 
 (** The result monad *)
@@ -159,16 +159,15 @@ let rec eval_expr env {Location.data=e'; loc} =
      in
      Value.Closure f
 
-  | Syntax.Comodel (e, lst) ->
-     let w = eval_expr env e in
+  | Syntax.Comodel lst ->
      let coop px pw c =
        let loc = c.Location.loc in
-       fun (u, Value.World w) ->
+       fun (u, w) ->
        let env = extend_pattern ~loc px u env in
        let env = extend_pattern ~loc pw w env in
        let r = eval_comp env c in
        let (v, w) = as_pair ~loc (as_value ~loc r) in
-       (v, Value.World w)
+       (v, w)
      in
      let cmdl =
        List.fold_left
@@ -176,7 +175,7 @@ let rec eval_expr env {Location.data=e'; loc} =
          Name.Map.empty
          lst
      in
-     Value.Comodel (Value.World w, cmdl)
+     Value.Comodel cmdl
 
 and eval_comp env {Location.data=c'; loc} =
   match c' with
@@ -205,14 +204,15 @@ and eval_comp env {Location.data=c'; loc} =
      let u = eval_expr env u in
      Value.Operation (op, u, (fun v -> Value.Val v))
 
-  | Syntax.Using (cmdl, c, fin) ->
-     let (w, cmdl) = as_comodel ~loc (eval_expr env cmdl)
+  | Syntax.Using (cmdl, w, c, fin) ->
+     let w = eval_expr env w in
+     let cmdl = as_comodel ~loc (eval_expr env cmdl)
      and r = eval_comp env c
      and fin = eval_finally ~loc env fin in
      using ~loc env cmdl w r fin
 
 and eval_finally ~loc env (px, pw, c) =
-  fun (v, Value.World w) ->
+  fun (v, w) ->
   let env = extend_pattern ~loc px v env in
   let env = extend_pattern ~loc pw w env in
   eval_comp env c

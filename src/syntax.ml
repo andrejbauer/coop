@@ -32,7 +32,7 @@ and expr' =
   | Numeral of int
   | Tuple of expr list
   | Lambda of pattern * comp
-  | Comodel of expr * (Name.t * pattern * pattern * comp) list
+  | Comodel of (Name.t * pattern * pattern * comp) list
 
 (** Computations *)
 and comp = comp' Location.located
@@ -42,7 +42,7 @@ and comp' =
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr
   | Operation of Name.t * expr
-  | Using of expr * comp * finally
+  | Using of expr * expr * comp * finally
 
 and finally = pattern * pattern * comp
 

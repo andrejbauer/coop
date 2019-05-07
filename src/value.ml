@@ -2,9 +2,9 @@ type t =
   | Numeral of int
   | Tuple of t list
   | Closure of closure
-  | Comodel of world * cooperation Name.Map.t
+  | Comodel of cooperation Name.Map.t
 
-and world = World of t
+and world = t
 
 and result =
   | Val of t

@@ -25,28 +25,28 @@ and term' =
   | Var of Name.t
   | Numeral of int
   | Tuple of term list
-  | Match of term * (pattern * term) list
-  | Lambda of abstraction * term
+  | Match of term * (binder * term) list
+  | Lambda of binder list * term
   | Apply of term * term
   | Let of pattern * term * term
   | Sequence of term * term
-  | LetFun of Name.t * abstraction * term * term
+  | LetFun of Name.t * binder list * term * term
   | Ascribe of term * ty
-  | Comodel of term * comodel_clause list
-  | Using of term * term * finally
+  | Comodel of ty * comodel_clause list
+  | Using of term * term * term * finally
 
-and abstraction = (pattern * ty option) list
+and binder = pattern * ty option
 
-and comodel_clause = Name.t * pattern * pattern * term
+and comodel_clause = Name.t * binder * binder * term
 
-and finally = pattern * pattern * term
+and finally = binder  * binder * term
 
 (** Parsed top-level command. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of string
   | TopLet of pattern * term
-  | TopLetFun of Name.t * abstraction * term
+  | TopLetFun of Name.t * binder list * term
   | TopComp of term
   | DeclOperation of Name.t * ty * ty
   | External of Name.t * ty * string

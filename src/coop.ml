@@ -68,7 +68,7 @@ let interactive_shell state =
          state
 
       | Typecheck.Error {Location.data=err; Location.loc} ->
-         Print.error "Typechecking error at %t:@ %t"
+         Print.error "Type error at %t:@ %t"
            (Location.print loc)
            (Typecheck.print_error err) ;
          state
@@ -80,7 +80,7 @@ let interactive_shell state =
          state
 
       | External.Error msg ->
-         Print.error "@[<hov>Error in external function: %s@]@." msg ;
+         Print.error "@[<hov>Error in external function, please report: %s@]@." msg ;
          state
 
       | Sys.Break ->
@@ -160,7 +160,7 @@ let main =
        Print.error "@[<hov>Syntax error at %t:@ %t@]@." (Location.print loc) (Desugar.print_error err)
 
     | Typecheck.Error {Location.data=err; Location.loc} ->
-       Print.error "@[<hov>Typechecking error at %t:@ %t@]@."
+       Print.error "@[<hov>Type error at %t:@ %t@]@."
          (Location.print loc)
          (Typecheck.print_error err)
 

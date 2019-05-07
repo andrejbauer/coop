@@ -150,10 +150,10 @@ let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
     | Sugared.Lambda (a, c) ->
        ([], abstract ~loc ctx a c)
 
-    | Sugared.Comodel (e, lst) ->
-       let ws, e = expr ctx e in
+    | Sugared.Comodel (t, lst) ->
+       let t = ty ctx t in
        let lst = comodel_clauses ~loc ctx lst in
-       (ws, locate (Desugared.Comodel (e, lst)))
+       ([], locate (Desugared.Comodel (t, lst)))
 
     | (Sugared.Match _ | Sugared.Apply _ | Sugared.Let _ | Sugared.Sequence _ |
        Sugared.LetFun _ | Sugared.Using _) ->
@@ -181,8 +181,8 @@ and comodel_clause ~loc ctx (op, px, pw, c) =
   if not (is_operation op ctx) then
     error ~loc (UnknownOperation op)
   else
-    let ctx, px = pattern ctx px in
-    let ctx, pw = pattern ctx pw in
+    let ctx, px = binder ctx px in
+    let ctx, pw = binder ctx pw in
     let c = comp ctx c in
     (op, px, pw, c)
 
@@ -245,34 +245,40 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
        let p = locate (Desugared.PattVar f) in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.Using (cmdl, c, fs) ->
-       let ws, cmdl = expr ctx cmdl in
+    | Sugared.Using (cmdl, e, c, fs) ->
+       let ws1, cmdl = expr ctx cmdl in
+       let ws2, e = expr ctx e in
        let c = comp ctx c in
        let fs = finally ctx fs in
-       let_binds ws (locate (Desugared.Using (cmdl, c, fs)))
+       let_binds (ws1 @ ws2) (locate (Desugared.Using (cmdl, e, c, fs)))
 
 and match_clauses ctx lst =
   List.map (match_clause ctx) lst
 
-and match_clause ctx (patt, c) =
-  let ctx, patt = pattern ctx patt in
+and match_clause ctx (p, c) =
+  let ctx, p = binder ctx p in
   let c = comp ctx c in
-  (patt, c)
+  (p, c)
 
 and finally ctx (px, pw, c) =
-  let ctx, px = pattern ctx px in
-  let ctx, pw = pattern ctx pw in
+  let ctx, px = binder ctx px in
+  let ctx, pw = binder ctx pw in
   let c = comp ctx c in
   (px, pw, c)
+
+(** Desugar a single binder. *)
+and binder ctx (p, topt) =
+  let ctx, p = pattern ctx p in
+  let topt = ty_opt ctx topt in
+  ctx, (p, topt)
 
 (** Desugar a lambda abstraction. *)
 and binders ctx a =
   let rec fold ctx pts = function
     | [] -> ctx, List.rev pts
-    | (p, topt) :: lst ->
-       let ctx, p = pattern ctx p in
-       let topt = ty_opt ctx topt in
-       fold ctx ((p, topt) :: pts) lst
+    | ptopt :: lst ->
+       let ctx, ptopt = binder ctx ptopt in
+       fold ctx (ptopt :: pts) lst
   in
   fold ctx [] a
 

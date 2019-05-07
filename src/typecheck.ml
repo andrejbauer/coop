@@ -241,10 +241,10 @@ let rec infer_expr (ctx : context) {Location.data=e'; loc} =
   | Desugared.Lambda ((p, None), _) ->
      error ~loc:p.Location.loc CannotInferArgument
 
-  | Desugared.Comodel (e, coops) ->
-     let e, e_ty = infer_expr ctx e in
-     let coops, sgn1, sgn2 = infer_coops ~loc ctx e_ty coops in
-     locate (Syntax.Comodel (e, coops)), Syntax.ComodelTy (sgn1, e_ty, sgn2)
+  | Desugared.Comodel (t, coops) ->
+     let t = expr_ty t in
+     let coops, sgn1, sgn2 = infer_coops ~loc ctx t coops in
+     locate (Syntax.Comodel coops), Syntax.ComodelTy (sgn1, t, sgn2)
 
 (** [infer_comp ctx c] infers the type [ty] of a computation [c]. It returns
     the processed computation [c] and its type [ty].  *)
@@ -291,20 +291,21 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
      let e_ty = Syntax.op_ty ty2 op in
      locate (Syntax.Operation (op, e)), e_ty
 
-  | Desugared.Using (cmdl, c, (px, pw, fin)) ->
+  | Desugared.Using (cmdl, w, c, (px, pw, fin)) ->
      let cmdl, (sig1, w_ty, sig2) = infer_comodel ctx cmdl in
+     let w = check_expr ctx w w_ty in
      let c, (Syntax.CompTy (c_ty', _) as c_ty) = infer_comp ctx c in
      check_dirt ~loc c_ty sig1 ;
-     let ctx, px = extend_pattern ctx px c_ty' in
-     let ctx, pw = extend_pattern ctx pw w_ty in
+     let ctx, px = extend_binder ctx px c_ty' in
+     let ctx, pw = extend_binder ctx pw w_ty in
      let fin, fin_ty = infer_comp ctx fin in
-     locate (Syntax.Using (cmdl, c, (px, pw, fin))), fin_ty
+     locate (Syntax.Using (cmdl, w, c, (px, pw, fin))), fin_ty
 
 and infer_match_clauses ~loc ctx patt_ty lst =
   match lst with
   | [] -> error ~loc CannotInferMatch
   | (p, c) :: lst ->
-     let ctx, p = extend_pattern ctx p patt_ty in
+     let ctx, p = extend_binder ctx p patt_ty in
      let c, c_ty = infer_comp ctx c in
      let lst = check_match_clauses ctx patt_ty c_ty lst in
      ((p, c) :: lst), c_ty
@@ -321,8 +322,8 @@ and infer_coops ~loc ctx w_ty lst =
          error ~loc (DuplicateOperation op)
        else
          let (x_ty, op_ty) = lookup_operation ~loc op ctx in
-         let ctx, px = extend_pattern ctx px x_ty in
-         let ctx, pw = extend_pattern ctx pw w_ty in
+         let ctx, px = extend_binder ctx px x_ty in
+         let ctx, pw = extend_binder ctx pw w_ty in
          let c, (Syntax.CompTy (_, c_sgn) as c_ty) = infer_comp ctx c in
          let c_required = Syntax.pure (Syntax.Product [op_ty; w_ty]) in
          if not (Syntax.comp_subty c_required c_ty) then
@@ -342,6 +343,15 @@ and infer_comodel ctx cmdl =
 
   | Syntax.Int | Syntax.Product _ | Syntax.Arrow _ ->
      error ~loc:cmdl.Location.loc (ComodelExpected e_ty)
+
+and extend_binder ctx (p, topt) t =
+  match topt with
+  | None -> extend_pattern ctx p t
+  | Some t' ->
+     let t' = expr_ty t' in
+     if not (Syntax.expr_subty t t') then
+       error ~loc:p.Location.loc (ExprTypeMismatch (t, t')) ;
+     extend_pattern ctx p t'
 
 (** [check_expr ctx e ty] checks that expression [e] has type [ty] in context [ctx].
     It returns the processed expression [e]. *)
@@ -413,14 +423,15 @@ and check_comp ctx ({Location.data=c'; loc} as c) check_ty =
      let c2 = check_comp ctx c2 check_ty in
      locate (Syntax.Let (p, c1, c2))
 
-  | Desugared.Using (cmdl, c, (px, pw, fin)) ->
+  | Desugared.Using (cmdl, w, c, (px, pw, fin)) ->
      let cmdl, (sig1, w_ty, sig2) = infer_comodel ctx cmdl in
+     let w = check_expr ctx w w_ty in
      let c, (Syntax.CompTy (c_ty', _) as c_ty) = infer_comp ctx c in
      check_dirt ~loc c_ty sig1 ;
-     let ctx, px = extend_pattern ctx px c_ty' in
-     let ctx, pw = extend_pattern ctx pw w_ty in
+     let ctx, px = extend_binder ctx px c_ty' in
+     let ctx, pw = extend_binder ctx pw w_ty in
      let fin = check_comp ctx fin check_ty in
-     locate (Syntax.Using (cmdl, c, (px, pw, fin)))
+     locate (Syntax.Using (cmdl, w, c, (px, pw, fin)))
 
   | (Desugared.Apply _ | Desugared.AscribeComp _ | Desugared.Operation _) ->
      let c, c_ty = infer_comp ctx c in
@@ -434,7 +445,7 @@ and check_match_clauses ctx patt_ty ty lst =
   List.map (check_match_clause ctx patt_ty ty) lst
 
 and check_match_clause ctx patt_ty ty (p, c) =
-  let ctx, p = extend_pattern ctx p patt_ty in
+  let ctx, p = extend_binder ctx p patt_ty in
   let c = check_comp ctx c ty in
   (p, c)
 
