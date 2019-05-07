@@ -1,0 +1,28 @@
+operation tick : unit -> unit
+operation read : unit -> int
+
+let ticker =
+  comodel int with
+  | tick () @ w -> ((), w+1)
+  | read () @ w -> (w, w)
+  end
+
+let f (_ : unit) =
+  tick () ;
+  tick () ;
+  let a = read () in
+  tick () ;
+  let b = read () in
+  tick () ;
+  (a, b)
+
+let demo =
+  using ticker @ 0 in
+    let r1 = f () in
+    let r2 = f () in
+    (r1, r2)
+  finally
+    val v @ _ -> v
+  end
+
+  
