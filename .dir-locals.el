@@ -3,24 +3,24 @@
   . ((eval
       . (progn
           ;; root directory (ending with slash)
-          (let ((terminus-root-directory
+          (let ((coop-root-directory
                  (when buffer-file-name
                    (locate-dominating-file buffer-file-name ".dir-locals.el")))
-                (terminus-project-find-file
-                 (and (boundp 'terminus-project-find-file) terminus-project-find-file)))
+                (coop-project-find-file
+                 (and (boundp 'coop-project-find-file) coop-project-find-file)))
 
-            ;; terminus tags file
-            (when terminus-root-directory
-              (setq tags-file-name (concat terminus-root-directory "TAGS"))
-              (add-to-list 'compilation-search-path terminus-root-directory)
-              ;; Setting the compilation directory to terminus root. This is
+            ;; coop tags file
+            (when coop-root-directory
+              (setq tags-file-name (concat coop-root-directory "TAGS"))
+              (add-to-list 'compilation-search-path coop-root-directory)
+              ;; Setting the compilation directory to coop root. This is
               ;; mutually exclusive with the setting of default-directory
               ;; below.
-              (if (not terminus-project-find-file)
-                  (setq compile-command (concat "make -C " terminus-root-directory)))
+              (if (not coop-project-find-file)
+                  (setq compile-command (concat "make -C " coop-root-directory)))
               )
-            (setq terminus-executable (concat terminus-root-directory "terminus.native")))))))
+            (setq coop-executable (concat coop-root-directory "coop.native")))))))
  (tuareg-mode
   (show-trailing-whitespace . t))
- (terminus-mode
+ (coop-mode
   (show-trailing-whitespace . t)))

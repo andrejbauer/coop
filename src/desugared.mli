@@ -1,4 +1,4 @@
-(** Desugared syntax of Terminus. *)
+(** Desugared syntax of Coop. *)
 
 type signature = Name.Set.t
 

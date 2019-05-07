@@ -1,4 +1,4 @@
 _build
-/terminus.native
-/terminus.byte
-/terminus.docdir
+/coop.native
+/coop.byte
+/coop.docdir

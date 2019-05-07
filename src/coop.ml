@@ -1,7 +1,7 @@
 (** Command-line processing and the main program. *)
 
 (** The usage message. *)
-let usage = "Usage: terminus [option] ... [file] ..."
+let usage = "Usage: coop [option] ... [file] ..."
 
 (** A list of files to be loaded and run, together with information on whether they should
     be loaded in interactive mode. *)

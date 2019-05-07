@@ -1,4 +1,4 @@
-(** Configuration parameters that control how Terminus works. *)
+(** Configuration parameters that control how Coop works. *)
 
 (** How to load the pervasives file. *)
 type pervasives =

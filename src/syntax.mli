@@ -1,4 +1,4 @@
-(** Type-checked syntax of Terminus. *)
+(** Type-checked syntax of Coop. *)
 
 (** A signature is a set of operation names. We need not carry the types of the
    operations because those are declared globally. *)

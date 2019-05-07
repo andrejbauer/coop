@@ -1,4 +1,4 @@
-(** Terminus type checking. *)
+(** Coop type checking. *)
 
 (** Typing context *)
 type context =

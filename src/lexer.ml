@@ -207,7 +207,7 @@ let read_toplevel parse () =
     else acc ^ "\n" ^ str
   in
 
-  let str = read_more "terminus> " "" in
+  let str = read_more "coop> " "" in
   let lex = Ulexbuf.from_string (str ^ "\n") in
   run token parse lex
 
