@@ -129,7 +129,7 @@ let main =
     | Config.PervasivesDefault ->
       (* look for pervasives next to the executable and don't whine if it is not there *)
        let d = Filename.dirname Sys.argv.(0) in
-       let f = Filename.concat d "pervasives.trm" in
+       let f = Filename.concat d "pervasives.coop" in
        if Sys.file_exists f then add_file true f
   end ;
 
