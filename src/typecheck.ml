@@ -22,6 +22,7 @@ type error =
   | CompTypeMismatch of Syntax.comp_ty * Syntax.comp_ty
   | TypeExpectedButFunction of Syntax.expr_ty
   | TypeExpectedButTuple of Syntax.expr_ty
+  | TypeExpectedButUnit of Syntax.expr_ty
   | TupleTooShort of Syntax.expr_ty
   | TupleTooLong of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
@@ -66,6 +67,10 @@ let print_error err ppf =
 
   | TypeExpectedButTuple ty ->
      Format.fprintf ppf "this expression is a tuple but should have type@ %t"
+                        (Syntax.print_expr_ty ty)
+
+  | TypeExpectedButUnit ty ->
+     Format.fprintf ppf "this expression is the unit but should have type@ %t"
                         (Syntax.print_expr_ty ty)
 
   | TupleTooShort ty ->
@@ -126,6 +131,8 @@ let rec expr_ty {Location.data=t'; loc} =
 
   | Desugared.Int -> Syntax.Int
 
+  | Desugared.Bool -> Syntax.Bool
+
   | Desugared.Product lst ->
      let lst = List.map expr_ty lst in
      Syntax.Product lst
@@ -149,7 +156,8 @@ and comp_ty ({Location.data=t'; loc} as t) =
      let t = expr_ty t in
      Syntax.CompTy (t, sgn)
 
-  | (Desugared.Int | Desugared.Product _ | Desugared.Arrow _ | Desugared.ComodelTy _) ->
+  | (Desugared.Int | Desugared.Bool | Desugared.Product _ |
+     Desugared.Arrow _ | Desugared.ComodelTy _) ->
      let t = expr_ty t in
      Syntax.CompTy (t, Syntax.empty_signature)
 
@@ -169,11 +177,15 @@ let check_pattern patt ty =
     | Desugared.PattNumeral n, Syntax.Int ->
        Syntax.PattNumeral n, xts
 
+    | Desugared.PattBoolean b, Syntax.Bool ->
+       Syntax.PattBoolean b, xts
+
     | Desugared.PattTuple ps, Syntax.Product ts ->
        fold_tuple ~loc xts [] ps ts
 
-    | ((Desugared.PattTuple _, (Syntax.Int | Syntax.Arrow _ | Syntax.ComodelTy _)) |
-       (Desugared.PattNumeral _, (Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _))) ->
+    | Desugared.PattNumeral _, (Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattBoolean _, (Syntax.Int | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattTuple _, (Syntax.Int | Syntax.Bool | Syntax.Arrow _ | Syntax.ComodelTy _) ->
        error ~loc (PattTypeMismatch ty)
 
   and fold_tuple ~loc xts ps' ps ts =
@@ -228,6 +240,9 @@ let rec infer_expr (ctx : context) {Location.data=e'; loc} =
   | Desugared.Numeral n ->
      locate (Syntax.Numeral n), Syntax.Int
 
+  | Desugared.Boolean b ->
+     locate (Syntax.Boolean b), Syntax.Bool
+
   | Desugared.Tuple lst ->
      let lst = List.map (infer_expr ctx) lst in
      locate (Syntax.Tuple (List.map fst lst)),  Syntax.Product (List.map snd lst)
@@ -281,7 +296,7 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
           let e2 = check_expr ctx e2 u1 in
           locate (Syntax.Apply (e1, e2)), u2
 
-       | (Syntax.Int | Syntax.Product _ | Syntax.ComodelTy _) ->
+       | (Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.ComodelTy _) ->
           error ~loc:(e1.Location.loc) (FunctionExpected t1)
      end
 
@@ -341,7 +356,7 @@ and infer_comodel ctx cmdl =
 
   | Syntax.ComodelTy (sgn1, t, sgn2) -> e, (sgn1, t, sgn2)
 
-  | Syntax.Int | Syntax.Product _ | Syntax.Arrow _ ->
+  | Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ ->
      error ~loc:cmdl.Location.loc (ComodelExpected e_ty)
 
 and extend_binder ctx (p, topt) t =
@@ -366,7 +381,7 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
           let ctx, p = extend_pattern ctx p t in
           let c = check_comp ctx e u in
           locate (Syntax.Lambda (p, c))
-       | (Syntax.Int | Syntax.Product _ | Syntax.ComodelTy _) ->
+       | (Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.ComodelTy _) ->
           error ~loc (TypeExpectedButFunction ty)
      end
 
@@ -387,12 +402,15 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
           in
           fold es ts []
 
-       | (Syntax.Int | Syntax.Arrow _ | Syntax.ComodelTy _) ->
-          error ~loc (TypeExpectedButTuple ty)
+       | (Syntax.Int | Syntax.Bool | Syntax.Arrow _ | Syntax.ComodelTy _) ->
+          begin match es with
+          | [] -> error ~loc (TypeExpectedButUnit ty)
+          | _::_ -> error ~loc (TypeExpectedButTuple ty)
+          end
      end
 
-  | (Desugared.Numeral _ | Desugared.Lambda ((_, Some _), _) | Desugared.Var _ |
-     Desugared.AscribeExpr _ | Desugared.Comodel _) ->
+  | (Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
+     Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Comodel _) ->
      let e, ty' = infer_expr ctx e in
      if Syntax.expr_subty ty' ty
      then

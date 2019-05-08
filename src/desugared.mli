@@ -6,6 +6,7 @@ type signature = Name.Set.t
 type ty = ty' Location.located
 and ty' =
   | Int
+  | Bool
   | Arrow of ty * ty
   | Product of ty list
   | ComodelTy of signature * ty * signature
@@ -17,6 +18,7 @@ and pattern' =
   | PattAnonymous
   | PattVar of Name.t
   | PattNumeral of int
+  | PattBoolean of bool
   | PattTuple of pattern list
 
 (** Expressions *)
@@ -25,6 +27,7 @@ and expr' =
   | AscribeExpr of expr * ty
   | Var of Name.t
   | Numeral of int
+  | Boolean of bool
   | Tuple of expr list
   | Lambda of binder * comp
   | Comodel of ty * comodel_clause list

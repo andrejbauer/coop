@@ -6,6 +6,7 @@ type signature = Name.t list
 type ty = ty' Location.located
 and ty' =
   | Int
+  | Bool
   | Product of ty list
   | Arrow of ty * ty
   | ComodelTy of signature * ty * signature
@@ -24,8 +25,11 @@ type term = term' Location.located
 and term' =
   | Var of Name.t
   | Numeral of int
+  | False
+  | True
   | Tuple of term list
   | Match of term * (binder * term) list
+  | If of term * term * term
   | Lambda of binder list * term
   | Apply of term * term
   | Let of pattern * term * term

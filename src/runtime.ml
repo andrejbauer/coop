@@ -66,6 +66,9 @@ let match_pattern p v =
   | Syntax.PattNumeral m, Value.Numeral n ->
      if m = n then Some us else None
 
+  | Syntax.PattBoolean b, Value.Boolean b' ->
+     if b = b' then Some us else None
+
   | Syntax.PattTuple ps, Value.Tuple vs ->
      fold_tuple us ps vs
 
@@ -73,8 +76,9 @@ let match_pattern p v =
 
   | _, Value.Comodel _ -> None
 
-  | (Syntax.PattTuple _, Value.Numeral _ |
-     Syntax.PattNumeral _, Value.Tuple _) ->
+  | Syntax.PattNumeral _, (Value.Boolean _ | Value.Tuple _)
+  | Syntax.PattBoolean _, (Value.Numeral _ | Value.Tuple _)
+  | Syntax.PattTuple _, (Value.Numeral _ | Value.Boolean _) ->
      None
 
   and fold_tuple us ps vs =
@@ -118,12 +122,14 @@ let match_clauses ~loc env ps v =
 
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
-  | Value.Closure _ | Value.Numeral _ | Value.Tuple ([] | [_] | _::_::_::_) | Value.Comodel _ ->
+  | Value.Closure _ | Value.Numeral _ | Value.Boolean _
+  | Value.Tuple ([] | [_] | _::_::_::_) | Value.Comodel _ ->
      error ~loc PairExpected
 
 let as_closure ~loc = function
   | Value.Closure f -> f
-  | Value.Numeral _ | Value.Tuple _ | Value.Comodel _ -> error ~loc FunctionExpected
+  | Value.Numeral _ | Value.Boolean _ | Value.Tuple _
+  | Value.Comodel _ -> error ~loc FunctionExpected
 
 let as_value ~loc = function
   | Value.Val v -> v
@@ -131,7 +137,8 @@ let as_value ~loc = function
 
 let as_comodel ~loc = function
   | Value.Comodel cmdl -> cmdl
-  | Value.Numeral _ | Value.Tuple _ | Value.Closure _ -> error ~loc ComodelExpected
+  | Value.Numeral _ | Value.Boolean _ | Value.Tuple _
+  | Value.Closure _ -> error ~loc ComodelExpected
 
 (** The result monad *)
 let rec bind r k =
@@ -145,6 +152,8 @@ let rec eval_expr env {Location.data=e'; loc} =
   match e' with
 
   | Syntax.Numeral k -> Value.Numeral k
+
+  | Syntax.Boolean b -> Value.Boolean b
 
   | Syntax.Var i -> lookup ~loc i env
 

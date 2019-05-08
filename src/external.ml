@@ -6,7 +6,7 @@ let error msg = raise (Error msg)
 
 let as_int = function
   | Value.Numeral n -> n
-  | Value.Tuple _ | Value.Closure _ | Value.Comodel _ ->
+  | Value.Boolean _ | Value.Tuple _ | Value.Closure _ | Value.Comodel _ ->
      error "integer expected"
 
 (*

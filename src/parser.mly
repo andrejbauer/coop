@@ -9,7 +9,7 @@
 %token UNDERSCORE
 
 (* Primitive types *)
-%token INT UNIT
+%token INT UNIT BOOL
 
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
@@ -18,6 +18,7 @@
 
 (* Expressions and computations *)
 %token <int> NUMERAL
+%token FALSE TRUE IF THEN ELSE
 %token FUN
 %token COMODEL
 %token LET EQUAL IN
@@ -138,6 +139,9 @@ term_:
   | MATCH e=infix_term WITH lst=match_clauses END
     { Sugared.Match (e, lst) }
 
+  | IF e1=term THEN e2=term ELSE e3=term
+    { Sugared.If (e1, e2, e3) }
+
   | COMODEL t=ty WITH lst=comodel_clauses END
     { Sugared.Comodel (t, lst) }
 
@@ -179,6 +183,12 @@ prefix_term_:
 simple_term_:
   | n=NUMERAL
     { Sugared.Numeral n }
+
+  | FALSE
+    { Sugared.False }
+
+  | TRUE
+    { Sugared.True }
 
   | x=var_name
     { Sugared.Var x }
@@ -289,6 +299,9 @@ simple_ty_:
 
   | UNIT
     { Sugared.Product [] }
+
+  | BOOL
+    { Sugared.Bool }
 
   | LPAREN t=ty_ RPAREN
     { t }

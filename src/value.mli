@@ -1,5 +1,6 @@
 type t =
   | Numeral of int
+  | Boolean of bool
   | Tuple of t list
   | Closure of closure
   | Comodel of cooperation Name.Map.t

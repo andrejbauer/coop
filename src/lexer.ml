@@ -2,17 +2,22 @@
 
 (** Reserved words. *)
 let reserved = [
+  ("bool", Parser.BOOL) ;
   ("comodel", Parser.COMODEL) ;
-  ("end", Parser.END) ;
+  ("else", Parser.ELSE) ;
   ("external", Parser.EXTERNAL) ;
+  ("false", Parser.FALSE) ;
   ("finally", Parser.FINALLY) ;
   ("fun", Parser.FUN) ;
+  ("if", Parser.IF) ;
   ("in", Parser.IN) ;
   ("int", Parser.INT) ;
   ("let", Parser.LET) ;
   ("load", Parser.LOAD) ;
   ("match", Parser.MATCH) ;
   ("operation", Parser.OPERATION) ;
+  ("then", Parser.THEN) ;
+  ("true", Parser.TRUE) ;
   ("unit", Parser.UNIT) ;
   ("using", Parser.USING) ;
   ("val", Parser.VAL) ;

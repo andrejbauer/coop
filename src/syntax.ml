@@ -5,6 +5,7 @@ type signature = Name.Set.t
 (** Expression type *)
 type expr_ty =
   | Int
+  | Bool
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
   | ComodelTy of comodel_ty
@@ -20,6 +21,7 @@ type pattern =
   | PattAnonymous
   | PattVar
   | PattNumeral of int
+  | PattBoolean of bool
   | PattTuple of pattern list
 
 (** De Bruijn index *)
@@ -30,6 +32,7 @@ type expr = expr' Location.located
 and expr' =
   | Var of index
   | Numeral of int
+  | Boolean of bool
   | Tuple of expr list
   | Lambda of pattern * comp
   | Comodel of (Name.t * pattern * pattern * comp) list
@@ -76,6 +79,8 @@ let rec expr_subty t u =
 
   | Int, Int -> true
 
+  | Bool, Bool -> true
+
   | Product ts, Product us ->
      let rec fold ts us =
        match ts, us with
@@ -91,10 +96,11 @@ let rec expr_subty t u =
   | ComodelTy (tsgn1, t, tsgn2), ComodelTy (usgn1, u, usgn2) ->
      Name.Set.subset usgn1 tsgn1 && expr_eqtype t u && Name.Set.subset tsgn2 usgn2
 
-  | Int,         (Product _ | Arrow _ | ComodelTy _)
-  | Product _,   (Int | Arrow _ | ComodelTy _)
-  | Arrow _,     (Int | Product _ | ComodelTy _)
-  | ComodelTy _, (Int | Product _ | Arrow _) ->
+  | Int,         (Bool | Product _ | Arrow _ | ComodelTy _)
+  | Bool,        (Int | Product _ | Arrow _ | ComodelTy _)
+  | Product _,   (Int | Bool | Arrow _ | ComodelTy _)
+  | Arrow _,     (Int | Bool | Product _ | ComodelTy _)
+  | ComodelTy _, (Int | Bool | Product _ | Arrow _) ->
      false
 
 and comp_subty (CompTy (t1, drt1)) (CompTy (t2, drt2)) =
@@ -108,6 +114,8 @@ let rec print_expr_ty ?max_level ty ppf =
   match ty with
 
   | Int -> Format.fprintf ppf "int"
+
+  | Bool -> Format.fprintf ppf "bool"
 
   | Product [] -> Format.fprintf ppf "unit"
 

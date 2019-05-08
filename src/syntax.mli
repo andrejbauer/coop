@@ -7,6 +7,7 @@ type signature = Name.Set.t
 (** Expression type *)
 type expr_ty =
   | Int
+  | Bool
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
   | ComodelTy of comodel_ty
@@ -22,6 +23,7 @@ type pattern =
   | PattAnonymous
   | PattVar
   | PattNumeral of int
+  | PattBoolean of bool
   | PattTuple of pattern list
 
 (** De Bruijn index *)
@@ -32,6 +34,7 @@ type expr = expr' Location.located
 and expr' =
   | Var of index
   | Numeral of int
+  | Boolean of bool
   | Tuple of expr list
   | Lambda of pattern * comp
   | Comodel of (Name.t * pattern * pattern * comp) list

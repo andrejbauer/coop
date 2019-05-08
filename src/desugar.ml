@@ -62,6 +62,8 @@ let rec ty ctx {Location.data=t'; loc} =
 
     | Sugared.Int -> Desugared.Int
 
+    | Sugared.Bool -> Desugared.Bool
+
     | Sugared.Product lst ->
        let lst = List.map (ty ctx) lst in
        Desugared.Product lst
@@ -136,6 +138,12 @@ let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
     | Sugared.Numeral n ->
        ([], locate (Desugared.Numeral n))
 
+    | Sugared.False ->
+       ([], locate (Desugared.Boolean false))
+
+    | Sugared.True ->
+       ([], locate (Desugared.Boolean true))
+
     | Sugared.Tuple lst ->
        let rec fold = function
          | [] -> [], []
@@ -155,8 +163,8 @@ let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
        let lst = comodel_clauses ~loc ctx lst in
        ([], locate (Desugared.Comodel (t, lst)))
 
-    | (Sugared.Match _ | Sugared.Apply _ | Sugared.Let _ | Sugared.Sequence _ |
-       Sugared.LetFun _ | Sugared.Using _) ->
+    | (Sugared.Match _ | Sugared.If _ | Sugared.Apply _ | Sugared.Let _ |
+       Sugared.Sequence _ | Sugared.LetFun _ | Sugared.Using _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Desugared.Var x))
@@ -199,7 +207,8 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
     fold ws
   in
   match c' with
-    | (Sugared.Var _ | Sugared.Numeral _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _) ->
+    | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True |
+       Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _) ->
        let ws, e = expr ctx c in
        let return_e = locate (Desugared.Val e) in
        let_binds ws return_e
@@ -213,6 +222,26 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
        let w, e = expr ctx e in
        let lst = match_clauses ctx lst in
        let_binds w (locate (Desugared.Match (e, lst)))
+
+    | Sugared.If (e, c1, c2) ->
+       (* Desguar into a match statement *)
+       let w, e = expr ctx e in
+       let e' =
+         let loc x = Location.locate ~loc:e.Location.loc x in
+         loc (Desugared.AscribeExpr (e, loc Desugared.Bool))
+       in
+       let b = Location.locate ~loc Desugared.Bool in
+       let cl1 =
+         let c1 = comp ctx c1 in
+         let loc x = Location.locate ~loc:c1.Location.loc x in
+         ((loc (Desugared.PattBoolean true), Some b), c1)
+       in
+       let cl2 =
+         let c2 = comp ctx c2 in
+         let loc x = Location.locate ~loc:c1.Location.loc x in
+         ((loc (Desugared.PattBoolean false), Some b), c2)
+       in
+       let_binds w (locate (Desugared.Match (e', [cl1; cl2])))
 
     | Sugared.Apply ({Location.data=Sugared.Var op; loc}, e) when is_operation op ctx ->
        let ws, e = expr ctx e in

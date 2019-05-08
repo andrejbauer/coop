@@ -1,5 +1,6 @@
 type t =
   | Numeral of int
+  | Boolean of bool
   | Tuple of t list
   | Closure of closure
   | Comodel of cooperation Name.Map.t
@@ -18,6 +19,8 @@ let rec print ?max_level v ppf =
   match v with
 
   | Numeral k -> Format.fprintf ppf "%d" k
+
+  | Boolean b -> Format.fprintf ppf "%b" b
 
   | Tuple lst ->
      Format.fprintf ppf "(%t)"
