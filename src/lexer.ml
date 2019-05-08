@@ -94,7 +94,7 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | ':'                      -> f (); Parser.COLON
   | ';'                      -> f (); Parser.SEMI
   | ";;"                     -> f (); Parser.SEMISEMI
-  | '='                      -> f (); Parser.EQUAL
+  | '='                      -> f (); Parser.EQUAL (Location.locate ~loc:(loc_of lexbuf) (Name.Ident("=", Name.Infix Level.Infix1)))
   | "->" | 8594 | 10230      -> f (); Parser.ARROW
   | "=>" | 8658              -> f (); Parser.DARROW
 

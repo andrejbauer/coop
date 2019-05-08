@@ -2,7 +2,7 @@
 %}
 
 (* Infix operations a la OCaml *)
-%token <Name.t Location.located> PREFIXOP INFIXOP0 INFIXOP1 INFIXOP2 INFIXOP3 INFIXOP4 INFIXOP5 STAR BANG AT
+%token <Name.t Location.located> PREFIXOP INFIXOP0 INFIXOP1 EQUAL INFIXOP2 INFIXOP3 INFIXOP4 INFIXOP5 STAR BANG AT
 
 (* Names *)
 %token <Name.t> NAME
@@ -21,7 +21,7 @@
 %token FALSE TRUE IF THEN ELSE
 %token FUN
 %token COMODEL
-%token LET EQUAL IN
+%token LET IN
 %token MATCH WITH BAR END
 %token USING FINALLY VAL
 
@@ -37,7 +37,7 @@
 
 (* Precedence and fixity of infix operators *)
 %nonassoc INFIXOP0
-%left     INFIXOP1
+%left     INFIXOP1 EQUAL
 %right    INFIXOP2 AT
 %left     INFIXOP3
 %left     INFIXOP4 STAR
@@ -206,6 +206,7 @@ var_name:
 %inline infix:
   | op=INFIXOP0    { op }
   | op=INFIXOP1    { op }
+  | op=EQUAL       { op }
   | op=INFIXOP2    { op }
   | op=AT          { op }
   | op=INFIXOP3    { op }
