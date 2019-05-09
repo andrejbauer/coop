@@ -32,6 +32,13 @@ let wrap_int_int f =
       let m = f n in
       Value.Numeral m)
 
+let wrap_int_int_bool f =
+    wrap_binary (fun v1 v2 ->
+      let n1 = as_int v1
+      and n2 = as_int v2 in
+      let b = f n1 n2 in
+      Value.Boolean b)
+
 let externals =
   [
     ("+", wrap_int_int_int ( + )) ;
@@ -39,7 +46,13 @@ let externals =
     ("-", wrap_int_int_int ( - )) ;
     ("/", wrap_int_int_int (fun a b -> try a / b with Division_by_zero -> error "division by zero")) ;
     ("%", wrap_int_int_int (fun a b -> try a mod b with Division_by_zero -> error "division by zero")) ;
-    ("~-", wrap_int_int ( ~- ))
+    ("~-", wrap_int_int ( ~- )) ;
+    ("=",  wrap_int_int_bool ((=) : int -> int -> bool)) ;
+    ("<>",  wrap_int_int_bool ((<>) : int -> int -> bool)) ;
+    ("<",  wrap_int_int_bool ((<) : int -> int -> bool)) ;
+    (">",  wrap_int_int_bool ((>) : int -> int -> bool)) ;
+    ("<=",  wrap_int_int_bool ((<=) : int -> int -> bool)) ;
+    (">=",  wrap_int_int_bool ((>=) : int -> int -> bool)) ;
   ]
 
 let lookup s = List.assoc_opt s externals
