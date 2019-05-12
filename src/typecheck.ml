@@ -5,6 +5,8 @@ type context =
   { ctx_operations : (Syntax.expr_ty * Syntax.expr_ty) Name.Map.t
   ; ctx_signals : Syntax.expr_ty Name.Map.t
   ; ctx_idents : (Name.t * Syntax.expr_ty) list
+  ; ctx_tyabbrevs : Syntax.expr_ty Name.Map.t
+  ; ctx_datatypes : (Name.t * Syntax.ty_definition) list
   }
 
 (** Initial typing context *)
@@ -12,6 +14,8 @@ let initial =
   { ctx_operations = Name.Map.empty
   ; ctx_signals = Name.Map.empty
   ; ctx_idents = []
+  ; ctx_tyabbrevs = Name.Map.empty
+  ; ctx_datatypes = []
   }
 
 (** Type errors *)
@@ -19,15 +23,19 @@ type error =
   | InvalidName of Name.t
   | InvalidOperation of Name.t
   | InvalidSignal of Name.t
+  | InvalidType of Name.t
   | PattTypeMismatch of Syntax.expr_ty
   | ExprTypeMismatch of Syntax.expr_ty * Syntax.expr_ty
   | ExprTypeExpected
+  | WrongTupleLength of int * int
+  | IllegalConstructor of Name.t
+  | UnknownConstructor of Name.t
+  | WrongConstructor of Name.t * Syntax.expr_ty
   | CompTypeMismatch of Syntax.comp_ty * Syntax.comp_ty
   | TypeExpectedButFunction of Syntax.expr_ty
   | TypeExpectedButTuple of Syntax.expr_ty
   | TypeExpectedButUnit of Syntax.expr_ty
-  | TupleTooShort of Syntax.expr_ty
-  | TupleTooLong of Syntax.expr_ty
+  | TypeExpectedButConstructor of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
   | ComodelExpected of Syntax.expr_ty
   | CannotInferArgument
@@ -54,6 +62,10 @@ let print_error err ppf =
      Format.fprintf ppf "invalid signal %t, please report"
        (Name.print sgl)
 
+  | InvalidType ty ->
+     Format.fprintf ppf "invalid ty %t, please report"
+       (Name.print ty)
+
   | PattTypeMismatch ty_expected ->
      Format.fprintf ppf "this pattern should have type@ %t"
        (Syntax.print_expr_ty ty_expected)
@@ -71,6 +83,21 @@ let print_error err ppf =
   | ExprTypeExpected ->
      Format.fprintf ppf "this type should be pure"
 
+  | WrongTupleLength (k_expected, k_actual) ->
+     Format.fprintf ppf "this tuple should have %d component but has %d" k_expected k_actual
+
+  | IllegalConstructor cnstr ->
+     Format.fprintf ppf "illegal application of constructor %t, please report"
+       (Name.print cnstr)
+
+  | UnknownConstructor cnstr ->
+     Format.fprintf ppf "unknown constructor %t" (Name.print cnstr)
+
+  | WrongConstructor (cnstr, ty) ->
+     Format.fprintf ppf "constructor %t does not have type %t"
+       (Name.print cnstr)
+       (Syntax.print_expr_ty ty)
+
   | TypeExpectedButFunction ty ->
      Format.fprintf ppf "this expression is a function but should have type@ %t"
                         (Syntax.print_expr_ty ty)
@@ -83,12 +110,8 @@ let print_error err ppf =
      Format.fprintf ppf "this expression is the unit but should have type@ %t"
        (Syntax.print_expr_ty ty)
 
-  | TupleTooShort ty ->
-     Format.fprintf ppf "this tuple has too few components, it should have type@ %t"
-       (Syntax.print_expr_ty ty)
-
-  | TupleTooLong ty ->
-     Format.fprintf ppf "this tuple has too many components, it should have type@ %t"
+  | TypeExpectedButConstructor ty ->
+     Format.fprintf ppf "this expression is a constructor but should have type@ %t"
        (Syntax.print_expr_ty ty)
 
   | FunctionExpected ty ->
@@ -133,6 +156,12 @@ let rec extend_idents xts ctx =
   | [] -> ctx
   | (x, t) :: xts -> extend_idents xts (extend_ident x t ctx)
 
+let extend_tyabbrev ~loc x ty ctx =
+  { ctx with ctx_tyabbrevs = Name.Map.add x ty ctx.ctx_tyabbrevs }
+
+let extend_datatype ~loc x cnstrs ctx =
+  { ctx with ctx_datatypes = (x, cnstrs) :: ctx.ctx_datatypes }
+
 let declare_operation op ty1 ty2 ctx =
   { ctx with ctx_operations = Name.Map.add op (ty1, ty2) ctx.ctx_operations }
 
@@ -158,13 +187,176 @@ let lookup_signal ~loc sgl {ctx_signals;_} =
   | None -> error ~loc (InvalidSignal sgl)
   | Some ty -> ty
 
+let lookup_tyabbrev ~loc ty {ctx_tyabbrevs;_} =
+  match Name.Map.find ty ctx_tyabbrevs with
+  | None -> error ~loc (InvalidType ty)
+  | Some abbrev -> abbrev
+
+let lookup_datatype ~loc ty {ctx_datatypes;_} =
+  match List.assoc_opt ty ctx_datatypes with
+  | None -> error ~loc (InvalidType ty)
+  | Some def -> def
+
+let lookup_constructor ~loc cnstr {ctx_datatypes;_} =
+  let rec find = function
+
+    | [] ->
+       error ~loc (UnknownConstructor cnstr)
+
+    | (ty, cnstrs) :: lst ->
+       begin
+         match List.assoc_opt cnstr cnstrs  with
+
+         | Some ts -> (ty, ts)
+
+         | None -> find lst
+       end
+  in
+  find ctx_datatypes
+
 let signature Desugared.{sig_ops; sig_sgs} = Syntax.{sig_ops; sig_sgs}
+
+(**** Normalization of types ****)
+
+(** Unfold the definition of a type *)
+let rec norm_ty ~loc ctx t =
+  match t with
+
+  | Syntax.TyAbbreviation x ->
+     let t = lookup_tyabbrev ~loc x ctx in
+     norm_ty ~loc ctx t
+
+  | (Syntax.TyDatatype _ |  Syntax.SignalTy | Syntax.Int | Syntax.Bool |
+     Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
+     t
+
+let as_product ~loc ctx ty =
+  match norm_ty ~loc ctx ty with
+
+  | Syntax.TyAbbreviation _ -> assert false
+
+  | Syntax.Product ts -> Some ts
+
+  | (Syntax.TyDatatype _  | Syntax.SignalTy | Syntax.Int | Syntax.Bool |
+     Syntax.Arrow _ | Syntax.ComodelTy _) ->
+     None
+
+let as_arrow ~loc ctx ty =
+  match norm_ty ~loc ctx ty with
+
+  | Syntax.TyAbbreviation _ -> assert false
+
+  | Syntax.Arrow (t,u) -> Some (t, u)
+
+  | (Syntax.Product _ | Syntax.TyDatatype _ | Syntax.SignalTy | Syntax.Int | Syntax.Bool |
+     Syntax.ComodelTy _) ->
+     None
+
+let as_comodel ~loc ctx ty =
+
+  match norm_ty ~loc ctx ty with
+
+  | Syntax.TyAbbreviation _ -> assert false
+
+  | Syntax.ComodelTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
+
+  | (Syntax.Product _ | Syntax.TyDatatype _ | Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.Arrow _) ->
+     None
+
+let as_datatype ~loc ctx ty =
+
+  match norm_ty ~loc ctx ty with
+
+  | Syntax.TyAbbreviation _ -> assert false
+
+  | Syntax.TyDatatype ty ->
+     Some (lookup_datatype ~loc ty ctx)
+
+  | (Syntax.Product _ | Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.Arrow _ | Syntax.ComodelTy _) ->
+     None
 
 
 (**** Subtyping ****)
 
-let rec join_expr_ty ~loc t1 t2 =
+(** Is the first signature a subsignature of the second one? *)
+let subsignature Syntax.{sig_ops=ops1; sig_sgs=sgs1} Syntax.{sig_ops=ops2; sig_sgs=sgs2} =
+  Name.Set.subset ops1 ops2 && Name.Set.subset sgs1 sgs2
+
+let rec expr_subty ~loc ctx t u =
+  match t, u with
+
+  | Syntax.TyAbbreviation x, Syntax.TyAbbreviation y when Name.equal x y -> true
+
+  | Syntax.TyAbbreviation _, _ ->
+     let t = norm_ty ~loc ctx t in
+     expr_subty ~loc ctx t u
+
+  | _, Syntax.TyAbbreviation _ ->
+     let u = norm_ty ~loc ctx u in
+     expr_subty ~loc ctx t u
+
+  | Syntax.TyDatatype x, Syntax.TyDatatype y ->
+     Name.equal x y
+
+  | Syntax.SignalTy, _ -> true
+
+  | _, Syntax.SignalTy -> false
+
+  | Syntax.Int, Syntax.Int -> true
+
+  | Syntax.Bool, Syntax.Bool -> true
+
+  | Syntax.Product ts, Syntax.Product us ->
+     let rec fold ts us =
+       match ts, us with
+       | [], [] -> true
+       | t :: ts, u :: us -> expr_subty ~loc ctx t u && fold ts us
+       | [], _::_ | _::_, [] -> false
+     in
+     fold ts us
+
+  | Syntax.Arrow (t1, t2), Syntax.Arrow (u1, u2) ->
+     expr_subty ~loc ctx u1 t1 && comp_subty ~loc ctx t2 u2
+
+  | Syntax.ComodelTy (tsgn1, t, tsgn2), Syntax.ComodelTy (usgn1, u, usgn2) ->
+     Name.Set.subset usgn1 tsgn1 && expr_eqtype ~loc ctx t u && subsignature  tsgn2 usgn2
+
+  | (Syntax.TyDatatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
+     Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
+     false
+
+and comp_subty ~loc ctx (Syntax.CompTy (t1, sig1)) (Syntax.CompTy (t2, sig2)) =
+  subsignature sig1 sig2 && expr_subty ~loc ctx t1 t2
+
+and expr_eqtype ~loc ctx t u =
+  expr_subty ~loc ctx t u && expr_subty ~loc ctx u t
+
+let join_signature Syntax.{sig_ops=ops1; sig_sgs=sgs1} Syntax.{sig_ops=ops2; sig_sgs=sgs2} =
+  let sig_ops = Name.Set.union ops1 ops2
+  and sig_sgs = Name.Set.union sgs1 sgs2 in
+  Syntax.{sig_ops; sig_sgs}
+
+let meet_signature Syntax.{sig_ops=ops1; sig_sgs=sgs1} Syntax.{sig_ops=ops2; sig_sgs=sgs2} =
+  let sig_ops = Name.Set.inter ops1 ops2
+  and sig_sgs = Name.Set.inter sgs1 sgs2 in
+  Syntax.{sig_ops; sig_sgs}
+
+let rec join_expr_ty ~loc ctx t1 t2 =
   match t1, t2 with
+
+  | Syntax.TyAbbreviation x, Syntax.TyAbbreviation y when Name.equal x y ->
+     t1
+
+  | Syntax.TyAbbreviation _, _ ->
+     let t1 = norm_ty ~loc ctx t1 in
+     join_expr_ty ~loc ctx t1 t2
+
+  | _, Syntax.TyAbbreviation _ ->
+     let t2 = norm_ty ~loc ctx t2 in
+     join_expr_ty ~loc ctx t1 t2
+
+  | Syntax.TyDatatype x, Syntax.TyDatatype y when Name.equal x y ->
+     t1
 
   | Syntax.SignalTy, t2 -> t2
 
@@ -181,7 +373,7 @@ let rec join_expr_ty ~loc t1 t2 =
           let ts = List.rev ts in
           Syntax.Product ts
        | t1::ts1, t2::ts2 ->
-          let t = join_expr_ty ~loc t1 t2 in
+          let t = join_expr_ty ~loc ctx t1 t2 in
           fold (t :: ts) ts1 ts2
        | [], _::_ | _::_, [] ->
           error ~loc (ExprTypeMismatch (t2, t1))
@@ -189,21 +381,36 @@ let rec join_expr_ty ~loc t1 t2 =
      fold [] ts1 ts2
 
   | Syntax.Arrow (u1, t1), Syntax.Arrow (u2, t2) ->
-     let u = meet_expr_ty ~loc u1 u2 in
-     let t = join_comp_ty ~loc t1 t2 in
+     let u = meet_expr_ty ~loc ctx u1 u2 in
+     let t = join_comp_ty ~loc ctx t1 t2 in
      Syntax.Arrow (u, t)
 
   | Syntax.ComodelTy (ops1, t1, sig1), Syntax.ComodelTy (ops2, t2, sig2) ->
      let ops = Name.Set.inter ops1 ops2
-     and t = meet_expr_ty ~loc t1 t2
-     and sgn = Syntax.join_signature sig1 sig2 in
+     and t = meet_expr_ty ~loc ctx t1 t2
+     and sgn = join_signature sig1 sig2 in
      Syntax.ComodelTy  (ops, t, sgn)
 
-  | (Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
+  | (Syntax.TyDatatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
+     Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
-and meet_expr_ty ~loc t1 t2 =
+and meet_expr_ty ~loc ctx t1 t2 =
   match t1, t2 with
+
+  | Syntax.TyAbbreviation x, Syntax.TyAbbreviation y when Name.equal x y ->
+     t1
+
+  | Syntax.TyAbbreviation _, _ ->
+     let t1 = norm_ty ~loc ctx t1 in
+     meet_expr_ty ~loc ctx t1 t2
+
+  | _, Syntax.TyAbbreviation _ ->
+     let t2 = norm_ty ~loc ctx t2 in
+     meet_expr_ty ~loc ctx t1 t2
+
+  | Syntax.TyDatatype x, Syntax.TyDatatype y when Name.equal x y ->
+     t1
 
   | Syntax.SignalTy, _ -> Syntax.SignalTy
 
@@ -220,7 +427,7 @@ and meet_expr_ty ~loc t1 t2 =
           let ts = List.rev ts in
           Syntax.Product ts
        | t1::ts1, t2::ts2 ->
-          let t = meet_expr_ty ~loc t1 t2 in
+          let t = meet_expr_ty ~loc ctx t1 t2 in
           fold (t :: ts) ts1 ts2
        | [], _::_ | _::_, [] ->
           error ~loc (ExprTypeMismatch (t2, t1))
@@ -228,27 +435,28 @@ and meet_expr_ty ~loc t1 t2 =
      fold [] ts1 ts2
 
   | Syntax.Arrow (u1, t1), Syntax.Arrow (u2, t2) ->
-     let u = join_expr_ty ~loc u1 u2 in
-     let t = meet_comp_ty ~loc t1 t2 in
+     let u = join_expr_ty ~loc ctx u1 u2 in
+     let t = meet_comp_ty ~loc ctx t1 t2 in
      Syntax.Arrow (u, t)
 
   | Syntax.ComodelTy (ops1, t1, sig1), Syntax.ComodelTy (ops2, t2, sig2) ->
      let ops = Name.Set.union ops1 ops2
-     and t = join_expr_ty ~loc t1 t2
-     and sgn = Syntax.meet_signature sig1 sig2 in
+     and t = join_expr_ty ~loc ctx t1 t2
+     and sgn = meet_signature sig1 sig2 in
      Syntax.ComodelTy  (ops, t, sgn)
 
-  | (Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
+  | (Syntax.TyDatatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
+     Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
-and join_comp_ty ~loc (Syntax.CompTy(t1, sig1)) (Syntax.CompTy(t2,sig2)) =
-  let t = join_expr_ty ~loc t1 t2
-  and sgn = Syntax.join_signature sig1 sig2 in
+and join_comp_ty ~loc ctx (Syntax.CompTy(t1, sig1)) (Syntax.CompTy(t2,sig2)) =
+  let t = join_expr_ty ~loc ctx t1 t2
+  and sgn = join_signature sig1 sig2 in
   Syntax.CompTy (t, sgn)
 
-and meet_comp_ty ~loc (Syntax.CompTy(t1, sig1)) (Syntax.CompTy(t2,sig2)) =
-  let t = meet_expr_ty ~loc t1 t2
-  and sgn = Syntax.meet_signature sig1 sig2 in
+and meet_comp_ty ~loc ctx (Syntax.CompTy(t1, sig1)) (Syntax.CompTy(t2,sig2)) =
+  let t = meet_expr_ty ~loc ctx t1 t2
+  and sgn = meet_signature sig1 sig2 in
   Syntax.CompTy (t, sgn)
 
 (**** Type checking ****)
@@ -260,6 +468,10 @@ let rec expr_ty {Location.data=t'; loc} =
   | Desugared.Int -> Syntax.Int
 
   | Desugared.Bool -> Syntax.Bool
+
+  | Desugared.TyAbbreviation t -> Syntax.TyAbbreviation t
+
+  | Desugared.TyDatatype t -> Syntax.TyDatatype t
 
   | Desugared.Product lst ->
      let lst = List.map expr_ty lst in
@@ -286,17 +498,20 @@ and comp_ty ({Location.data=t'; loc} as t) =
      and sgn = signature sgn in
      Syntax.CompTy (t, sgn)
 
-  | (Desugared.Int | Desugared.Bool | Desugared.Product _ |
-     Desugared.Arrow _ | Desugared.ComodelTy _) ->
+  | (Desugared.Int | Desugared.Bool | Desugared.TyAbbreviation _  | Desugared.TyDatatype _ |
+     Desugared.Product _ | Desugared.Arrow _ | Desugared.ComodelTy _) ->
      let t = expr_ty t in
      Syntax.CompTy (t, Syntax.empty_signature)
 
 
 (** Typecheck a pattern, return processed pattern and the list of identifiers
    and types bound by the pattern *)
-let check_pattern patt ty =
+let check_pattern ~loc ctx patt ty =
   let rec fold xts {Location.data=p'; loc} t =
+    let t = norm_ty ~loc ctx t in
     match p', t with
+
+    | _, Syntax.TyAbbreviation _ -> assert false
 
     | _, Syntax.SignalTy ->
        error ~loc (PattTypeMismatch ty)
@@ -313,19 +528,37 @@ let check_pattern patt ty =
     | Desugared.PattBoolean b, Syntax.Bool ->
        Syntax.PattBoolean b, xts
 
-    | Desugared.PattTuple ps, Syntax.Product ts ->
-       fold_tuple ~loc xts [] ps ts
+    | Desugared.PattConstructor (cnstr, popt), Syntax.TyDatatype x ->
+       let lst = lookup_datatype ~loc x ctx in
+       begin match List.assoc_opt cnstr lst with
+         | None -> error ~loc (PattTypeMismatch ty)
+         | Some topt ->
+            begin
+              match popt, topt with
+              | None, None ->
+                 Syntax.PattConstructor (cnstr, None), xts
+              | Some p, Some t ->
+                 let p, xts = fold xts p t in
+                 Syntax.PattConstructor (cnstr, Some p), xts
+              | None, Some _ | Some _, None -> error ~loc  (PattTypeMismatch ty)
+            end
+       end
 
-    | Desugared.PattNumeral _, (Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattBoolean _, (Syntax.Int | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattTuple _, (Syntax.Int | Syntax.Bool | Syntax.Arrow _ | Syntax.ComodelTy _) ->
+    | Desugared.PattTuple ps, Syntax.Product ts ->
+       let ps, xts = fold_tuple ~loc xts [] ps ts in
+       Syntax.PattTuple ps, xts
+
+    | Desugared.PattNumeral _, (Syntax.Bool | Syntax.TyDatatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattBoolean _, (Syntax.Int | Syntax.TyDatatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattConstructor  _, (Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattTuple _, (Syntax.Int | Syntax.Bool | Syntax.TyDatatype _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
        error ~loc (PattTypeMismatch ty)
 
   and fold_tuple ~loc xts ps' ps ts =
     match ps, ts with
     | [], [] ->
        let ps' = List.rev ps' in
-       Syntax.PattTuple ps', xts
+       ps', xts
     | p :: ps, t :: ts ->
        let p', xts = fold xts p t in
        fold_tuple ~loc xts (p' :: ps') ps ts
@@ -337,15 +570,15 @@ let check_pattern patt ty =
   p, List.rev xts
 
 (** Extend the context by typechecking the pattern against the type *)
-let extend_pattern ctx p t =
-  let p, xts = check_pattern p t in
+let extend_pattern ~loc ctx p t =
+  let p, xts = check_pattern ~loc ctx p t in
   let ctx = extend_idents xts ctx in
   ctx, p
 
 (** Extend the context by typechecking the pattern against the type,
     also return the list of bound names with their types. *)
-let top_extend_pattern ctx p t =
-  let p, xts = check_pattern p t in
+let top_extend_pattern ~loc ctx p t =
+  let p, xts = check_pattern ~loc ctx p t in
   let ctx = extend_idents xts ctx in
   ctx, p, xts
 
@@ -379,13 +612,18 @@ let rec infer_expr (ctx : context) {Location.data=e'; loc} =
   | Desugared.Boolean b ->
      locate (Syntax.Boolean b), Syntax.Bool
 
+  | Desugared.Constructor (cnstr, eopt) ->
+     let ty, topt = lookup_constructor ~loc cnstr ctx in
+     let e = check_constructor ~loc ctx cnstr eopt topt in
+     locate (Syntax.Constructor (cnstr, e)), Syntax.TyDatatype ty
+
   | Desugared.Tuple lst ->
      let lst = List.map (infer_expr ctx) lst in
      locate (Syntax.Tuple (List.map fst lst)),  Syntax.Product (List.map snd lst)
 
   | Desugared.Lambda ((p, Some t), c) ->
      let t = expr_ty t in
-     let ctx, p = extend_pattern ctx p t in
+     let ctx, p = extend_pattern ~loc ctx p t in
      let c, c_ty = infer_comp ctx c in
      locate (Syntax.Lambda (p, c)), Syntax.Arrow (t, c_ty)
 
@@ -414,7 +652,7 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
 
   | Desugared.Let (p, c1, c2) ->
      let c1, (Syntax.CompTy (c1_ty, c1_sgn)) = infer_comp ctx c1 in
-     let ctx, p = extend_pattern ctx p c1_ty in
+     let ctx, p = extend_pattern ~loc ctx p c1_ty in
      let c2, c2_ty = infer_comp ctx c2 in
      let c2_ty = Syntax.pollute c2_ty c1_sgn in
      locate (Syntax.Let (p, c1, c2)), c2_ty
@@ -426,13 +664,11 @@ and infer_comp (ctx : context) {Location.data=c'; loc} =
 
   | Desugared.Apply (e1, e2) ->
      let e1, t1 = infer_expr ctx e1 in
-     begin
-       match t1 with
-       | Syntax.Arrow (u1, u2) ->
+     begin match as_arrow ~loc:(e1.Location.loc) ctx t1 with
+       | Some (u1, u2) ->
           let e2 = check_expr ctx e2 u1 in
           locate (Syntax.Apply (e1, e2)), u2
-
-       | (Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.ComodelTy _) ->
+       | None ->
           error ~loc:(e1.Location.loc) (FunctionExpected t1)
      end
 
@@ -470,7 +706,7 @@ and infer_match_clauses ~loc ctx patt_ty lst =
        | (p, c) :: lst ->
           let ctx, p = extend_binder ctx p patt_ty in
           let c, c_ty = infer_comp ctx c in
-          let ty = join_comp_ty ~loc:c.Location.loc c_ty ty in
+          let ty = join_comp_ty ~loc:c.Location.loc ctx c_ty ty in
           fold ((p,c) :: clauses) ty lst
      in
      let clauses, ty = fold [] c_ty lst in
@@ -492,23 +728,25 @@ and infer_coops ~loc ctx w_ty lst =
          let ctx, pw = extend_binder ctx pw w_ty in
          let c, (Syntax.CompTy (_, c_sgn) as c_ty) = infer_comp ctx c in
          let c_required = Syntax.pure (Syntax.Product [op_ty; w_ty]) in
-         if not (Syntax.comp_subty c_required c_ty) then
+         if not (comp_subty ~loc ctx c_required c_ty) then
            error ~loc (CompTypeMismatch (c_required, c_ty)) ;
          let coops = (op, px, pw, c) :: coops
          and ops = Name.Set.add op ops
-         and sgn2 = Syntax.join_signature sgn2 c_sgn in
+         and sgn2 = join_signature sgn2 c_sgn in
          fold coops ops sgn2 lst
   in
   fold [] Name.Set.empty Syntax.empty_signature lst
 
 and infer_comodel ctx cmdl =
   let e, e_ty = infer_expr ctx cmdl in
-  match e_ty with
+  match as_comodel ~loc:cmdl.Location.loc ctx e_ty with
 
-  | Syntax.ComodelTy (ops, t, sgn2) -> e, (ops, t, sgn2)
+    | Some (ops, t, sgn2) ->
+       e, (ops, t, sgn2)
 
-  | Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ ->
-     error ~loc:cmdl.Location.loc (ComodelExpected e_ty)
+    | None ->
+       error ~loc:cmdl.Location.loc (ComodelExpected e_ty)
+
 
 and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_signals} =
   let fin_val, c_ty =
@@ -530,7 +768,7 @@ and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_signals} =
            let ctx, px = extend_binder ctx px x_ty in
            let ctx, pw = extend_binder ctx pw w_ty in
            let c_sg, sg_ty = infer_comp ctx c_sg in
-           let ty = join_comp_ty ~loc:c_sg.Location.loc ty sg_ty in
+           let ty = join_comp_ty ~loc:c_sg.Location.loc ctx ty sg_ty in
            let sgs = Name.Set.add sg sgs in
            fold ((sg, px, pw, c_sg) :: fs) sgs ty lst
          end
@@ -541,13 +779,14 @@ and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_signals} =
 
 
 and extend_binder ctx (p, topt) t =
+  let loc = p.Location.loc in
   match topt with
-  | None -> extend_pattern ctx p t
+  | None -> extend_pattern ~loc ctx p t
   | Some t' ->
      let t' = expr_ty t' in
-     if not (Syntax.expr_subty t t') then
-       error ~loc:p.Location.loc (ExprTypeMismatch (t, t')) ;
-     extend_pattern ctx p t'
+     if not (expr_subty ~loc ctx t t') then
+       error ~loc (ExprTypeMismatch (t, t')) ;
+     extend_pattern ~loc ctx p t'
 
 (** [check_expr ctx e ty] checks that expression [e] has type [ty] in context [ctx].
     It returns the processed expression [e]. *)
@@ -557,47 +796,86 @@ and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
 
   | Desugared.Lambda ((p, None), e) ->
      begin
-       match ty with
-       | Syntax.Arrow (t, u) ->
-          let ctx, p = extend_pattern ctx p t in
+       match as_arrow ~loc ctx ty with
+       | Some (t, u) ->
+          let ctx, p = extend_pattern ~loc ctx p t in
           let c = check_comp ctx e u in
           locate (Syntax.Lambda (p, c))
-       | (Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.ComodelTy _) ->
+       | None ->
           error ~loc (TypeExpectedButFunction ty)
+     end
+
+  | Desugared.Constructor (cnstr, eopt) ->
+     begin
+       match as_datatype ~loc ctx ty with
+
+       | None ->
+          error ~loc (TypeExpectedButConstructor ty)
+
+       | Some cnstrs ->
+          begin
+            match List.assoc_opt cnstr cnstrs with
+
+            | None -> error ~loc (WrongConstructor (cnstr, ty))
+
+            | Some topt ->
+               let e = check_constructor ~loc ctx cnstr eopt topt in
+               locate (Syntax.Constructor (cnstr, e))
+          end
      end
 
   | Desugared.Tuple es ->
      begin
-       match ty with
-       | Syntax.Product ts ->
-          let rec fold es ts es' =
-            match es, ts with
-            | [], [] ->
-               let es' = List.rev es' in
-               locate (Syntax.Tuple es')
-            | e :: es, t :: ts ->
-               let e' = check_expr ctx e t in
-               fold es ts (e' :: es')
-            | _ :: _, [] -> error ~loc (TupleTooLong ty)
-            | [], _ :: _ -> error ~loc (TupleTooShort ty)
-          in
-          fold es ts []
-
-       | (Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.Arrow _ | Syntax.ComodelTy _) ->
-          begin match es with
-          | [] -> error ~loc (TypeExpectedButUnit ty)
-          | _::_ -> error ~loc (TypeExpectedButTuple ty)
-          end
+       match as_product ~loc ctx ty with
+       | Some ts ->
+          let k_actual = List.length es
+          and k_expected = List.length ts in
+          if k_expected <> k_actual then error ~loc (WrongTupleLength (k_expected, k_actual)) ;
+          let es = check_tuple ctx es ts in
+          locate (Syntax.Tuple es)
+       | None ->
+          if List.length es = 0 then
+            error ~loc (TypeExpectedButUnit ty)
+          else
+            error ~loc (TypeExpectedButTuple ty)
      end
 
   | (Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
      Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Comodel _) ->
      let e, ty' = infer_expr ctx e in
-     if Syntax.expr_subty ty' ty
+     if expr_subty ~loc ctx ty' ty
      then
        e
      else
        error ~loc (ExprTypeMismatch (ty, ty'))
+
+and check_tuple ctx es ts =
+  let rec fold es ts es' =
+    match es, ts with
+    | [], [] ->
+       List.rev es'
+    | e :: es, t :: ts ->
+       let e' = check_expr ctx e t in
+       fold es ts (e' :: es')
+    | _ :: _, [] | [], _ :: _ -> assert false
+  in
+  fold es ts []
+
+
+and check_constructor ~loc ctx cnstr eopt topt =
+  match eopt, topt with
+
+  | None, None -> None
+
+  | Some e, Some t ->
+     let e = check_expr ctx e t in
+     Some e
+
+  | None, Some t ->
+     error ~loc (IllegalConstructor cnstr)
+
+  | Some e, None ->
+     error ~loc (IllegalConstructor cnstr)
 
 (** [check_comp ctx c ty] checks that computation [c] has computation type [ty] in context [ctx].
     It returns the processed computation [c]. *)
@@ -618,14 +896,14 @@ and check_comp ctx ({Location.data=c'; loc} as c) check_ty =
   | Desugared.Let (p, c1, c2) ->
      let c1, (Syntax.CompTy (c1_ty', _) as c1_ty) = infer_comp ctx c1 in
      check_dirt ~loc c1_ty check_sgn ;
-     let ctx, p = extend_pattern ctx p c1_ty' in
+     let ctx, p = extend_pattern ~loc ctx p c1_ty' in
      let c2 = check_comp ctx c2 check_ty in
      locate (Syntax.Let (p, c1, c2))
 
   | (Desugared.Apply _ | Desugared.AscribeComp _ | Desugared.Operation _ |
      Desugared.Signal _ | Desugared.Using _) ->
      let c, c_ty = infer_comp ctx c in
-     if Syntax.comp_subty c_ty check_ty
+     if comp_subty ~loc ctx c_ty check_ty
      then
        c
      else
@@ -639,6 +917,13 @@ and check_match_clause ctx patt_ty ty (p, c) =
   let c = check_comp ctx c ty in
   (p, c)
 
+and datatype_definition cnstrs =
+  List.map
+    (function
+     | (x, None) -> (x, None)
+     | (x, Some t) -> (x, Some (expr_ty t)))
+    cnstrs
+
 and toplevel ~quiet ctx {Location.data=d'; loc} =
   let ctx, d' =
     match d' with
@@ -650,12 +935,22 @@ and toplevel ~quiet ctx {Location.data=d'; loc} =
     | Desugared.TopLet (p, c) ->
        let c, (Syntax.CompTy (c_ty', _) as c_ty) = infer_comp ctx c in
        check_dirt ~loc c_ty Syntax.empty_signature ;
-       let ctx, p, xts = top_extend_pattern ctx p c_ty' in
+       let ctx, p, xts = top_extend_pattern ~loc ctx p c_ty' in
        ctx, Syntax.TopLet (p, xts, c)
 
     | Desugared.TopComp c ->
        let c, (Syntax.CompTy (c_ty', _) as c_ty) = infer_comp ctx c in
        ctx, Syntax.TopComp (c, c_ty')
+
+    | Desugared.TypeAbbreviation (x, ty) ->
+       let ty = expr_ty ty in
+       let ctx = extend_tyabbrev ~loc x ty ctx in
+       ctx, Syntax.TypeAbbreviation (x, ty)
+
+    | Desugared.DatatypeDefinition (x, cnstrs) ->
+       let cnstrs = datatype_definition cnstrs in
+       let ctx = extend_datatype ~loc x cnstrs ctx in
+       ctx, Syntax.DatatypeDefinition (x, cnstrs)
 
     | Desugared.DeclOperation (op, ty1, ty2) ->
        let ty1 = expr_ty ty1

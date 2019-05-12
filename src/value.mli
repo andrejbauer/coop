@@ -1,6 +1,7 @@
 type t =
   | Numeral of int
   | Boolean of bool
+  | Constructor of Name.t * t option
   | Tuple of t list
   | Closure of closure
   | Comodel of cooperation Name.Map.t

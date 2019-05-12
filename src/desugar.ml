@@ -9,10 +9,16 @@
 type desugar_error =
   | UnknownIdentifier of Name.t
   | UnknownOperation of Name.t
+  | UnknownConstructor of Name.t
+  | UnknownType of Name.t
   | OperationExpected of Name.t
   | OperationOrSignalExpected of Name.t
   | ShadowOperation of Name.t
   | ShadowSignal of Name.t
+  | ShadowConstructor of Name.t
+  | ConstructorCannotApply of Name.t
+  | ConstructorMustApply of Name.t
+  | ShadowType of Name.t
   | BareOperation
   | BareSignal
   | MissingFinallyVal
@@ -35,6 +41,12 @@ let print_error err ppf =
   | UnknownOperation op ->
      Format.fprintf ppf "unknown operation %t" (Name.print op)
 
+  | UnknownConstructor cnstr ->
+     Format.fprintf ppf "unknown constructor %t" (Name.print cnstr)
+
+  | UnknownType ty ->
+     Format.fprintf ppf "unknown type %t" (Name.print ty)
+
   | OperationExpected x ->
      Format.fprintf ppf "%t is not an operation" (Name.print x)
 
@@ -46,6 +58,18 @@ let print_error err ppf =
 
   | ShadowSignal sgl ->
      Format.fprintf ppf "%t is already declared to be a signal" (Name.print sgl)
+
+  | ShadowConstructor cnstr ->
+     Format.fprintf ppf "constructor %t is already exists" (Name.print cnstr)
+
+  | ConstructorCannotApply cnstr ->
+     Format.fprintf ppf "constructor %t cannot be applied" (Name.print cnstr)
+
+  | ConstructorMustApply cnstr ->
+     Format.fprintf ppf "constructor %t should be applied" (Name.print cnstr)
+
+  | ShadowType ty ->
+     Format.fprintf ppf "the type %t is already defined" (Name.print ty)
 
   | BareOperation ->
      Format.fprintf ppf "this operation should be applied to an argument"
@@ -64,34 +88,76 @@ let print_error err ppf =
 
 
 (** A desugaring context resolves names to their kinds. *)
-type ident_kind = Variable | Operation | Signal
+type ident_kind =
+  | Variable
+  | Operation
+  | Signal
 
-type context = ident_kind Name.Map.t
+type ty_kind =
+  | TyAbbreviation
+  | TyDatatype
+
+type constructor_kind =
+  | ConstrApplied
+  | ConstrNonApplied
+
+type context = {
+    ctx_idents : ident_kind Name.Map.t ;
+    ctx_constructors : constructor_kind Name.Map.t ;
+    ctx_types : ty_kind Name.Map.t
+  }
 
 (** Initial empty context *)
-let initial = Name.Map.empty
+let initial =
+  { ctx_idents = Name.Map.empty ;
+    ctx_constructors = Name.Map.empty ;
+    ctx_types = Name.Map.empty
+  }
 
 (** Add a new identifier of the given kind to the context. *)
-let extend = Name.Map.add
+let extend_ident x k ctx =
+  { ctx with ctx_idents = Name.Map.add x k ctx.ctx_idents }
 
-let lookup x ctx = Name.Map.find x ctx
+let extend_constructor x k ctx =
+  { ctx with ctx_constructors = Name.Map.add x k ctx.ctx_constructors }
+
+let extend_type x k ctx =
+  { ctx with ctx_types = Name.Map.add x k ctx.ctx_types }
+
+let lookup_ident x {ctx_idents;_} = Name.Map.find x ctx_idents
+
+let lookup_constructor x {ctx_constructors;_} = Name.Map.find x ctx_constructors
+
+let lookup_ty x {ctx_types;_} = Name.Map.find x ctx_types
 
 let is_operation op ctx =
-  match Name.Map.find op ctx with
+  match lookup_ident op ctx with
   | Some Operation -> true
   | Some (Variable | Signal) | None -> false
 
-let is_signal op ctx =
-  match Name.Map.find op ctx with
+let is_signal sgl ctx =
+  match lookup_ident sgl ctx with
   | Some Signal -> true
   | Some (Variable | Operation) | None -> false
 
 (** Check whether [x] shadows an operation or a signal *)
-let check_shadow ~loc x ctx =
-  match Name.Map.find x ctx with
+let check_ident_shadow ~loc x ctx =
+  match lookup_ident x ctx with
   | None | Some Variable -> ()
   | Some Operation -> error ~loc (ShadowOperation x)
   | Some Signal -> error ~loc (ShadowSignal x)
+
+(** Check whether [x] shadows a type *)
+let check_type_shadow ~loc x ctx =
+  match lookup_ty x ctx with
+  | None -> ()
+  | Some _ -> error ~loc (ShadowType x)
+
+(** Check whether [x] shadows a constructor *)
+let check_constructor_shadow ~loc x ctx =
+  match lookup_constructor x ctx with
+  | None -> ()
+  | Some _ -> error ~loc (ShadowConstructor x)
 
 (** Desugar a singature of a computation type *)
 let signature ~loc ctx lst =
@@ -99,7 +165,7 @@ let signature ~loc ctx lst =
     | [] -> Desugared.{ sig_ops=ops; sig_sgs=sgs }
     | x :: lst ->
        begin
-         match Name.Map.find x ctx with
+         match lookup_ident x ctx with
          | None -> error ~loc (UnknownOperation x)
          | Some Variable -> error ~loc (OperationOrSignalExpected x)
          | Some Operation -> fold (Name.Set.add x ops) sgs lst
@@ -119,6 +185,13 @@ let rec ty ctx {Location.data=t'; loc} =
     | Sugared.Int -> Desugared.Int
 
     | Sugared.Bool -> Desugared.Bool
+
+    | Sugared.NamedTy t ->
+       begin match lookup_ty t ctx with
+       | None -> error ~loc (UnknownType t)
+       | Some TyAbbreviation -> Desugared.TyAbbreviation t
+       | Some TyDatatype -> Desugared.TyDatatype t
+       end
 
     | Sugared.Product lst ->
        let lst = List.map (ty ctx) lst in
@@ -155,24 +228,49 @@ let rec pattern ctx {Location.data=p'; loc} =
      ctx, locate (Desugared.PattAnonymous)
 
   | Sugared.PattVar x ->
-     let ctx = extend x Variable ctx in
+     let ctx = extend_ident x Variable ctx in
      ctx, locate (Desugared.PattVar x)
 
   | Sugared.PattNumeral n ->
      ctx, locate (Desugared.PattNumeral n)
 
-  | Sugared.PattTuple lst ->
-     let rec fold ctx qs = function
+  | Sugared.PattBoolean b ->
+     ctx, locate (Desugared.PattBoolean b)
 
-       | [] ->
-          let qs = List.rev qs in
-          ctx, locate (Desugared.PattTuple qs)
+  | Sugared.PattConstructor (cnstr, None) ->
+     begin
+       match lookup_constructor cnstr ctx with
+       | None -> error ~loc (UnknownConstructor cnstr)
+       | Some ConstrApplied -> error ~loc (ConstructorMustApply cnstr)
+       | Some ConstrNonApplied -> ctx, locate (Desugared.PattConstructor (cnstr, None))
+     end
 
-       | p :: ps ->
-          let ctx, q = pattern ctx p in
-          fold ctx (q :: qs) ps
-     in
-     fold ctx [] lst
+  | Sugared.PattConstructor (cnstr, Some p) ->
+     begin
+       match lookup_constructor cnstr ctx with
+       | None -> error ~loc (UnknownConstructor cnstr)
+       | Some ConstrNonApplied -> error ~loc (ConstructorCannotApply cnstr)
+       | Some ConstrApplied ->
+          let ctx, p = pattern ctx p in
+          ctx, locate (Desugared.PattConstructor (cnstr, Some p))
+     end
+
+  | Sugared.PattTuple ps ->
+     let ctx, ps = pattern_tuple ctx ps in
+     ctx, locate (Desugared.PattTuple ps)
+
+and pattern_tuple ctx ps =
+  let rec fold ctx qs = function
+
+    | [] ->
+       let qs = List.rev qs in
+       ctx, qs
+
+    | p :: ps ->
+       let ctx, q = pattern ctx p in
+       fold ctx (q :: qs) ps
+  in
+  fold ctx [] ps
 
 (** Desugar an expression *)
 let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
@@ -180,7 +278,7 @@ let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
   match e' with
     | Sugared.Var x ->
        begin
-         match Name.Map.find x ctx with
+         match lookup_ident x ctx with
          | None -> error ~loc (UnknownIdentifier x)
          | Some Variable -> ([], locate (Desugared.Var x))
          | Some Operation -> error ~loc BareOperation
@@ -201,15 +299,26 @@ let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
     | Sugared.True ->
        ([], locate (Desugared.Boolean true))
 
+    | Sugared.Constructor cnstr ->
+       begin
+         match lookup_constructor cnstr ctx with
+         | None -> error ~loc (UnknownConstructor cnstr)
+         | Some ConstrApplied -> error ~loc (ConstructorMustApply cnstr)
+         | Some ConstrNonApplied -> ([], locate (Desugared.Constructor (cnstr, None)))
+       end
+
+    | Sugared.Apply ({Location.data=Sugared.Constructor cnstr;_}, e) ->
+       begin
+         match lookup_constructor cnstr ctx with
+         | None -> error ~loc (UnknownConstructor cnstr)
+         | Some ConstrNonApplied -> error ~loc (ConstructorCannotApply cnstr)
+         | Some ConstrApplied ->
+            let ws, e = expr ctx e in
+            (ws, locate (Desugared.Constructor (cnstr, Some e)))
+       end
+
     | Sugared.Tuple lst ->
-       let rec fold = function
-         | [] -> [], []
-         | t :: ts ->
-            let w, e = expr ctx t
-            and ws, es = fold ts in
-            (w @ ws, e :: es)
-       in
-       let ws, lst = fold lst in
+       let ws, lst = expr_tuple ctx lst in
        (ws, locate (Desugared.Tuple lst))
 
     | Sugared.Lambda (a, c) ->
@@ -225,6 +334,16 @@ let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Desugared.Var x))
+
+and expr_tuple ctx es =
+  let rec fold = function
+    | [] -> [], []
+    | t :: ts ->
+       let w, e = expr ctx t
+       and ws, es = fold ts in
+       (w @ ws, e :: es)
+  in
+  fold es
 
 and abstract ~loc ctx a c =
   let locate x = Location.locate ~loc x in
@@ -243,7 +362,7 @@ and abstract ~loc ctx a c =
 and comodel_clauses ~loc ctx lst = List.map (comodel_clause ~loc ctx) lst
 
 and comodel_clause ~loc ctx (op, px, pw, c) =
-  match lookup op ctx with
+  match lookup_ident op ctx with
 
   | None -> error ~loc (UnknownOperation op)
 
@@ -269,7 +388,8 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
   in
   match c' with
     | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True |
-       Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _) ->
+       Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _ |
+       Sugared.Apply ({Location.data=Sugared.Constructor _;_}, _)) ->
        let ws, e = expr ctx c in
        let return_e = locate (Desugared.Val e) in
        let_binds ws return_e
@@ -335,7 +455,7 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
     | Sugared.LetFun (f, a, c1, c2) ->
        let e = abstract ~loc ctx a c1 in
        let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Val e) in
-       let ctx = extend f Variable ctx in
+       let ctx = extend_ident f Variable ctx in
        let c2 = comp ctx c2 in
        let p = locate (Desugared.PattVar f) in
        locate (Desugared.Let (p, c1, c2))
@@ -406,6 +526,27 @@ and binders ctx a =
   in
   fold ctx [] a
 
+(** Desugar the clauses of a datatype definition. *)
+let datatype ~loc ctx lst =
+  let rec fold ctx clauses = function
+
+    | [] ->
+       let clauses = List.rev clauses in
+       ctx, clauses
+
+    | (cnstr, None) :: lst ->
+       check_constructor_shadow ~loc cnstr ctx ;
+       let ctx = extend_constructor cnstr ConstrNonApplied ctx in
+       fold ctx ((cnstr, None) :: clauses) lst
+
+    | (cnstr, Some t) :: lst ->
+       check_constructor_shadow ~loc cnstr ctx ;
+       let t = ty ctx t in
+       let ctx = extend_constructor cnstr ConstrApplied ctx in
+       fold ctx ((cnstr, Some t) :: clauses) lst
+  in
+  fold ctx [] lst
+
 (** Desugar a toplevel. *)
 let rec toplevel ctx {Location.data=c; Location.loc=loc} =
 
@@ -424,7 +565,7 @@ let toplevel' ctx = function
     | Sugared.TopLetFun (f, a, c) ->
        let e = abstract ~loc ctx a c in
        let c = Location.locate ~loc:c.Location.loc (Desugared.Val e) in
-       let ctx = extend f Variable ctx in
+       let ctx = extend_ident f Variable ctx in
        let p = Location.locate ~loc (Desugared.PattVar f) in
        ctx, Desugared.TopLet (p, c)
 
@@ -432,22 +573,34 @@ let toplevel' ctx = function
        let c = comp ctx c in
        ctx, Desugared.TopComp c
 
+    | Sugared.TypeAbbreviation (x, t) ->
+       check_type_shadow ~loc x ctx ;
+       let t = ty ctx t in
+       let ctx = extend_type x TyAbbreviation ctx in
+       ctx, Desugared.TypeAbbreviation (x, t)
+
+    | Sugared.DatatypeDefinition (x, lst) ->
+       check_type_shadow ~loc x ctx ;
+       let ctx, lst = datatype ~loc ctx lst in
+       let ctx = extend_type x TyDatatype ctx in
+       ctx, Desugared.DatatypeDefinition (x, lst)
+
     | Sugared.DeclOperation (op, t1, t2) ->
-       check_shadow ~loc op ctx ;
+       check_ident_shadow ~loc op ctx ;
        let t1 = ty ctx t1
        and t2 = ty ctx t2
-       and ctx = extend op Operation ctx in
+       and ctx = extend_ident op Operation ctx in
        ctx, Desugared.DeclOperation (op, t1, t2)
 
     | Sugared.DeclSignal (sgl, t) ->
-       check_shadow ~loc sgl ctx ;
+       check_ident_shadow ~loc sgl ctx ;
        let t = ty ctx t in
-       let ctx = extend sgl Signal ctx in
+       let ctx = extend_ident sgl Signal ctx in
        ctx, Desugared.DeclSignal (sgl, t)
 
     | Sugared.External (x, t, s) ->
        let t = ty ctx t in
-       let ctx = extend x Variable ctx in
+       let ctx = extend_ident x Variable ctx in
        ctx, Desugared.External (x, t, s)
 
   in

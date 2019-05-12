@@ -10,20 +10,30 @@ let g (n : int) =
 let c =
   comodel int with
   | op k @ w ->
-      if w > 10 then croak w else (w, k + w)
+      if k > 10 then croak w else (w, k + w)
   end
 
 let demo (n : int) =
   using c @ 1 in
     let a = apply g n in
     let b = apply g n in
-    (a, b)
+    (1000 + a, 1000 + b)
   finally
   | val x @ w -> (x, w)
   | croak k @ w -> ((k,-1), w)
-  | die () @ w -> ((0,0), w)
+  | die () @ w -> die ()
   end
+;;
 
-let x = demo 2
+demo 2 ;;
 
-let y = demo 6
+using (comodel unit with end) @ () in
+  demo (-3)
+finally
+  | val x @ _ -> 42
+  | die () @ _ -> 23
+end
+;;
+
+demo 20 ;;
+

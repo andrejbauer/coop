@@ -9,6 +9,8 @@ type signature = {
 
 (** Expression type *)
 type expr_ty =
+  | TyAbbreviation of Name.t
+  | TyDatatype of Name.t
   | SignalTy
   | Int
   | Bool
@@ -22,12 +24,16 @@ and comp_ty = CompTy of expr_ty * signature
 (** Comodel *)
 and comodel_ty = Name.Set.t * expr_ty * signature
 
+(** The body of a datatype definition *)
+type ty_definition = (Name.t * expr_ty option) list
+
 (** Patterns *)
 type pattern =
   | PattAnonymous
   | PattVar
   | PattNumeral of int
   | PattBoolean of bool
+  | PattConstructor of Name.t * pattern option
   | PattTuple of pattern list
 
 (** De Bruijn index *)
@@ -39,6 +45,7 @@ and expr' =
   | Var of index
   | Numeral of int
   | Boolean of bool
+  | Constructor of Name.t * expr option
   | Tuple of expr list
   | Lambda of pattern * comp
   | Comodel of (Name.t * pattern * pattern * comp) list
@@ -65,6 +72,8 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopComp of comp * expr_ty
+  | TypeAbbreviation of Name.t * expr_ty
+  | DatatypeDefinition of Name.t * ty_definition
   | DeclOperation of Name.t * expr_ty * expr_ty
   | DeclSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string
@@ -87,23 +96,11 @@ val operation_ty : expr_ty -> Name.t -> comp_ty
 (** Make a computation type with a single signal. *)
 val signal_ty : Name.t -> comp_ty
 
-(** Is the first expression type a subtype of the second one? *)
-val expr_subty : expr_ty -> expr_ty -> bool
-
-(** Is the first computation type a subtype of the second one? *)
-val comp_subty : comp_ty -> comp_ty -> bool
-
-(** Is the first signature a subsignature of the second one? *)
-val subsignature : signature -> signature -> bool
-
-(** Join signatures by taking the union of operations and signals *)
-val join_signature : signature -> signature -> signature
-
-(** Meet signatures by taking the intersection of operations and signals *)
-val meet_signature : signature -> signature -> signature
-
 (** Print an expression type *)
 val print_expr_ty : ?max_level:Level.t -> expr_ty -> Format.formatter -> unit
 
 (** Print a computation type *)
 val print_comp_ty : ?max_level:Level.t -> comp_ty -> Format.formatter -> unit
+
+(** Print the body of a type definition *)
+val print_ty_definition : ty_definition -> Format.formatter -> unit

@@ -7,10 +7,14 @@ type ty = ty' Location.located
 and ty' =
   | Int
   | Bool
+  | NamedTy of Name.t
   | Product of ty list
   | Arrow of ty * ty
   | ComodelTy of Name.t list * ty * signature
   | CompTy of ty * signature
+
+(** The body of a datatype definition *)
+type ty_definition = (Name.t * ty option) list
 
 (** Pattern *)
 type pattern = pattern' Location.located
@@ -18,6 +22,8 @@ and pattern' =
   | PattAnonymous
   | PattVar of Name.t
   | PattNumeral of int
+  | PattBoolean of bool
+  | PattConstructor of Name.t * pattern option
   | PattTuple of pattern list
 
 (** Parsed expressions/computations *)
@@ -27,6 +33,7 @@ and term' =
   | Numeral of int
   | False
   | True
+  | Constructor of Name.t
   | Tuple of term list
   | Match of term * (binder * term) list
   | If of term * term * term
@@ -54,6 +61,8 @@ and toplevel' =
   | TopLet of pattern * term
   | TopLetFun of Name.t * binder list * term
   | TopComp of term
+  | TypeAbbreviation of Name.t * ty
+  | DatatypeDefinition of Name.t * ty_definition
   | DeclOperation of Name.t * ty * ty
   | DeclSignal of Name.t * ty
   | External of Name.t * ty * string

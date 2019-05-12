@@ -73,6 +73,17 @@ let match_pattern p v =
   | Syntax.PattBoolean b, Value.Boolean b' ->
      if b = b' then Some us else None
 
+  | Syntax.PattConstructor (cnstr, popt), Value.Constructor (cnstr', vopt) ->
+     begin
+     if not (Name.equal cnstr cnstr') then
+       None
+     else
+       match popt, vopt with
+       | None, None -> Some us
+       | Some p, Some v -> fold us p v
+       | Some _, None | None, Some _ -> None
+     end
+
   | Syntax.PattTuple ps, Value.Tuple vs ->
      fold_tuple us ps vs
 
@@ -80,9 +91,10 @@ let match_pattern p v =
 
   | _, Value.Comodel _ -> None
 
-  | Syntax.PattNumeral _, (Value.Boolean _ | Value.Tuple _)
-  | Syntax.PattBoolean _, (Value.Numeral _ | Value.Tuple _)
-  | Syntax.PattTuple _, (Value.Numeral _ | Value.Boolean _) ->
+  | Syntax.PattNumeral _, (Value.Boolean _ | Value.Constructor _ | Value.Tuple _)
+  | Syntax.PattBoolean _, (Value.Numeral _ | Value.Constructor _ | Value.Tuple _)
+  | Syntax.PattConstructor _, (Value.Boolean _ | Value.Numeral _ | Value.Tuple _)
+  | Syntax.PattTuple _, (Value.Numeral _ | Value.Boolean _ | Value.Constructor _) ->
      None
 
   and fold_tuple us ps vs =
@@ -126,13 +138,13 @@ let match_clauses ~loc env ps v =
 
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
-  | Value.Closure _ | Value.Numeral _ | Value.Boolean _
+  | Value.Closure _ | Value.Numeral _ | Value.Boolean _ | Value.Constructor _
   | Value.Tuple ([] | [_] | _::_::_::_) | Value.Comodel _ ->
      error ~loc PairExpected
 
 let as_closure ~loc = function
   | Value.Closure f -> f
-  | Value.Numeral _ | Value.Boolean _ | Value.Tuple _
+  | Value.Numeral _ | Value.Boolean _ | Value.Constructor _ | Value.Tuple _
   | Value.Comodel _ -> error ~loc FunctionExpected
 
 let as_value ~loc = function
@@ -142,7 +154,7 @@ let as_value ~loc = function
 
 let as_comodel ~loc = function
   | Value.Comodel cmdl -> cmdl
-  | Value.Numeral _ | Value.Boolean _ | Value.Tuple _
+  | Value.Numeral _ | Value.Boolean _ | Value.Tuple _ | Value.Constructor _
   | Value.Closure _ -> error ~loc ComodelExpected
 
 (** The result monad *)
@@ -162,6 +174,13 @@ let rec eval_expr env {Location.data=e'; loc} =
   | Syntax.Boolean b -> Value.Boolean b
 
   | Syntax.Var i -> lookup ~loc i env
+
+  | Syntax.Constructor (cnstr, None) ->
+     Value.Constructor (cnstr, None)
+
+  | Syntax.Constructor (cnstr, Some e) ->
+     let v = eval_expr env e in
+     Value.Constructor (cnstr, Some v)
 
   | Syntax.Tuple lst ->
      let lst = List.map (eval_expr env) lst in
@@ -300,6 +319,20 @@ let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
        Format.printf "@[<hov>- :@ %t@ =@ %t@]@."
          (Syntax.print_expr_ty ty)
          (Value.print v) ;
+     env
+
+  | Syntax.TypeAbbreviation (x, t) ->
+     if not quiet then
+       Format.printf "@[<hov>type %t@ =@ %t@]@."
+         (Name.print x)
+         (Syntax.print_expr_ty t) ;
+     env
+
+  | Syntax.DatatypeDefinition (x, tydef) ->
+     if not quiet then
+       Format.printf "@[<hov>type %t@ =@ %t@]@."
+         (Name.print x)
+         (Syntax.print_ty_definition tydef) ;
      env
 
   | Syntax.DeclOperation (op, ty1, ty2) ->

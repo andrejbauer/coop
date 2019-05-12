@@ -31,6 +31,9 @@ let infix = function
 let tuple = no_parens
 let tuple_arg = no_parens
 
+let constr = 150
+let constr_arg = constr - 1
+
 (* Type levels *)
 
 let comp_ty = 800

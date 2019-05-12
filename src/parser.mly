@@ -3,6 +3,7 @@
 
 (* Names *)
 %token <Name.t> NAME
+%token <Name.t> CONSTRUCTOR
 %token UNDERSCORE
 
 (* Primitive types *)
@@ -29,6 +30,7 @@
 %token OPERATION
 %token SIGNAL OF
 %token EXTERNAL
+%token TYPE
 
 (* End of input token *)
 %token EOF
@@ -116,6 +118,13 @@ toplevel_:
   | EXTERNAL x=var_name COLON t=ty EQUAL s=QUOTED_STRING
     { Sugared.External (x, t, s) }
 
+  | TYPE x=var_name EQUAL lst=constructor_clauses
+    { Sugared.DatatypeDefinition (x, lst) }
+
+  | TYPE x=var_name EQUAL t=ty
+    { Sugared.TypeAbbreviation (x, t) }
+
+
 (* Main syntax tree *)
 term : mark_location(term_) { $1 }
 term_:
@@ -191,6 +200,9 @@ simple_term_:
   | TRUE
     { Sugared.True }
 
+  | cnstr=CONSTRUCTOR
+    { Sugared.Constructor cnstr }
+
   | x=var_name
     { Sugared.Var x }
 
@@ -227,7 +239,7 @@ match_clauses:
     { lst }
 
 match_clause:
-  | p=binder ARROW c=term
+  | p=match_binder ARROW c=term
     { (p, c) }
 
 comodel_clauses:
@@ -255,6 +267,13 @@ finally_clause:
     { Sugared.FinSignal (sgl, px, pw, c) }
 
 binder:
+  | p=simple_pattern
+    { (p, None) }
+
+  | LPAREN p=pattern COLON t=ty RPAREN
+    { (p, Some t) }
+
+match_binder:
   | p=pattern
     { (p, None) }
 
@@ -263,6 +282,14 @@ binder:
 
 pattern : mark_location(pattern_) { $1 }
 pattern_:
+  | p=simple_pattern_
+    { p }
+
+  | cnstr=CONSTRUCTOR p=simple_pattern
+    { Sugared.PattConstructor (cnstr, Some p) }
+
+simple_pattern: mark_location(simple_pattern_) { $1 }
+simple_pattern_:
   | UNDERSCORE
     { Sugared.PattAnonymous }
 
@@ -272,10 +299,20 @@ pattern_:
   | k=NUMERAL
     { Sugared.PattNumeral k }
 
+  | TRUE
+    { Sugared.PattBoolean true }
+
+  | FALSE
+    { Sugared.PattBoolean false }
+
+  | cnstr=CONSTRUCTOR
+    { Sugared.PattConstructor (cnstr, None) }
+
   | LPAREN lst=separated_list(COMMA, pattern) RPAREN
-                { match lst with
-                  | [p] -> p.Location.data
-                  | [] | _::_ -> Sugared.PattTuple lst }
+    { match lst with
+      | [p] -> p.Location.data
+      | [] | _::_ -> Sugared.PattTuple lst }
+
 
 
 ty: mark_location(ty_) { $1 }
@@ -301,8 +338,8 @@ comp_ty_:
 
 prod_ty: mark_location(prod_ty_) { $1 }
 prod_ty_:
-  | t=simple_ty_
-    { t }
+  | simple_ty_
+    { $1 }
 
   | t=simple_ty STAR ts=separated_nonempty_list(STAR, simple_ty)
     { Sugared.Product (t :: ts) }
@@ -319,9 +356,22 @@ simple_ty_:
   | BOOL
     { Sugared.Bool }
 
+  | t=var_name
+    { Sugared.NamedTy t }
+
   | LPAREN t=ty_ RPAREN
     { t }
 
+constructor_clauses:
+  | BAR? lst=separated_nonempty_list(BAR, constructor_clause)
+    { lst }
+
+constructor_clause:
+  | cnstr=CONSTRUCTOR OF t=prod_ty
+    { (cnstr, Some t) }
+
+  | cnstr=CONSTRUCTOR
+    { (cnstr, None) }
 
 signature:
   | LBRACE lst=separated_list(COMMA, var_name) RBRACE

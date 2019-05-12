@@ -26,6 +26,10 @@ val prefix_arg : t
 (** The level of an infix operator, and its left and right arguments *)
 val infix : infix -> t * t * t
 
+(** The level of a constructor application *)
+val constr : t
+val constr_arg : t
+
 (** The level of a product type and its arguments *)
 val product : t
 val product_arg : t

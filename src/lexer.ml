@@ -21,6 +21,7 @@ let reserved = [
   ("signal", Parser.SIGNAL);
   ("then", Parser.THEN) ;
   ("true", Parser.TRUE) ;
+  ("type", Parser.TYPE) ;
   ("unit", Parser.UNIT) ;
   ("using", Parser.USING) ;
   ("val", Parser.VAL) ;
@@ -28,7 +29,13 @@ let reserved = [
 ]
 
 let name =
-  [%sedlex.regexp? (('_' | alphabetic),
+  [%sedlex.regexp? (('_' | lowercase),
+                 Star ('_' | alphabetic
+                      | 185 | 178 | 179 | 8304 .. 8351 (* sub-/super-scripts *)
+                      | '0'..'9' | '\'')) | math]
+
+let constructor =
+  [%sedlex.regexp? (uppercase,
                  Star ('_' | alphabetic
                       | 185 | 178 | 179 | 8304 .. 8351 (* sub-/super-scripts *)
                       | '0'..'9' | '\'')) | math]
@@ -92,7 +99,8 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | '}'                      -> f (); Parser.RBRACE
   | '@'                      -> f (); Parser.AT (Location.locate ~loc:(loc_of lexbuf) (Name.Ident("@", Name.Infix Level.Infix2)))
   | '!'                      -> f (); Parser.BANG (Location.locate ~loc:(loc_of lexbuf) (Name.Ident("!", Name.Prefix)))
-  | '*' | 215                -> f (); Parser.STAR (Location.locate ~loc:(loc_of lexbuf) (Name.Ident(Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix4)))
+  | '*' | 215                -> f (); Parser.STAR (Location.locate ~loc:(loc_of lexbuf)
+                                                     (Name.Ident(Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix4)))
   | ','                      -> f (); Parser.COMMA
   | ':'                      -> f (); Parser.COLON
   | ';'                      -> f (); Parser.SEMI
@@ -106,27 +114,39 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | prefixop                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Prefix) in
                                       let op = Location.locate ~loc:(loc_of lexbuf) op in
                                       Parser.PREFIXOP op
+
   | infixop0                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix0) in
                                       let op = Location.locate ~loc:(loc_of lexbuf) op in
                                       Parser.INFIXOP0 op
+
   | infixop1                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix1) in
                                       let op = Location.locate ~loc:(loc_of lexbuf) op in
                                       Parser.INFIXOP1 op
+
   | infixop2                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix2) in
                                       let op = Location.locate ~loc:(loc_of lexbuf) op in
                                       Parser.INFIXOP2 op
+
   | infixop3                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix3) in
                                       let op = Location.locate ~loc:(loc_of lexbuf) op in
                                       Parser.INFIXOP3 op
+
   (* Comes before infixop4 because ** matches the infixop4 pattern too *)
   | infixop5                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix5) in
                                       let op = Location.locate ~loc:(loc_of lexbuf) op in
                                       Parser.INFIXOP5 op
+
   | infixop4                 -> f (); let op = Name.Ident (Ulexbuf.lexeme lexbuf, Name.Infix Level.Infix4) in
                                       let op = Location.locate ~loc:(loc_of lexbuf) op in
                                       Parser.INFIXOP4 op
 
   | eof                      -> f (); Parser.EOF
+
+
+  | constructor              -> f ();
+    let n = Ulexbuf.lexeme lexbuf in
+    Parser.CONSTRUCTOR (Name.Ident (n, Name.Word))
+
   | name                     -> f ();
     let n = Ulexbuf.lexeme lexbuf in
     begin try List.assoc n reserved
