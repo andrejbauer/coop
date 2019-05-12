@@ -622,16 +622,8 @@ and check_comp ctx ({Location.data=c'; loc} as c) check_ty =
      let c2 = check_comp ctx c2 check_ty in
      locate (Syntax.Let (p, c1, c2))
 
-  | Desugared.Using (cmdl, w, c, fin) ->
-     let cmdl, (ops, w_ty, sig2) = infer_comodel ctx cmdl in
-     let w = check_expr ctx w w_ty in
-     let c, (Syntax.CompTy (x_ty, _) as c_ty) = infer_comp ctx c in
-     let fin, fin_sgs = check_finally ~loc ctx x_ty w_ty fin check_ty in
-     let c_sig = Syntax.{sig_ops=ops; sig_sgs=fin_sgs} in
-     check_dirt ~loc c_ty c_sig ;
-     locate (Syntax.Using (cmdl, w, c, fin))
-
-  | (Desugared.Apply _ | Desugared.AscribeComp _ | Desugared.Operation _ | Desugared.Signal _) ->
+  | (Desugared.Apply _ | Desugared.AscribeComp _ | Desugared.Operation _ |
+     Desugared.Signal _ | Desugared.Using _) ->
      let c, c_ty = infer_comp ctx c in
      if Syntax.comp_subty c_ty check_ty
      then
@@ -646,34 +638,6 @@ and check_match_clause ctx patt_ty ty (p, c) =
   let ctx, p = extend_binder ctx p patt_ty in
   let c = check_comp ctx c ty in
   (p, c)
-
-and check_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_signals} check_ty =
-  let fin_val =
-    let (px, pw, c) = fin_val in
-    let ctx, px = extend_binder ctx px x_ty in
-    let ctx, pw = extend_binder ctx pw w_ty in
-    let c = check_comp ctx c check_ty in
-    (px, pw, c)
-  in
-  let fin_signals, fin_sgs =
-    let rec fold fs sgs = function
-      | [] ->
-         let fs = List.rev fs in
-         fs, sgs
-      | (sg, px, pw, c_sg) :: lst ->
-         begin
-           if List.exists (fun (sg', _, _, _) -> Name.equal sg sg') fs then error ~loc (DuplicateSignal sg) ;
-           let x_ty = lookup_signal ~loc sg ctx in
-           let ctx, px = extend_binder ctx px x_ty in
-           let ctx, pw = extend_binder ctx pw w_ty in
-           let c_sg = check_comp ctx c_sg check_ty in
-           let sgs = Name.Set.add sg sgs in
-           fold ((sg, px, pw, c_sg) :: fs) sgs lst
-         end
-    in
-    fold [] Name.Set.empty fin_signals
-  in
-  Syntax.{fin_val; fin_signals}, fin_sgs
 
 and toplevel ~quiet ctx {Location.data=d'; loc} =
   let ctx, d' =
