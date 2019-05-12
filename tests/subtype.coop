@@ -1,0 +1,29 @@
+operation op : int -> int
+signal die of unit
+signal croak of int
+
+let apply (h : int -> int ! {op, die}) (n : int) = h n
+
+let g (n : int) =
+  if n > 0 then op n else die ()
+
+let c =
+  comodel int with
+  | op k @ w ->
+      if w > 10 then croak w else (w, k + w)
+  end
+
+let demo (n : int) =
+  using c @ 1 in
+    let a = apply g n in
+    let b = apply g n in
+    (a, b)
+  finally
+  | val x @ w -> (x, w)
+  | croak k @ w -> ((k,-1), w)
+  | die () @ w -> ((0,0), w)
+  end
+
+let x = demo 2
+
+let y = demo 6

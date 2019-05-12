@@ -1,0 +1,19 @@
+operation get : unit -> int
+operation put : int -> unit
+
+let state =
+  comodel int with
+  | get t @ w -> (w, w)
+  | put x @ w -> ((), x)
+  end
+
+let demo =
+  using state @ 1 in
+    let a = get () in
+    put 2 ;
+    let b = get () in
+    put 3 ;
+    (a, b)
+  finally
+    val x @ w -> (x, w)
+  end

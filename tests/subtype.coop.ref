@@ -1,0 +1,10 @@
+operation op : int → int
+signal die of unit
+signal croak of int
+val apply : (int → int ! {die, op}) → (int → int ! {die, op}) ! {} =
+<fun>
+val g : int → int ! {die, op} = <fun>
+val c : {op} @ int ⇒ {croak} = <comodel>
+val demo : int → (int × int) × int ! {} = <fun>
+val x : (int × int) × int = ((1, 3), 5)
+val y : (int × int) × int = ((1, 7), 13)

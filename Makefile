@@ -6,7 +6,7 @@ OCAMLBUILD_MENHIRFLAGS = -use-menhir -menhir "menhir --explain"
 
 default: coop.native
 
-.PHONY: doc clean coop.byte coop.native coop.d.byte coop.p.native
+.PHONY: doc clean coop.byte coop.native coop.d.byte coop.p.native tests
 
 ### Compilation of OCaml files
 
@@ -22,3 +22,13 @@ clean:
 
 doc:
 	ocamlbuild -docflag -keep-code $(OCAMLBUILD_MENHIRFLAGS) $(OCAMLBUILD_FLAGS) coop.docdir/index.html
+
+
+# "make test" to see if anything broke
+test: default
+	cd tests && sh ./test.sh
+
+# "make test-validate" to see if anything broke
+# and ask for validation of possibly broken things.
+test-validate: default
+	cd tests && sh ./test.sh -v
