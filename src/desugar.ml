@@ -10,7 +10,14 @@ type desugar_error =
   | UnknownIdentifier of Name.t
   | UnknownOperation of Name.t
   | OperationExpected of Name.t
+  | OperationOrSignalExpected of Name.t
+  | ShadowOperation of Name.t
+  | ShadowSignal of Name.t
   | BareOperation
+  | BareSignal
+  | MissingFinallyVal
+  | DoubleFinallyVal
+  | DoubleFinallySignal of Name.t
 
 (** The exception signalling a desugaring error*)
 exception Error of desugar_error Location.located
@@ -21,13 +28,43 @@ let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
 (** Print desugaring error. *)
 let print_error err ppf =
   match err with
-  | UnknownIdentifier x -> Format.fprintf ppf "unknown identifier %t" (Name.print x)
-  | UnknownOperation op -> Format.fprintf ppf "unknown operation %t" (Name.print op)
-  | OperationExpected x -> Format.fprintf ppf "%t is not an operation" (Name.print x)
-  | BareOperation -> Format.fprintf ppf "this operation should be applied to an argument"
+
+  | UnknownIdentifier x ->
+     Format.fprintf ppf "unknown identifier %t" (Name.print x)
+
+  | UnknownOperation op ->
+     Format.fprintf ppf "unknown operation %t" (Name.print op)
+
+  | OperationExpected x ->
+     Format.fprintf ppf "%t is not an operation" (Name.print x)
+
+  | OperationOrSignalExpected x ->
+     Format.fprintf ppf "%t is neither an operation nor a signal" (Name.print x)
+
+  | ShadowOperation op ->
+     Format.fprintf ppf "%t is already declared to be an operation" (Name.print op)
+
+  | ShadowSignal sgl ->
+     Format.fprintf ppf "%t is already declared to be a signal" (Name.print sgl)
+
+  | BareOperation ->
+     Format.fprintf ppf "this operation should be applied to an argument"
+
+  | BareSignal ->
+     Format.fprintf ppf "this signal should be applied to an argument"
+
+  | MissingFinallyVal ->
+     Format.fprintf ppf "missing finally value clause"
+
+  | DoubleFinallyVal ->
+     Format.fprintf ppf "multiple value clauses"
+
+  | DoubleFinallySignal sgl ->
+     Format.fprintf ppf "multile signal %t clauses" (Name.print sgl)
+
 
 (** A desugaring context resolves names to their kinds. *)
-type ident_kind = Variable | Operation
+type ident_kind = Variable | Operation | Signal
 
 type context = ident_kind Name.Map.t
 
@@ -37,23 +74,42 @@ let initial = Name.Map.empty
 (** Add a new identifier of the given kind to the context. *)
 let extend = Name.Map.add
 
+let lookup x ctx = Name.Map.find x ctx
+
 let is_operation op ctx =
   match Name.Map.find op ctx with
   | Some Operation -> true
-  | Some Variable | None -> false
+  | Some (Variable | Signal) | None -> false
 
+let is_signal op ctx =
+  match Name.Map.find op ctx with
+  | Some Signal -> true
+  | Some (Variable | Operation) | None -> false
+
+(** Check whether [x] shadows an operation or a signal *)
+let check_shadow ~loc x ctx =
+  match Name.Map.find x ctx with
+  | None | Some Variable -> ()
+  | Some Operation -> error ~loc (ShadowOperation x)
+  | Some Signal -> error ~loc (ShadowSignal x)
+
+(** Desugar a singature of a computation type *)
 let signature ~loc ctx lst =
-  let rec fold sgn = function
-    | [] -> sgn
-    | op :: ops ->
+  let rec fold ops sgs = function
+    | [] -> Desugared.{ sig_ops=ops; sig_sgs=sgs }
+    | x :: lst ->
        begin
-         match Name.Map.find op ctx with
-         | None -> error ~loc (UnknownOperation op)
-         | Some Variable -> error ~loc (OperationExpected op)
-         | Some Operation -> fold (Name.Set.add op sgn) ops
+         match Name.Map.find x ctx with
+         | None -> error ~loc (UnknownOperation x)
+         | Some Variable -> error ~loc (OperationOrSignalExpected x)
+         | Some Operation -> fold (Name.Set.add x ops) sgs lst
+         | Some Signal -> fold ops (Name.Set.add x sgs) lst
        end
   in
-  fold Name.Set.empty lst
+  fold Name.Set.empty Name.Set.empty lst
+
+let operations ops =
+  List.fold_left (fun ops op -> Name.Set.add op ops) Name.Set.empty ops
 
 (** Desugar a type, which at this stage is the same as an expressions. *)
 let rec ty ctx {Location.data=t'; loc} =
@@ -73,11 +129,11 @@ let rec ty ctx {Location.data=t'; loc} =
        and t2 = ty ctx t2 in
        Desugared.Arrow (t1, t2)
 
-    | Sugared.ComodelTy (sgn1, t, sgn2) ->
-       let sgn1 = signature ~loc ctx sgn1
+    | Sugared.ComodelTy (ops, t, sgn2) ->
+       let ops = operations ops
        and t = ty ctx t
        and sgn2 = signature ~loc ctx sgn2 in
-       Desugared.ComodelTy (sgn1, t, sgn2)
+       Desugared.ComodelTy (ops, t, sgn2)
 
     | Sugared.CompTy (t, sgn) ->
        let t = ty ctx t
@@ -128,6 +184,7 @@ let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
          | None -> error ~loc (UnknownIdentifier x)
          | Some Variable -> ([], locate (Desugared.Var x))
          | Some Operation -> error ~loc BareOperation
+         | Some Signal -> error ~loc BareSignal
        end
 
     | Sugared.Ascribe (e, t) ->
@@ -186,13 +243,17 @@ and abstract ~loc ctx a c =
 and comodel_clauses ~loc ctx lst = List.map (comodel_clause ~loc ctx) lst
 
 and comodel_clause ~loc ctx (op, px, pw, c) =
-  if not (is_operation op ctx) then
-    error ~loc (UnknownOperation op)
-  else
-    let ctx, px = binder ctx px in
-    let ctx, pw = binder ctx pw in
-    let c = comp ctx c in
-    (op, px, pw, c)
+  match lookup op ctx with
+
+  | None -> error ~loc (UnknownOperation op)
+
+  | Some (Signal | Variable) -> error ~loc (OperationExpected op)
+
+  | Some Operation ->
+     let ctx, px = binder ctx px in
+     let ctx, pw = binder ctx pw in
+     let c = comp ctx c in
+     (op, px, pw, c)
 
 (** Desugar a computation *)
 and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
@@ -248,6 +309,11 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
        let c = locate (Desugared.Operation (op, e)) in
        let_binds ws c
 
+    | Sugared.Apply ({Location.data=Sugared.Var sgl; loc}, e) when is_signal sgl ctx ->
+       let ws, e = expr ctx e in
+       let c = locate (Desugared.Signal (sgl, e)) in
+       let_binds ws c
+
     | Sugared.Apply (e1, e2) ->
        let ws1, e1 = expr ctx e1 in
        let ws2, e2 = expr ctx e2 in
@@ -274,12 +340,12 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
        let p = locate (Desugared.PattVar f) in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.Using (cmdl, e, c, fs) ->
+    | Sugared.Using (cmdl, e, c, fin) ->
        let ws1, cmdl = expr ctx cmdl in
        let ws2, e = expr ctx e in
        let c = comp ctx c in
-       let fs = finally ctx fs in
-       let_binds (ws1 @ ws2) (locate (Desugared.Using (cmdl, e, c, fs)))
+       let fin = finally ~loc ctx fin in
+       let_binds (ws1 @ ws2) (locate (Desugared.Using (cmdl, e, c, fin)))
 
 and match_clauses ctx lst =
   List.map (match_clause ctx) lst
@@ -289,11 +355,40 @@ and match_clause ctx (p, c) =
   let c = comp ctx c in
   (p, c)
 
-and finally ctx (px, pw, c) =
-  let ctx, px = binder ctx px in
-  let ctx, pw = binder ctx pw in
-  let c = comp ctx c in
-  (px, pw, c)
+and finally ~loc ctx lst =
+  let rec fold fin_val fin_signals = function
+
+    | [] ->
+       begin match fin_val with
+       | None -> error ~loc MissingFinallyVal
+       | Some fin_val ->
+          let fin_signals = List.rev fin_signals in
+          { Desugared.fin_val; Desugared.fin_signals }
+       end
+
+    | Sugared.FinVal (px, pw, c) :: lst ->
+       begin match fin_val with
+       | Some _ -> error ~loc DoubleFinallyVal
+       | None ->
+          let ctx, px = binder ctx px in
+          let ctx, pw = binder ctx pw in
+          let c = comp ctx c in
+          let fin_val = Some (px, pw, c) in
+          fold fin_val fin_signals lst
+       end
+
+    | Sugared.FinSignal (sgl, px, pw, c) :: lst ->
+       begin match List.exists (fun (sgl', _, _, _) -> Name.equal sgl sgl') fin_signals with
+       | true -> error ~loc (DoubleFinallySignal sgl)
+       | false ->
+          let ctx, px = binder ctx px in
+          let ctx, pw = binder ctx pw in
+          let c = comp ctx c in
+          let fin_signals = (sgl, px, pw, c) :: fin_signals in
+          fold fin_val fin_signals lst
+       end
+  in
+  fold None [] lst
 
 (** Desugar a single binder. *)
 and binder ctx (p, topt) =
@@ -338,10 +433,17 @@ let toplevel' ctx = function
        ctx, Desugared.TopComp c
 
     | Sugared.DeclOperation (op, t1, t2) ->
+       check_shadow ~loc op ctx ;
        let t1 = ty ctx t1
        and t2 = ty ctx t2
        and ctx = extend op Operation ctx in
        ctx, Desugared.DeclOperation (op, t1, t2)
+
+    | Sugared.DeclSignal (sgl, t) ->
+       check_shadow ~loc sgl ctx ;
+       let t = ty ctx t in
+       let ctx = extend sgl Signal ctx in
+       ctx, Desugared.DeclSignal (sgl, t)
 
     | Sugared.External (x, t, s) ->
        let t = ty ctx t in

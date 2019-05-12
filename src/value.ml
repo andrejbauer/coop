@@ -10,6 +10,7 @@ and world = t
 and result =
   | Val of t
   | Operation of Name.t * t * closure
+  | Signal of Name.t * t
 
 and closure = t -> result
 

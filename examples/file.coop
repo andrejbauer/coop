@@ -1,0 +1,28 @@
+(* Simulate writing to a file where the disk becomes full. *)
+
+operation write : int -> unit
+signal disk_full of unit
+
+let disk =
+  comodel int with
+  | write k @ w ->
+      let w = w - k in
+      (if w >= 0 then ((), w) else disk_full ())
+  end
+
+let job (_ : unit) =
+    write 2 ;
+    write 3 ;
+    42
+
+let demo (n : int) =
+  using disk @ n in
+    job ()
+  finally
+  | val x @ _ -> x
+  end
+;;
+
+demo 10 ;;
+
+demo 3 ;;

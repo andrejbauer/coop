@@ -1,6 +1,3 @@
-%{
-%}
-
 (* Infix operations a la OCaml *)
 %token <Name.t Location.located> PREFIXOP INFIXOP0 INFIXOP1 EQUAL INFIXOP2 INFIXOP3 INFIXOP4 INFIXOP5 STAR BANG AT
 
@@ -30,6 +27,7 @@
 %token <string> QUOTED_STRING
 %token LOAD
 %token OPERATION
+%token SIGNAL OF
 %token EXTERNAL
 
 (* End of input token *)
@@ -111,6 +109,9 @@ toplevel_:
 
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
     { Sugared.DeclOperation (op, t1, t2) }
+
+  | SIGNAL sgl=var_name OF  t=ty
+    { Sugared.DeclSignal (sgl, t) }
 
   | EXTERNAL x=var_name COLON t=ty EQUAL s=QUOTED_STRING
     { Sugared.External (x, t, s) }
@@ -219,20 +220,39 @@ var_name:
   | op=BANG        { op }
 
 match_clauses:
-  | BAR? lst=separated_list(BAR, match_clause)
+  | BAR lst=separated_nonempty_list(BAR, match_clause)
+    { lst }
+
+  | lst=separated_list(BAR, match_clause)
     { lst }
 
 match_clause:
-  | p=binder ARROW e=term
-    { (p, e) }
+  | p=binder ARROW c=term
+    { (p, c) }
 
 comodel_clauses:
-  | BAR? lst=separated_list(BAR, comodel_clause)
+  | BAR lst=separated_nonempty_list(BAR, comodel_clause)
+    { lst }
+
+  | lst=separated_list(BAR, comodel_clause)
     { lst }
 
 comodel_clause:
-  | op=var_name px=binder AT pw=binder ARROW e=term
-    { (op, px, pw, e) }
+  | op=var_name px=binder AT pw=binder ARROW c=term
+    { (op, px, pw, c) }
+
+finally:
+  | BAR lst=separated_nonempty_list(BAR, finally_clause)
+    { lst }
+  | lst=separated_list(BAR, finally_clause)
+    { lst }
+
+finally_clause:
+  | VAL px=binder AT pw=binder ARROW t=term
+    { Sugared.FinVal (px, pw, t) }
+
+  | sgl=var_name px=binder AT pw=binder ARROW c=term
+    { Sugared.FinSignal (sgl, px, pw, c) }
 
 binder:
   | p=pattern
@@ -240,11 +260,6 @@ binder:
 
   | LPAREN p=pattern COLON t=ty RPAREN
     { (p, Some t) }
-
-finally:
-  | VAL px=binder AT pw=binder ARROW t=term
-    { (px, pw, t) }
-
 
 pattern : mark_location(pattern_) { $1 }
 pattern_:
@@ -315,4 +330,3 @@ signature:
 mark_location(X):
   x=X
   { Location.locate ~loc:(Location.make $startpos $endpos) x }
-%%

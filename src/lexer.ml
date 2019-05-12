@@ -5,6 +5,7 @@ let reserved = [
   ("bool", Parser.BOOL) ;
   ("comodel", Parser.COMODEL) ;
   ("else", Parser.ELSE) ;
+  ("end", Parser.END) ;
   ("external", Parser.EXTERNAL) ;
   ("false", Parser.FALSE) ;
   ("finally", Parser.FINALLY) ;
@@ -15,7 +16,9 @@ let reserved = [
   ("let", Parser.LET) ;
   ("load", Parser.LOAD) ;
   ("match", Parser.MATCH) ;
+  ("of", Parser.OF) ;
   ("operation", Parser.OPERATION) ;
+  ("signal", Parser.SIGNAL);
   ("then", Parser.THEN) ;
   ("true", Parser.TRUE) ;
   ("unit", Parser.UNIT) ;

@@ -1,9 +1,13 @@
 (** Type-checked syntax of Coop. *)
 
-type signature = Name.Set.t
+type signature = {
+    sig_ops : Name.Set.t ;
+    sig_sgs : Name.Set.t
+  }
 
 (** Expression type *)
 type expr_ty =
+  | SignalTy
   | Int
   | Bool
   | Product of expr_ty list
@@ -11,10 +15,11 @@ type expr_ty =
   | ComodelTy of comodel_ty
 
 (** Computation type *)
-and comp_ty = CompTy of expr_ty * signature
+and comp_ty =
+  | CompTy of expr_ty * signature
 
 (** Comodel *)
-and comodel_ty = signature * expr_ty * signature
+and comodel_ty = Name.Set.t * expr_ty * signature
 
 (** Patterns *)
 type pattern =
@@ -45,9 +50,13 @@ and comp' =
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr
   | Operation of Name.t * expr
+  | Signal of Name.t * expr
   | Using of expr * expr * comp * finally
 
-and finally = pattern * pattern * comp
+and finally = {
+    fin_val : pattern * pattern * comp ;
+    fin_signals : (Name.t * pattern * pattern * comp) list
+}
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located
@@ -56,26 +65,56 @@ and toplevel' =
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopComp of comp * expr_ty
   | DeclOperation of Name.t * expr_ty * expr_ty
+  | DeclSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string
 
 (** The unit type *)
 let unit_ty = Product []
 
 (** The empty signature *)
-let empty_signature = Name.Set.empty
+let empty_signature = { sig_ops = Name.Set.empty; sig_sgs = Name.Set.empty }
+
+(** Is the first signature a subsignature of the second one? *)
+let subsignature {sig_ops=ops1; sig_sgs=sgs1} {sig_ops=ops2; sig_sgs=sgs2} =
+  Name.Set.subset ops1 ops2 && Name.Set.subset sgs1 sgs2
+
+let join_signature {sig_ops=ops1; sig_sgs=sgs1} {sig_ops=ops2; sig_sgs=sgs2} =
+  let sig_ops = Name.Set.union ops1 ops2
+  and sig_sgs = Name.Set.union sgs1 sgs2 in
+  {sig_ops; sig_sgs}
+
+let meet_signature {sig_ops=ops1; sig_sgs=sgs1} {sig_ops=ops2; sig_sgs=sgs2} =
+  let sig_ops = Name.Set.inter ops1 ops2
+  and sig_sgs = Name.Set.inter sgs1 sgs2 in
+  {sig_ops; sig_sgs}
 
 (** Make a pure computation type *)
 let pure t = CompTy (t, empty_signature)
 
-let op_ty t op =
-  let sgn = Name.Set.add op Name.Set.empty in
+let operation_ty t op =
+ let sgn = { sig_ops = Name.Set.add op Name.Set.empty ;
+              sig_sgs = Name.Set.empty }
+  in
   CompTy (t, sgn)
 
+let signal_ty sgl =
+ let sgn = { sig_ops = Name.Set.empty ;
+             sig_sgs = Name.Set.add sgl Name.Set.empty }
+  in
+  CompTy (SignalTy, sgn)
+
 let pollute (CompTy (t, sgn1)) sgn2 =
-  CompTy (t, Name.Set.union sgn1 sgn2)
+  let sgn = { sig_ops = Name.Set.union sgn1.sig_ops sgn2.sig_ops ;
+              sig_sgs = Name.Set.union sgn1.sig_sgs sgn2.sig_sgs }
+  in
+  CompTy (t, sgn)
 
 let rec expr_subty t u =
   match t, u with
+
+  | SignalTy, _ -> true
+
+  | _, SignalTy -> false
 
   | Int, Int -> true
 
@@ -94,7 +133,7 @@ let rec expr_subty t u =
      expr_subty u1 t1 && comp_subty t2 u2
 
   | ComodelTy (tsgn1, t, tsgn2), ComodelTy (usgn1, u, usgn2) ->
-     Name.Set.subset usgn1 tsgn1 && expr_eqtype t u && Name.Set.subset tsgn2 usgn2
+     Name.Set.subset usgn1 tsgn1 && expr_eqtype t u && subsignature  tsgn2 usgn2
 
   | Int,         (Bool | Product _ | Arrow _ | ComodelTy _)
   | Bool,        (Int | Product _ | Arrow _ | ComodelTy _)
@@ -103,8 +142,8 @@ let rec expr_subty t u =
   | ComodelTy _, (Int | Bool | Product _ | Arrow _) ->
      false
 
-and comp_subty (CompTy (t1, drt1)) (CompTy (t2, drt2)) =
-  Name.Set.subset drt1 drt2 && expr_subty t1 t2
+and comp_subty (CompTy (t1, sig1)) (CompTy (t2, sig2)) =
+  subsignature sig1 sig2 && expr_subty t1 t2
 
 and expr_eqtype t u =
   expr_subty t u && expr_subty u t
@@ -112,6 +151,8 @@ and expr_eqtype t u =
 (** Pretty-print an expresion type *)
 let rec print_expr_ty ?max_level ty ppf =
   match ty with
+
+  | SignalTy -> Format.fprintf ppf "signal"
 
   | Int -> Format.fprintf ppf "int"
 
@@ -137,13 +178,15 @@ and print_comp_ty ?max_level (CompTy (t, sgn)) ppf =
     (print_expr_ty ~max_level:Level.comp_ty_left t)
     (print_signature sgn)
 
-and print_comodel_ty (sgn1, w_ty, sgn2) ppf =
-  Format.fprintf ppf "%t@ @@@ %t %s@ %t"
-    (print_signature sgn1)
+and print_comodel_ty (ops, w_ty, sgn2) ppf =
+  let ops = List.sort Pervasives.compare (Name.Set.elements ops) in
+  Format.fprintf ppf "{%t}@ @@@ %t %s@ %t"
+    (Print.sequence (Name.print ~parentheses:true) "," ops)
     (print_expr_ty ~max_level:Level.comodel_ty_world w_ty)
     (Print.char_darrow ())
     (print_signature sgn2)
 
-and print_signature sgn ppf =
-  let lst = List.sort Pervasives.compare (Name.Set.elements sgn) in
-  Format.fprintf ppf "{%t}" (Print.sequence (Name.print ~parentheses:true) "," lst)
+and print_signature {sig_ops; sig_sgs} ppf =
+  let lst = List.sort Pervasives.compare (Name.Set.elements sig_ops @ Name.Set.elements sig_sgs) in
+  Format.fprintf ppf "{%t}"
+    (Print.sequence (Name.print ~parentheses:true) "," lst)

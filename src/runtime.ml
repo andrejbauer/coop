@@ -3,6 +3,7 @@ type environment = Value.t list
 type error =
   | InvalidDeBruijn of int
   | UnhandledOperation of Name.t
+  | UnhandledSignal of Name.t
   | UnknownExternal of string
   | FunctionExpected
   | ComodelExpected
@@ -21,6 +22,9 @@ let print_error err ppf =
 
   | UnhandledOperation op ->
      Format.fprintf ppf "unhandled operation %t" (Name.print op)
+
+  | UnhandledSignal sgl ->
+     Format.fprintf ppf "terminated by signal %t" (Name.print sgl)
 
   | UnknownExternal s ->
      Format.fprintf ppf "unknown external %s" s
@@ -134,6 +138,7 @@ let as_closure ~loc = function
 let as_value ~loc = function
   | Value.Val v -> v
   | Value.Operation (op, _, _) -> error ~loc (UnhandledOperation op)
+  | Value.Signal (sgl, _) -> error ~loc (UnhandledSignal sgl)
 
 let as_comodel ~loc = function
   | Value.Comodel cmdl -> cmdl
@@ -145,6 +150,7 @@ let rec bind r k =
   match r with
   | Value.Val v -> k v
   | Value.Operation (op, u, l) -> Value.Operation (op, u, fun x -> let r = l x in bind r k)
+  | Value.Signal _ as v -> v
 
 (*** Evaluation ***)
 
@@ -213,6 +219,10 @@ and eval_comp env {Location.data=c'; loc} =
      let u = eval_expr env u in
      Value.Operation (op, u, (fun v -> Value.Val v))
 
+  | Syntax.Signal (sgl, e) ->
+     let v = eval_expr env e in
+     Value.Signal (sgl, v)
+
   | Syntax.Using (cmdl, w, c, fin) ->
      let w = eval_expr env w in
      let cmdl = as_comodel ~loc (eval_expr env cmdl)
@@ -220,17 +230,30 @@ and eval_comp env {Location.data=c'; loc} =
      and fin = eval_finally ~loc env fin in
      using ~loc env cmdl w r fin
 
-and eval_finally ~loc env (px, pw, c) =
-  fun (v, w) ->
-  let env = extend_pattern ~loc px v env in
-  let env = extend_pattern ~loc pw w env in
-  eval_comp env c
+and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_signals} =
+  let fin_val (v, w) =
+    let env = extend_pattern ~loc px v env in
+    let env = extend_pattern ~loc pw w env in
+    eval_comp env c
+  and fin_signals =
+    List.fold_left
+      (fun fin_signals (sgl, px, pw, c) ->
+        let f (v, w) =
+          let env = extend_pattern ~loc px v env in
+          let env = extend_pattern ~loc pw w env in
+          eval_comp env c
+        in
+        Name.Map.add sgl f fin_signals)
+      Name.Map.empty
+      fin_signals
+  in
+  (fin_val, fin_signals)
 
-and using ~loc env cmdl w r fin =
+and using ~loc env cmdl w r (fin_val, fin_signals) =
   let rec tensor w r =
     match r with
 
-    | Value.Val v -> fin (v, w)
+    | Value.Val v -> fin_val (v, w)
 
     | Value.Operation (op, u, k) ->
        begin
@@ -239,6 +262,13 @@ and using ~loc env cmdl w r fin =
          | Some coop ->
             let (v, w') = coop (u, w) in
             tensor w' (k v)
+       end
+
+    | Value.Signal (sgl, v) ->
+       begin
+         match Name.Map.find sgl fin_signals with
+         | None -> error ~loc (UnhandledSignal sgl)
+         | Some f -> f (v, w)
        end
   in
   tensor w r
@@ -274,12 +304,20 @@ let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
 
   | Syntax.DeclOperation (op, ty1, ty2) ->
      if not quiet then
-       Format.printf "@[<hov>operation %t@ :@ %t@ %s@ %t@."
+       Format.printf "@[<hov>operation %t@ :@ %t@ %s@ %t@]@."
          (Name.print op)
          (Syntax.print_expr_ty ty1)
          (Print.char_arrow ())
          (Syntax.print_expr_ty ty2) ;
      env
+
+| Syntax.DeclSignal (sgl, t) ->
+   if not quiet then
+       Format.printf "@[<hov>signal %t@ of@ %t@]@."
+         (Name.print sgl)
+         (Syntax.print_expr_ty t) ;
+     env
+
 
   | Syntax.External (x, t, s) ->
      begin

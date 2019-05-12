@@ -9,7 +9,7 @@ and ty' =
   | Bool
   | Product of ty list
   | Arrow of ty * ty
-  | ComodelTy of signature * ty * signature
+  | ComodelTy of Name.t list * ty * signature
   | CompTy of ty * signature
 
 (** Pattern *)
@@ -37,13 +37,15 @@ and term' =
   | LetFun of Name.t * binder list * term * term
   | Ascribe of term * ty
   | Comodel of ty * comodel_clause list
-  | Using of term * term * term * finally
+  | Using of term * term * term * finally_clause list
 
 and binder = pattern * ty option
 
 and comodel_clause = Name.t * binder * binder * term
 
-and finally = binder  * binder * term
+and finally_clause =
+  | FinVal of binder * binder * term
+  | FinSignal of Name.t * binder * binder * term
 
 (** Parsed top-level command. *)
 type toplevel = toplevel' Location.located
@@ -53,4 +55,5 @@ and toplevel' =
   | TopLetFun of Name.t * binder list * term
   | TopComp of term
   | DeclOperation of Name.t * ty * ty
+  | DeclSignal of Name.t * ty
   | External of Name.t * ty * string

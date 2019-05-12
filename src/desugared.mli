@@ -1,6 +1,9 @@
 (** Desugared syntax of Coop. *)
 
-type signature = Name.Set.t
+type signature = {
+    sig_ops : Name.Set.t ;
+    sig_sgs : Name.Set.t
+  }
 
 (** Types. *)
 type ty = ty' Location.located
@@ -9,7 +12,7 @@ and ty' =
   | Bool
   | Arrow of ty * ty
   | Product of ty list
-  | ComodelTy of signature * ty * signature
+  | ComodelTy of Name.Set.t * ty * signature
   | CompTy of ty * signature
 
 (** Patterns *)
@@ -41,13 +44,17 @@ and comp' =
   | Match of expr * (binder * comp) list
   | Apply of expr * expr
   | Operation of Name.t * expr
+  | Signal of Name.t * expr
   | Using of expr * expr * comp * finally
 
 and binder = pattern * ty option
 
 and comodel_clause = Name.t * binder * binder * comp
 
-and finally = binder * binder * comp
+and finally = {
+    fin_val : binder * binder * comp ;
+    fin_signals : (Name.t * binder * binder * comp) list
+  }
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located
@@ -56,4 +63,5 @@ and toplevel' =
   | TopLet of pattern * comp
   | TopComp of comp
   | DeclOperation of Name.t * ty * ty
+  | DeclSignal of Name.t * ty
   | External of Name.t * ty * string

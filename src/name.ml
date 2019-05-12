@@ -24,13 +24,15 @@ struct
   type t = S.t
 
   let empty = S.empty
+  let is_empty = S.is_empty
   let add = S.add
   let mem = S.mem
   let elements = S.elements
   let subset = S.subset
   let union = S.union
+  let inter = S.inter
 
-  let choose_diff s1 s2 = S.choose_opt (S.diff s1 s2)
+  let diff s1 s2 = S.diff s1 s2
 
 end
 

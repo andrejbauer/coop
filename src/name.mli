@@ -15,12 +15,14 @@ sig
   type t
 
   val empty : t
+  val is_empty : t -> bool
   val add : elt -> t -> t
   val mem : elt -> t -> bool
   val elements : t -> elt list
   val subset : t -> t -> bool
   val union : t -> t -> t
-  val choose_diff : t -> t -> elt option
+  val inter : t -> t -> t
+  val diff : t -> t -> t
 end
 
 (** A map from identifiers. *)
