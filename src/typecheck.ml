@@ -325,7 +325,7 @@ let rec expr_subty ~loc ctx t u =
      Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
      false
 
-and comp_subty ~loc ctx (Syntax.CompTy (t1, sig1)) (Syntax.CompTy (t2, sig2)) =
+and comp_subty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} (Syntax.{comp_ty=t2; comp_sig=sig2}) =
   subsignature sig1 sig2 && expr_subty ~loc ctx t1 t2
 
 and expr_eqtype ~loc ctx t u =
@@ -449,15 +449,15 @@ and meet_expr_ty ~loc ctx t1 t2 =
      Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
-and join_comp_ty ~loc ctx (Syntax.CompTy(t1, sig1)) (Syntax.CompTy(t2,sig2)) =
+and join_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2; comp_sig=sig2} =
   let t = join_expr_ty ~loc ctx t1 t2
   and sgn = join_signature sig1 sig2 in
-  Syntax.CompTy (t, sgn)
+  Syntax.{comp_ty=t; comp_sig=sgn}
 
-and meet_comp_ty ~loc ctx (Syntax.CompTy(t1, sig1)) (Syntax.CompTy(t2,sig2)) =
+and meet_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2; comp_sig=sig2} =
   let t = meet_expr_ty ~loc ctx t1 t2
   and sgn = meet_signature sig1 sig2 in
-  Syntax.CompTy (t, sgn)
+  Syntax.{comp_ty=t; comp_sig=sgn}
 
 (**** Type checking ****)
 
@@ -496,12 +496,12 @@ and comp_ty ({Location.it=t'; loc} as t) =
   | Desugared.CompTy (t, sgn) ->
      let t = expr_ty t
      and sgn = signature sgn in
-     Syntax.CompTy (t, sgn)
+     Syntax.{comp_ty=t; comp_sig=sgn}
 
   | (Desugared.Int | Desugared.Bool | Desugared.TyAbbreviation _  | Desugared.TyDatatype _ |
      Desugared.Product _ | Desugared.Arrow _ | Desugared.ComodelTy _) ->
      let t = expr_ty t in
-     Syntax.CompTy (t, Syntax.empty_signature)
+     Syntax.{comp_ty=t; comp_sig=empty_signature}
 
 
 (** Typecheck a pattern, return processed pattern and the list of identifiers
@@ -584,7 +584,7 @@ let top_extend_pattern ~loc ctx p t =
 
 (** Make sure that the dirt of the first type is a subsignature of [sgn], or report an error. *)
 let check_dirt ~loc
-  (Syntax.CompTy (_, Syntax.{sig_ops=ops1; sig_sgs=sgs1}))
+  Syntax.{comp_sig={sig_ops=ops1; sig_sgs=sgs1}; _}
   Syntax.{sig_ops=ops2; sig_sgs=sgs2} =
   let ops = Name.Set.diff ops1 ops2 in
   let sgs = Name.Set.diff sgs1 sgs2 in
@@ -651,7 +651,7 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      c, t
 
   | Desugared.Let (p, c1, c2) ->
-     let c1, (Syntax.CompTy (c1_ty, c1_sgn)) = infer_comp ctx c1 in
+     let c1, Syntax.{comp_ty=c1_ty; comp_sig=c1_sgn} = infer_comp ctx c1 in
      let ctx, p = extend_pattern ~loc ctx p c1_ty in
      let c2, c2_ty = infer_comp ctx c2 in
      let c2_ty = Syntax.pollute c2_ty c1_sgn in
@@ -688,7 +688,7 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let cmdl, (ops, w_ty, Syntax.{sig_ops=cmdl_ops; sig_sgs=cmdl_sgs}) =
        infer_comodel ctx cmdl in
      let w = check_expr ctx w w_ty in
-     let c, (Syntax.CompTy(x_ty, _) as c_ty) = infer_comp ctx c in
+     let c, (Syntax.{comp_ty=x_ty; _} as c_ty) = infer_comp ctx c in
      let fin, fin_sgs, fin_ty = infer_finally ~loc ctx x_ty w_ty fin in
      let cmdl_sig = Syntax.{sig_ops=cmdl_ops; sig_sgs = Name.Set.diff cmdl_sgs fin_sgs} in
      let fin_ty = Syntax.pollute fin_ty cmdl_sig in
@@ -726,7 +726,7 @@ and infer_coops ~loc ctx w_ty lst =
          let (x_ty, op_ty) = lookup_operation ~loc op ctx in
          let ctx, px = extend_binder ctx px x_ty in
          let ctx, pw = extend_binder ctx pw w_ty in
-         let c, (Syntax.CompTy (_, c_sgn) as c_ty) = infer_comp ctx c in
+         let c, (Syntax.{comp_sig=c_sgn;_} as c_ty) = infer_comp ctx c in
          let c_required = Syntax.pure (Syntax.Product [op_ty; w_ty]) in
          if not (comp_subty ~loc ctx c_required c_ty) then
            error ~loc (CompTypeMismatch (c_required, c_ty)) ;
@@ -880,7 +880,7 @@ and check_constructor ~loc ctx cnstr eopt topt =
 (** [check_comp ctx c ty] checks that computation [c] has computation type [ty] in context [ctx].
     It returns the processed computation [c]. *)
 and check_comp ctx ({Location.it=c'; loc} as c) check_ty =
-  let (Syntax.CompTy (check_ty', check_sgn)) = check_ty in
+  let Syntax.{comp_ty=check_ty'; comp_sig=check_sgn} = check_ty in
   let locate = Location.locate ~loc in
   match c' with
 
@@ -894,7 +894,7 @@ and check_comp ctx ({Location.it=c'; loc} as c) check_ty =
      locate (Syntax.Match (e, lst))
 
   | Desugared.Let (p, c1, c2) ->
-     let c1, (Syntax.CompTy (c1_ty', _) as c1_ty) = infer_comp ctx c1 in
+     let c1, (Syntax.{comp_ty=c1_ty';_} as c1_ty) = infer_comp ctx c1 in
      check_dirt ~loc c1_ty check_sgn ;
      let ctx, p = extend_pattern ~loc ctx p c1_ty' in
      let c2 = check_comp ctx c2 check_ty in
@@ -933,13 +933,13 @@ and toplevel ~quiet ctx {Location.it=d'; loc} =
        ctx, Syntax.TopLoad lst
 
     | Desugared.TopLet (p, c) ->
-       let c, (Syntax.CompTy (c_ty', _) as c_ty) = infer_comp ctx c in
+       let c, (Syntax.{comp_ty=c_ty';_} as c_ty) = infer_comp ctx c in
        check_dirt ~loc c_ty Syntax.empty_signature ;
        let ctx, p, xts = top_extend_pattern ~loc ctx p c_ty' in
        ctx, Syntax.TopLet (p, xts, c)
 
     | Desugared.TopComp c ->
-       let c, (Syntax.CompTy (c_ty', _)) = infer_comp ctx c in
+       let c, Syntax.{comp_ty=c_ty'; _} = infer_comp ctx c in
        ctx, Syntax.TopComp (c, c_ty')
 
     | Desugared.TypeAbbreviation (x, ty) ->

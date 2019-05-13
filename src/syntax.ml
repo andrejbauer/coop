@@ -17,8 +17,7 @@ type expr_ty =
   | ComodelTy of comodel_ty
 
 (** Computation type *)
-and comp_ty =
-  | CompTy of expr_ty * signature
+and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
 
 (** Comodel *)
 and comodel_ty = Name.Set.t * expr_ty * signature
@@ -84,25 +83,24 @@ let unit_ty = Product []
 let empty_signature = { sig_ops = Name.Set.empty; sig_sgs = Name.Set.empty }
 
 (** Make a pure computation type *)
-let pure t = CompTy (t, empty_signature)
+let pure t = { comp_ty = t ; comp_sig = empty_signature }
 
 let operation_ty t op =
- let sgn = { sig_ops = Name.Set.add op Name.Set.empty ;
-              sig_sgs = Name.Set.empty }
-  in
-  CompTy (t, sgn)
+  { comp_ty = t ;
+    comp_sig = { sig_ops = Name.Set.add op Name.Set.empty ;
+                 sig_sgs = Name.Set.empty }
+  }
 
 let signal_ty sgl =
- let sgn = { sig_ops = Name.Set.empty ;
-             sig_sgs = Name.Set.add sgl Name.Set.empty }
-  in
-  CompTy (SignalTy, sgn)
-
-let pollute (CompTy (t, sgn1)) sgn2 =
-  let sgn = { sig_ops = Name.Set.union sgn1.sig_ops sgn2.sig_ops ;
-              sig_sgs = Name.Set.union sgn1.sig_sgs sgn2.sig_sgs }
-  in
-  CompTy (t, sgn)
+  { comp_ty = SignalTy ;
+    comp_sig = { sig_ops = Name.Set.empty ;
+                 sig_sgs = Name.Set.add sgl Name.Set.empty }
+  }
+let pollute {comp_ty; comp_sig=sgn1} sgn2 =
+  { comp_ty ;
+    comp_sig = { sig_ops = Name.Set.union sgn1.sig_ops sgn2.sig_ops ;
+                 sig_sgs = Name.Set.union sgn1.sig_sgs sgn2.sig_sgs }
+  }
 
 (** Pretty-print an expresion type *)
 let rec print_expr_ty ?max_level ty ppf =
@@ -133,10 +131,10 @@ let rec print_expr_ty ?max_level ty ppf =
 
   | ComodelTy cmdl_ty -> print_comodel_ty cmdl_ty ppf
 
-and print_comp_ty ?max_level (CompTy (t, sgn)) ppf =
+and print_comp_ty ?max_level {comp_ty; comp_sig} ppf =
   Print.print ?max_level ~at_level:Level.comp_ty ppf "%t@ !@ %t"
-    (print_expr_ty ~max_level:Level.comp_ty_left t)
-    (print_signature sgn)
+    (print_expr_ty ~max_level:Level.comp_ty_left comp_ty)
+    (print_signature comp_sig)
 
 and print_comodel_ty (ops, w_ty, sgn2) ppf =
   let ops = List.sort Pervasives.compare (Name.Set.elements ops) in

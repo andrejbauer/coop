@@ -19,7 +19,7 @@ type expr_ty =
   | ComodelTy of comodel_ty
 
 (** Computation type *)
-and comp_ty = CompTy of expr_ty * signature
+and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
 
 (** Comodel *)
 and comodel_ty = Name.Set.t * expr_ty * signature
