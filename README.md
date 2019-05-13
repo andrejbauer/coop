@@ -1,4 +1,4 @@
-# Terminus
+# Coop
 
 A toy programming language for programming with comodels.
 
@@ -17,8 +17,8 @@ A toy programming language for programming with comodels.
 
 You can type:
 
-* `make` to make the `terminus.native` executable.
-* `make byte` to make the bytecode `terminus.byte` executable.
+* `make` to make the `coop.native` executable.
+* `make byte` to make the bytecode `coop.byte` executable.
 * `make clean` to clean up.
-* `make doc` to generate HTML documentation (see the generated [`terminus.docdir/index.html`](terminus.docdir/index.html)).
+* `make doc` to generate HTML documentation (see the generated [`coop.docdir/index.html`](coop.docdir/index.html)).
 
