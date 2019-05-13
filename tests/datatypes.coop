@@ -1,6 +1,6 @@
-type batman = Batman of joker | Robin of robin
+type robin = int * int
 
-and robin = int * int
+type batman = Batman of joker | Robin of robin
 
 and joker = Pun of batman | Joke of robin
 

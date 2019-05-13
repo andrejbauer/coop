@@ -112,14 +112,17 @@ toplevel_:
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
     { Sugared.DeclOperation (op, t1, t2) }
 
-  | SIGNAL sgl=var_name OF  t=ty
+  | SIGNAL sgl=var_name OF t=ty
     { Sugared.DeclSignal (sgl, t) }
 
   | EXTERNAL x=var_name COLON t=ty EQUAL s=QUOTED_STRING
     { Sugared.External (x, t, s) }
 
-  | TYPE lst=separated_list(AND, ty_definition)
-    { Sugared.TypeDefinition (lst) }
+  | TYPE x=var_name EQUAL t=ty
+    { Sugared.TypeAlias (x, t) }
+
+  | TYPE lst=separated_list(AND, datatype)
+    { Sugared.Datatype lst }
 
 
 (* Main syntax tree *)
@@ -359,12 +362,9 @@ simple_ty_:
   | LPAREN t=ty_ RPAREN
     { t }
 
-ty_definition:
-  | x=var_name EQUAL t=ty
-    { (x, Sugared.TydefAbbreviation t) }
-
+datatype:
   | x=var_name EQUAL lst=constructor_clauses
-    { (x, Sugared.TydefDatatype lst) }
+    { (x, lst) }
 
 constructor_clauses:
   | BAR? lst=separated_nonempty_list(BAR, constructor_clause)

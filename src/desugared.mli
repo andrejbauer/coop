@@ -10,7 +10,7 @@ type ty = ty' Location.located
 and ty' =
   | Int
   | Bool
-  | TyAbbreviation of Name.t
+  | TyAlias of Name.t
   | TyDatatype of Name.t
   | Arrow of ty * ty
   | Product of ty list
@@ -18,9 +18,7 @@ and ty' =
   | CompTy of ty * signature
 
 (** The body of a datatype definition *)
-type ty_definition =
-  | TydefAbbreviation of ty
-  | TydefDatatype of (Name.t * ty option) list
+type datatype = (Name.t * ty option) list
 
 (** Patterns *)
 type pattern = pattern' Location.located
@@ -71,7 +69,8 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * comp
   | TopComp of comp
-  | TypeDefinition of (Name.t * ty_definition) list
+  | TypeAlias of Name.t * ty
+  | Datatype of (Name.t * datatype) list
   | DeclOperation of Name.t * ty * ty
   | DeclSignal of Name.t * ty
   | External of Name.t * ty * string

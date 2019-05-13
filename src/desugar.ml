@@ -94,7 +94,7 @@ type ident_kind =
   | Signal
 
 type tydef_kind =
-  | TydefAbbreviation
+  | TydefAlias
   | TydefDatatype
 
 type constructor_kind =
@@ -188,7 +188,7 @@ let rec ty ctx {Location.it=t'; loc} =
 
     | Sugared.NamedTy t ->
        begin match lookup_ty t ctx with
-       | Some TydefAbbreviation -> Desugared.TyAbbreviation t
+       | Some TydefAlias -> Desugared.TyAlias t
        | Some TydefDatatype -> Desugared.TyDatatype t
        | None -> error ~loc (UnknownType t)
        end
@@ -548,28 +548,18 @@ let datatype ~loc ctx lst =
   fold ctx [] lst
 
 (** Desugar a type definition *)
-let ty_definition ~loc ctx ty_defs =
+let datatypes ~loc ctx ty_defs =
   let ctx =
     List.fold_left
-    (fun ctx (t, t_def) ->
+    (fun ctx (t, _) ->
       check_type_shadow ~loc t ctx ;
-      extend_type
-        t
-        (match t_def with
-         | Sugared.TydefAbbreviation _ -> TydefAbbreviation
-         | Sugared.TydefDatatype _ -> TydefDatatype)
-        ctx)
+      extend_type t TydefDatatype ctx)
     ctx ty_defs
   in
   List.fold_left
-    (fun (ctx, ty_defs) ->
-      function
-      | (t, Sugared.TydefAbbreviation abbrev) ->
-         ctx, (t, Desugared.TydefAbbreviation (ty ctx abbrev)) :: ty_defs
-
-      | (t, Sugared.TydefDatatype data) ->
-         let ctx, data = datatype ~loc ctx data in
-         ctx, (t, Desugared.TydefDatatype data) :: ty_defs)
+    (fun (ctx, ty_defs) (t, cnstrs) ->
+      let ctx, cnstrs = datatype ~loc ctx cnstrs in
+      ctx, (t, cnstrs) :: ty_defs)
     (ctx, [])
     ty_defs
 
@@ -599,9 +589,15 @@ let toplevel' ctx = function
        let c = comp ctx c in
        ctx, Desugared.TopComp c
 
-    | Sugared.TypeDefinition lst ->
-       let ctx, lst = ty_definition ~loc ctx lst in
-       ctx, Desugared.TypeDefinition lst
+    | Sugared.TypeAlias (t, abbrev) ->
+       check_type_shadow ~loc t ctx ;
+       let abbrev = ty ctx abbrev in
+       let ctx = extend_type t TydefAlias ctx in
+       ctx, Desugared.TypeAlias (t, abbrev)
+
+    | Sugared.Datatype lst ->
+       let ctx, lst = datatypes ~loc ctx lst in
+       ctx, Desugared.Datatype lst
 
     | Sugared.DeclOperation (op, t1, t2) ->
        check_ident_shadow ~loc op ctx ;

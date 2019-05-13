@@ -14,9 +14,7 @@ and ty' =
   | CompTy of ty * signature
 
 (** The body of a datatype definition *)
-type ty_definition =
-  | TydefAbbreviation of ty
-  | TydefDatatype of (Name.t * ty option) list
+type datatype = (Name.t * ty option) list
 
 (** Pattern *)
 type pattern = pattern' Location.located
@@ -63,7 +61,8 @@ and toplevel' =
   | TopLet of pattern * term
   | TopLetFun of Name.t * binder list * term
   | TopComp of term
-  | TypeDefinition of (Name.t * ty_definition) list
+  | TypeAlias of Name.t * ty
+  | Datatype of (Name.t * datatype) list
   | DeclOperation of Name.t * ty * ty
   | DeclSignal of Name.t * ty
   | External of Name.t * ty * string

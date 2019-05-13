@@ -7,7 +7,7 @@ type signature = {
 
 (** Expression type *)
 type expr_ty =
-  | TyAbbreviation of Name.t
+  | TyAlias of Name.t
   | TyDatatype of Name.t
   | SignalTy
   | Int
@@ -23,9 +23,7 @@ and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
 and comodel_ty = Name.Set.t * expr_ty * signature
 
 (** The body of a datatype definition *)
-type ty_definition =
-  | TydefAbbreviation of expr_ty
-  | TydefDatatype of (Name.t * expr_ty option) list
+type datatype = (Name.t * expr_ty option) list
 
 (** Patterns *)
 type pattern =
@@ -72,7 +70,8 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopComp of comp * expr_ty
-  | TypeDefinition of (Name.t * ty_definition) list
+  | TypeAlias of Name.t * expr_ty
+  | Datatype of (Name.t * datatype) list
   | DeclOperation of Name.t * expr_ty * expr_ty
   | DeclSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string
@@ -107,7 +106,7 @@ let pollute {comp_ty; comp_sig=sgn1} sgn2 =
 let rec print_expr_ty ?max_level ty ppf =
   match ty with
 
-  | TyAbbreviation t -> Format.fprintf ppf "%t" (Name.print t)
+  | TyAlias t -> Format.fprintf ppf "%t" (Name.print t)
 
   | TyDatatype t -> Format.fprintf ppf "%t" (Name.print t)
 
@@ -152,7 +151,7 @@ and print_signature {sig_ops; sig_sgs} ppf =
   Format.fprintf ppf "{%t}"
     (Print.sequence (Name.print ~parentheses:true) "," lst)
 
-let print_ty_definition ty_def ppf =
+let print_datatype (t, cnstrs) ppf =
   let print_clause (cnstr, topt) ppf =
     match topt with
     | None ->
@@ -162,14 +161,6 @@ let print_ty_definition ty_def ppf =
          (Name.print cnstr)
          (print_expr_ty ~max_level:Level.product t)
   in
-  match ty_def with
-
-  | (t, TydefAbbreviation abbrev) ->
-     Format.fprintf ppf "@[<hov>%t@ =@ %t@]"
-                    (Name.print t)
-                    (print_expr_ty abbrev)
-
-  | (t, TydefDatatype data) ->
-     Format.fprintf ppf "@[<hov>%t@ =@ %t@]"
-                    (Name.print t)
-                    (Print.sequence print_clause " |" data)
+  Format.fprintf ppf "@[<hov>%t@ =@ %t@]"
+                 (Name.print t)
+                 (Print.sequence print_clause " |" cnstrs)

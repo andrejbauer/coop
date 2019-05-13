@@ -222,7 +222,7 @@ let signature Desugared.{sig_ops; sig_sgs} = Syntax.{sig_ops; sig_sgs}
 let rec norm_ty ~loc ctx t =
   match t with
 
-  | Syntax.TyAbbreviation x ->
+  | Syntax.TyAlias x ->
      let t = lookup_tyabbrev ~loc x ctx in
      norm_ty ~loc ctx t
 
@@ -233,7 +233,7 @@ let rec norm_ty ~loc ctx t =
 let as_product ~loc ctx ty =
   match norm_ty ~loc ctx ty with
 
-  | Syntax.TyAbbreviation _ -> assert false
+  | Syntax.TyAlias _ -> assert false
 
   | Syntax.Product ts -> Some ts
 
@@ -244,7 +244,7 @@ let as_product ~loc ctx ty =
 let as_arrow ~loc ctx ty =
   match norm_ty ~loc ctx ty with
 
-  | Syntax.TyAbbreviation _ -> assert false
+  | Syntax.TyAlias _ -> assert false
 
   | Syntax.Arrow (t,u) -> Some (t, u)
 
@@ -256,7 +256,7 @@ let as_comodel ~loc ctx ty =
 
   match norm_ty ~loc ctx ty with
 
-  | Syntax.TyAbbreviation _ -> assert false
+  | Syntax.TyAlias _ -> assert false
 
   | Syntax.ComodelTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
 
@@ -267,7 +267,7 @@ let as_datatype ~loc ctx ty =
 
   match norm_ty ~loc ctx ty with
 
-  | Syntax.TyAbbreviation _ -> assert false
+  | Syntax.TyAlias _ -> assert false
 
   | Syntax.TyDatatype ty ->
      Some (lookup_datatype ~loc ty ctx)
@@ -285,13 +285,13 @@ let subsignature Syntax.{sig_ops=ops1; sig_sgs=sgs1} Syntax.{sig_ops=ops2; sig_s
 let rec expr_subty ~loc ctx t u =
   match t, u with
 
-  | Syntax.TyAbbreviation x, Syntax.TyAbbreviation y when Name.equal x y -> true
+  | Syntax.TyAlias x, Syntax.TyAlias y when Name.equal x y -> true
 
-  | Syntax.TyAbbreviation _, _ ->
+  | Syntax.TyAlias _, _ ->
      let t = norm_ty ~loc ctx t in
      expr_subty ~loc ctx t u
 
-  | _, Syntax.TyAbbreviation _ ->
+  | _, Syntax.TyAlias _ ->
      let u = norm_ty ~loc ctx u in
      expr_subty ~loc ctx t u
 
@@ -344,14 +344,14 @@ let meet_signature Syntax.{sig_ops=ops1; sig_sgs=sgs1} Syntax.{sig_ops=ops2; sig
 let rec join_expr_ty ~loc ctx t1 t2 =
   match t1, t2 with
 
-  | Syntax.TyAbbreviation x, Syntax.TyAbbreviation y when Name.equal x y ->
+  | Syntax.TyAlias x, Syntax.TyAlias y when Name.equal x y ->
      t1
 
-  | Syntax.TyAbbreviation _, _ ->
+  | Syntax.TyAlias _, _ ->
      let t1 = norm_ty ~loc ctx t1 in
      join_expr_ty ~loc ctx t1 t2
 
-  | _, Syntax.TyAbbreviation _ ->
+  | _, Syntax.TyAlias _ ->
      let t2 = norm_ty ~loc ctx t2 in
      join_expr_ty ~loc ctx t1 t2
 
@@ -398,14 +398,14 @@ let rec join_expr_ty ~loc ctx t1 t2 =
 and meet_expr_ty ~loc ctx t1 t2 =
   match t1, t2 with
 
-  | Syntax.TyAbbreviation x, Syntax.TyAbbreviation y when Name.equal x y ->
+  | Syntax.TyAlias x, Syntax.TyAlias y when Name.equal x y ->
      t1
 
-  | Syntax.TyAbbreviation _, _ ->
+  | Syntax.TyAlias _, _ ->
      let t1 = norm_ty ~loc ctx t1 in
      meet_expr_ty ~loc ctx t1 t2
 
-  | _, Syntax.TyAbbreviation _ ->
+  | _, Syntax.TyAlias _ ->
      let t2 = norm_ty ~loc ctx t2 in
      meet_expr_ty ~loc ctx t1 t2
 
@@ -469,7 +469,7 @@ let rec expr_ty {Location.it=t'; loc} =
 
   | Desugared.Bool -> Syntax.Bool
 
-  | Desugared.TyAbbreviation t -> Syntax.TyAbbreviation t
+  | Desugared.TyAlias t -> Syntax.TyAlias t
 
   | Desugared.TyDatatype t -> Syntax.TyDatatype t
 
@@ -498,7 +498,7 @@ and comp_ty ({Location.it=t'; loc} as t) =
      and sgn = signature sgn in
      Syntax.{comp_ty=t; comp_sig=sgn}
 
-  | (Desugared.Int | Desugared.Bool | Desugared.TyAbbreviation _  | Desugared.TyDatatype _ |
+  | (Desugared.Int | Desugared.Bool | Desugared.TyAlias _  | Desugared.TyDatatype _ |
      Desugared.Product _ | Desugared.Arrow _ | Desugared.ComodelTy _) ->
      let t = expr_ty t in
      Syntax.{comp_ty=t; comp_sig=empty_signature}
@@ -511,7 +511,7 @@ let check_pattern ~loc ctx patt ty =
     let t = norm_ty ~loc ctx t in
     match p', t with
 
-    | _, Syntax.TyAbbreviation _ -> assert false
+    | _, Syntax.TyAlias _ -> assert false
 
     | _, Syntax.SignalTy ->
        error ~loc (PattTypeMismatch ty)
@@ -924,22 +924,17 @@ and datatype cnstrs =
      | (x, Some t) -> (x, Some (expr_ty t)))
     cnstrs
 
-and ty_definition ~loc ctx ty_defs =
+and datatypes ~loc ctx ty_defs =
   let rec fold ctx ty_defs = function
 
     | [] ->
        let ty_defs = List.rev ty_defs in
        ctx, ty_defs
 
-    | (t, Desugared.TydefAbbreviation abbrev) :: lst ->
-       let abbrev = expr_ty abbrev in
-       let ctx = extend_tyabbrev ~loc t abbrev ctx in
-       fold ctx ((t, Syntax.TydefAbbreviation abbrev) :: ty_defs) lst
-
-    | (t, Desugared.TydefDatatype cnstrs) :: lst ->
+    | (t, cnstrs) :: lst ->
        let cnstrs = datatype cnstrs in
        let ctx = extend_datatype ~loc t cnstrs ctx in
-       fold ctx ((t, Syntax.TydefDatatype cnstrs) :: ty_defs) lst
+       fold ctx ((t, cnstrs) :: ty_defs) lst
   in
   fold ctx [] ty_defs
 
@@ -961,9 +956,14 @@ and toplevel ~quiet ctx {Location.it=d'; loc} =
        let c, Syntax.{comp_ty=c_ty'; _} = infer_comp ctx c in
        ctx, Syntax.TopComp (c, c_ty')
 
-    | Desugared.TypeDefinition ty_defs ->
-       let ctx, ty_defs = ty_definition ~loc ctx ty_defs in
-       ctx, Syntax.TypeDefinition ty_defs
+    | Desugared.TypeAlias (t, abbrev) ->
+       let abbrev = expr_ty abbrev in
+       let ctx = extend_tyabbrev ~loc t abbrev ctx in
+       ctx, Syntax.TypeAlias (t, abbrev)
+
+    | Desugared.Datatype ty_defs ->
+       let ctx, ty_defs = datatypes ~loc ctx ty_defs in
+       ctx, Syntax.Datatype ty_defs
 
     | Desugared.DeclOperation (op, ty1, ty2) ->
        let ty1 = expr_ty ty1

@@ -321,10 +321,17 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
          (Value.print v) ;
      env
 
-  | Syntax.TypeDefinition ty_defs ->
+  | Syntax.TypeAlias (t, abbrev) ->
      if not quiet then
-       Format.printf "@[<v>type %t@]@."
-         (Print.sequence (Syntax.print_ty_definition) " and" ty_defs) ;
+       Format.printf "@[<hov>type %t@ =@ %t@]@."
+         (Name.print t)
+         (Syntax.print_expr_ty abbrev) ;
+     env
+
+  | Syntax.Datatype lst ->
+     if not quiet then
+       Format.printf "@[<v 5>type %t@]@."
+         (Print.sequence (Syntax.print_datatype) " and" lst) ;
      env
 
   | Syntax.DeclOperation (op, ty1, ty2) ->
