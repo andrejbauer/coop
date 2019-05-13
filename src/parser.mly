@@ -164,7 +164,7 @@ infix_term_:
     { e }
 
   | e2=infix_term oploc=infix e3=infix_term
-    { let {Location.data=op; loc} = oploc in
+    { let {Location.it=op; loc} = oploc in
       let op = Location.locate ~loc (Sugared.Var op) in
       let e1 = Location.locate ~loc (Sugared.Apply (op, e2)) in
       Sugared.Apply (e1, e3)
@@ -184,7 +184,7 @@ prefix_term_:
     { e }
 
   | oploc=prefix e2=prefix_term
-    { let {Location.data=op; loc} = oploc in
+    { let {Location.it=op; loc} = oploc in
       let op = Location.locate ~loc (Sugared.Var op) in
       Sugared.Apply (op, e2)
     }
@@ -208,13 +208,13 @@ simple_term_:
 
   | LPAREN es=separated_list(COMMA, term) RPAREN
                 { match es with
-                  | [e] -> e.Location.data
+                  | [e] -> e.Location.it
                   | [] | _::_ -> Sugared.Tuple es }
 
 var_name:
   | NAME                     { $1 }
-  | LPAREN op=infix RPAREN   { op.Location.data }
-  | LPAREN op=prefix RPAREN  { op.Location.data }
+  | LPAREN op=infix RPAREN   { op.Location.it }
+  | LPAREN op=prefix RPAREN  { op.Location.it }
 
 %inline infix:
   | op=INFIXOP0    { op }
@@ -310,7 +310,7 @@ simple_pattern_:
 
   | LPAREN lst=separated_list(COMMA, pattern) RPAREN
     { match lst with
-      | [p] -> p.Location.data
+      | [p] -> p.Location.it
       | [] | _::_ -> Sugared.PattTuple lst }
 
 

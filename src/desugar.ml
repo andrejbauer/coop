@@ -178,7 +178,7 @@ let operations ops =
   List.fold_left (fun ops op -> Name.Set.add op ops) Name.Set.empty ops
 
 (** Desugar a type, which at this stage is the same as an expressions. *)
-let rec ty ctx {Location.data=t'; loc} =
+let rec ty ctx {Location.it=t'; loc} =
   let t' =
     match t' with
 
@@ -220,7 +220,7 @@ let ty_opt ctx = function
   | Some t -> Some (ty ctx t)
 
 (** Desugar a pattern *)
-let rec pattern ctx {Location.data=p'; loc} =
+let rec pattern ctx {Location.it=p'; loc} =
   let locate = Location.locate ~loc in
   match p' with
 
@@ -273,7 +273,7 @@ and pattern_tuple ctx ps =
   fold ctx [] ps
 
 (** Desugar an expression *)
-let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
+let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
   let locate x = Location.locate ~loc x in
   match e' with
     | Sugared.Var x ->
@@ -307,7 +307,7 @@ let rec expr (ctx : context) ({Location.data=e'; Location.loc=loc} as e) =
          | Some ConstrNonApplied -> ([], locate (Desugared.Constructor (cnstr, None)))
        end
 
-    | Sugared.Apply ({Location.data=Sugared.Constructor cnstr;_}, e) ->
+    | Sugared.Apply ({Location.it=Sugared.Constructor cnstr;_}, e) ->
        begin
          match lookup_constructor cnstr ctx with
          | None -> error ~loc (UnknownConstructor cnstr)
@@ -375,7 +375,7 @@ and comodel_clause ~loc ctx (op, px, pw, c) =
      (op, px, pw, c)
 
 (** Desugar a computation *)
-and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
+and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
   let locate x = Location.locate ~loc x in
   let let_binds ws c =
     let rec fold = function
@@ -389,7 +389,7 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
   match c' with
     | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True |
        Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _ |
-       Sugared.Apply ({Location.data=Sugared.Constructor _;_}, _)) ->
+       Sugared.Apply ({Location.it=Sugared.Constructor _;_}, _)) ->
        let ws, e = expr ctx c in
        let return_e = locate (Desugared.Val e) in
        let_binds ws return_e
@@ -424,12 +424,12 @@ and comp ctx ({Location.data=c'; Location.loc=loc} as c) : Desugared.comp =
        in
        let_binds w (locate (Desugared.Match (e', [cl1; cl2])))
 
-    | Sugared.Apply ({Location.data=Sugared.Var op; loc}, e) when is_operation op ctx ->
+    | Sugared.Apply ({Location.it=Sugared.Var op; loc}, e) when is_operation op ctx ->
        let ws, e = expr ctx e in
        let c = locate (Desugared.Operation (op, e)) in
        let_binds ws c
 
-    | Sugared.Apply ({Location.data=Sugared.Var sgl; loc}, e) when is_signal sgl ctx ->
+    | Sugared.Apply ({Location.it=Sugared.Var sgl; loc}, e) when is_signal sgl ctx ->
        let ws, e = expr ctx e in
        let c = locate (Desugared.Signal (sgl, e)) in
        let_binds ws c
@@ -548,7 +548,7 @@ let datatype ~loc ctx lst =
   fold ctx [] lst
 
 (** Desugar a toplevel. *)
-let rec toplevel ctx {Location.data=c; Location.loc=loc} =
+let rec toplevel ctx {Location.it=c; Location.loc=loc} =
 
 (** Desugar a non-located toplevel. *)
 let toplevel' ctx = function

@@ -5,6 +5,9 @@ val apply : (int → int ! {die, op}) → (int → int ! {die, op}) ! {} =
 <fun>
 val g : int → int ! {die, op} = <fun>
 val c : {op} @ int ⇒ {croak} = <comodel>
-val demo : int → (int × int) × int ! {} = <fun>
-val x : (int × int) × int = ((1, 3), 5)
-val y : (int × int) × int = ((1, 7), 13)
+val demo : int → (int × int) × int ! {die} = <fun>
+- : (int × int) × int = ((1001, 1003), 5)
+- : int = 23
+Runtime error at file "./subtype.coop", line 13, charaters 6-44:
+terminated by signal croak
+

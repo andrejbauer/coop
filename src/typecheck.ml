@@ -462,7 +462,7 @@ and meet_comp_ty ~loc ctx (Syntax.CompTy(t1, sig1)) (Syntax.CompTy(t2,sig2)) =
 (**** Type checking ****)
 
 (** Check that a type is valid. Retrn the processed type. *)
-let rec expr_ty {Location.data=t'; loc} =
+let rec expr_ty {Location.it=t'; loc} =
   match t' with
 
   | Desugared.Int -> Syntax.Int
@@ -490,7 +490,7 @@ let rec expr_ty {Location.data=t'; loc} =
   | Desugared.CompTy _ ->
      error ~loc ExprTypeExpected
 
-and comp_ty ({Location.data=t'; loc} as t) =
+and comp_ty ({Location.it=t'; loc} as t) =
   match t' with
 
   | Desugared.CompTy (t, sgn) ->
@@ -507,7 +507,7 @@ and comp_ty ({Location.data=t'; loc} as t) =
 (** Typecheck a pattern, return processed pattern and the list of identifiers
    and types bound by the pattern *)
 let check_pattern ~loc ctx patt ty =
-  let rec fold xts {Location.data=p'; loc} t =
+  let rec fold xts {Location.it=p'; loc} t =
     let t = norm_ty ~loc ctx t in
     match p', t with
 
@@ -594,7 +594,7 @@ let check_dirt ~loc
 
 (** [infer_expr ctx e] infers the expression type [ty] of an expression [e]. It
    returns the processed expression [e] and its type [ty]. *)
-let rec infer_expr (ctx : context) {Location.data=e'; loc} =
+let rec infer_expr (ctx : context) {Location.it=e'; loc} =
   let locate = Location.locate ~loc in
   match e' with
   | Desugared.Var x ->
@@ -637,7 +637,7 @@ let rec infer_expr (ctx : context) {Location.data=e'; loc} =
 
 (** [infer_comp ctx c] infers the type [ty] of a computation [c]. It returns
     the processed computation [c] and its type [ty].  *)
-and infer_comp (ctx : context) {Location.data=c'; loc} =
+and infer_comp (ctx : context) {Location.it=c'; loc} =
   let locate = Location.locate ~loc in
   match c' with
 
@@ -790,7 +790,7 @@ and extend_binder ctx (p, topt) t =
 
 (** [check_expr ctx e ty] checks that expression [e] has type [ty] in context [ctx].
     It returns the processed expression [e]. *)
-and check_expr (ctx : context) ({Location.data=e'; loc} as e) ty =
+and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
   let locate = Location.locate ~loc in
   match e' with
 
@@ -879,7 +879,7 @@ and check_constructor ~loc ctx cnstr eopt topt =
 
 (** [check_comp ctx c ty] checks that computation [c] has computation type [ty] in context [ctx].
     It returns the processed computation [c]. *)
-and check_comp ctx ({Location.data=c'; loc} as c) check_ty =
+and check_comp ctx ({Location.it=c'; loc} as c) check_ty =
   let (Syntax.CompTy (check_ty', check_sgn)) = check_ty in
   let locate = Location.locate ~loc in
   match c' with
@@ -924,7 +924,7 @@ and datatype_definition cnstrs =
      | (x, Some t) -> (x, Some (expr_ty t)))
     cnstrs
 
-and toplevel ~quiet ctx {Location.data=d'; loc} =
+and toplevel ~quiet ctx {Location.it=d'; loc} =
   let ctx, d' =
     match d' with
 
@@ -939,7 +939,7 @@ and toplevel ~quiet ctx {Location.data=d'; loc} =
        ctx, Syntax.TopLet (p, xts, c)
 
     | Desugared.TopComp c ->
-       let c, (Syntax.CompTy (c_ty', _) as c_ty) = infer_comp ctx c in
+       let c, (Syntax.CompTy (c_ty', _)) = infer_comp ctx c in
        ctx, Syntax.TopComp (c, c_ty')
 
     | Desugared.TypeAbbreviation (x, ty) ->

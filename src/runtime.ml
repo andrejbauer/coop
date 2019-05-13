@@ -166,7 +166,7 @@ let rec bind r k =
 
 (*** Evaluation ***)
 
-let rec eval_expr env {Location.data=e'; loc} =
+let rec eval_expr env {Location.it=e'; loc} =
   match e' with
 
   | Syntax.Numeral k -> Value.Numeral k
@@ -211,7 +211,7 @@ let rec eval_expr env {Location.data=e'; loc} =
      in
      Value.Comodel cmdl
 
-and eval_comp env {Location.data=c'; loc} =
+and eval_comp env {Location.it=c'; loc} =
   match c' with
 
   | Syntax.Val e ->
@@ -292,7 +292,7 @@ and using ~loc env cmdl w r (fin_val, fin_signals) =
   in
   tensor w r
 
-let rec eval_toplevel ~quiet env {Location.data=d'; loc} =
+let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
   match d' with
 
   | Syntax.TopLoad cs ->

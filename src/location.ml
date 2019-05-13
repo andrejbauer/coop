@@ -2,7 +2,7 @@ type t =
   | Location of Lexing.position * Lexing.position (** delimited location *)
   | Nowhere (** no location *)
 
-type 'a located = { data : 'a ; loc : t }
+type 'a located = { it : 'a ; loc : t }
 
 let nowhere = Nowhere
 
@@ -11,7 +11,7 @@ let make loc1 loc2 = Location (loc1, loc2)
 let of_lex lex =
   Location (Lexing.lexeme_start_p lex, Lexing.lexeme_end_p lex)
 
-let locate ?(loc=Nowhere) x = { data = x; loc = loc }
+let locate ~loc it = {it ; loc}
 
 let print loc ppf =
   match loc with

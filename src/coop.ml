@@ -59,21 +59,21 @@ let interactive_shell state =
         Toplevel.exec_interactive state
       with
 
-      | Ulexbuf.Error {Location.data=err; Location.loc} ->
+      | Ulexbuf.Error {Location.it=err; Location.loc} ->
          Print.error "Lexical error at %t:@ %t" (Location.print loc) (Ulexbuf.print_error err) ;
          state
 
-      | Desugar.Error {Location.data=err; Location.loc} ->
+      | Desugar.Error {Location.it=err; Location.loc} ->
          Print.error "Syntax error at %t:@ %t" (Location.print loc) (Desugar.print_error err) ;
          state
 
-      | Typecheck.Error {Location.data=err; Location.loc} ->
+      | Typecheck.Error {Location.it=err; Location.loc} ->
          Print.error "Type error at %t:@ %t"
            (Location.print loc)
            (Typecheck.print_error err) ;
          state
 
-      | Runtime.Error {Location.data=err; Location.loc} ->
+      | Runtime.Error {Location.it=err; Location.loc} ->
          Print.error "Runtime error at %t:@ %t"
            (Location.print loc)
            (Runtime.print_error err) ;
@@ -153,18 +153,18 @@ let main =
       end
     with
 
-    | Ulexbuf.Error {Location.data=err; Location.loc} ->
+    | Ulexbuf.Error {Location.it=err; Location.loc} ->
        Print.error "@[<hov>Lexical error at %t:@ %t@]@." (Location.print loc) (Ulexbuf.print_error err)
 
-    | Desugar.Error {Location.data=err; Location.loc} ->
+    | Desugar.Error {Location.it=err; Location.loc} ->
        Print.error "@[<hov>Syntax error at %t:@ %t@]@." (Location.print loc) (Desugar.print_error err)
 
-    | Typecheck.Error {Location.data=err; Location.loc} ->
+    | Typecheck.Error {Location.it=err; Location.loc} ->
        Print.error "@[<hov>Type error at %t:@ %t@]@."
          (Location.print loc)
          (Typecheck.print_error err)
 
-      | Runtime.Error {Location.data=err; Location.loc} ->
+      | Runtime.Error {Location.it=err; Location.loc} ->
          Print.error "@[<hov>Runtime error at %t:@ %t@]@."
            (Location.print loc)
            (Runtime.print_error err)
