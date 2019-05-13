@@ -93,9 +93,9 @@ type ident_kind =
   | Operation
   | Signal
 
-type ty_kind =
-  | TyAbbreviation
-  | TyDatatype
+type tydef_kind =
+  | TydefAbbreviation
+  | TydefDatatype
 
 type constructor_kind =
   | ConstrApplied
@@ -104,7 +104,7 @@ type constructor_kind =
 type context = {
     ctx_idents : ident_kind Name.Map.t ;
     ctx_constructors : constructor_kind Name.Map.t ;
-    ctx_types : ty_kind Name.Map.t
+    ctx_types : tydef_kind Name.Map.t
   }
 
 (** Initial empty context *)
@@ -177,7 +177,7 @@ let signature ~loc ctx lst =
 let operations ops =
   List.fold_left (fun ops op -> Name.Set.add op ops) Name.Set.empty ops
 
-(** Desugar a type, which at this stage is the same as an expressions. *)
+(** Desugar a type, allowing named types to be from the given list. *)
 let rec ty ctx {Location.it=t'; loc} =
   let t' =
     match t' with
@@ -188,13 +188,13 @@ let rec ty ctx {Location.it=t'; loc} =
 
     | Sugared.NamedTy t ->
        begin match lookup_ty t ctx with
+       | Some TydefAbbreviation -> Desugared.TyAbbreviation t
+       | Some TydefDatatype -> Desugared.TyDatatype t
        | None -> error ~loc (UnknownType t)
-       | Some TyAbbreviation -> Desugared.TyAbbreviation t
-       | Some TyDatatype -> Desugared.TyDatatype t
        end
 
     | Sugared.Product lst ->
-       let lst = List.map (ty ctx) lst in
+       let lst = List.map (fun t -> ty ctx t) lst in
        Desugared.Product lst
 
     | Sugared.Arrow (t1, t2) ->
@@ -547,6 +547,32 @@ let datatype ~loc ctx lst =
   in
   fold ctx [] lst
 
+(** Desugar a type definition *)
+let ty_definition ~loc ctx ty_defs =
+  let ctx =
+    List.fold_left
+    (fun ctx (t, t_def) ->
+      check_type_shadow ~loc t ctx ;
+      extend_type
+        t
+        (match t_def with
+         | Sugared.TydefAbbreviation _ -> TydefAbbreviation
+         | Sugared.TydefDatatype _ -> TydefDatatype)
+        ctx)
+    ctx ty_defs
+  in
+  List.fold_left
+    (fun (ctx, ty_defs) ->
+      function
+      | (t, Sugared.TydefAbbreviation abbrev) ->
+         ctx, (t, Desugared.TydefAbbreviation (ty ctx abbrev)) :: ty_defs
+
+      | (t, Sugared.TydefDatatype data) ->
+         let ctx, data = datatype ~loc ctx data in
+         ctx, (t, Desugared.TydefDatatype data) :: ty_defs)
+    (ctx, [])
+    ty_defs
+
 (** Desugar a toplevel. *)
 let rec toplevel ctx {Location.it=c; Location.loc=loc} =
 
@@ -573,17 +599,9 @@ let toplevel' ctx = function
        let c = comp ctx c in
        ctx, Desugared.TopComp c
 
-    | Sugared.TypeAbbreviation (x, t) ->
-       check_type_shadow ~loc x ctx ;
-       let t = ty ctx t in
-       let ctx = extend_type x TyAbbreviation ctx in
-       ctx, Desugared.TypeAbbreviation (x, t)
-
-    | Sugared.DatatypeDefinition (x, lst) ->
-       check_type_shadow ~loc x ctx ;
-       let ctx, lst = datatype ~loc ctx lst in
-       let ctx = extend_type x TyDatatype ctx in
-       ctx, Desugared.DatatypeDefinition (x, lst)
+    | Sugared.TypeDefinition lst ->
+       let ctx, lst = ty_definition ~loc ctx lst in
+       ctx, Desugared.TypeDefinition lst
 
     | Sugared.DeclOperation (op, t1, t2) ->
        check_ident_shadow ~loc op ctx ;

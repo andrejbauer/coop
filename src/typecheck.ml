@@ -6,7 +6,7 @@ type context =
   ; ctx_signals : Syntax.expr_ty Name.Map.t
   ; ctx_idents : (Name.t * Syntax.expr_ty) list
   ; ctx_tyabbrevs : Syntax.expr_ty Name.Map.t
-  ; ctx_datatypes : (Name.t * Syntax.ty_definition) list
+  ; ctx_datatypes : (Name.t * (Name.t * Syntax.expr_ty option) list) list
   }
 
 (** Initial typing context *)
@@ -917,12 +917,31 @@ and check_match_clause ctx patt_ty ty (p, c) =
   let c = check_comp ctx c ty in
   (p, c)
 
-and datatype_definition cnstrs =
+and datatype cnstrs =
   List.map
     (function
      | (x, None) -> (x, None)
      | (x, Some t) -> (x, Some (expr_ty t)))
     cnstrs
+
+and ty_definition ~loc ctx ty_defs =
+  let rec fold ctx ty_defs = function
+
+    | [] ->
+       let ty_defs = List.rev ty_defs in
+       ctx, ty_defs
+
+    | (t, Desugared.TydefAbbreviation abbrev) :: lst ->
+       let abbrev = expr_ty abbrev in
+       let ctx = extend_tyabbrev ~loc t abbrev ctx in
+       fold ctx ((t, Syntax.TydefAbbreviation abbrev) :: ty_defs) lst
+
+    | (t, Desugared.TydefDatatype cnstrs) :: lst ->
+       let cnstrs = datatype cnstrs in
+       let ctx = extend_datatype ~loc t cnstrs ctx in
+       fold ctx ((t, Syntax.TydefDatatype cnstrs) :: ty_defs) lst
+  in
+  fold ctx [] ty_defs
 
 and toplevel ~quiet ctx {Location.it=d'; loc} =
   let ctx, d' =
@@ -942,15 +961,9 @@ and toplevel ~quiet ctx {Location.it=d'; loc} =
        let c, Syntax.{comp_ty=c_ty'; _} = infer_comp ctx c in
        ctx, Syntax.TopComp (c, c_ty')
 
-    | Desugared.TypeAbbreviation (x, ty) ->
-       let ty = expr_ty ty in
-       let ctx = extend_tyabbrev ~loc x ty ctx in
-       ctx, Syntax.TypeAbbreviation (x, ty)
-
-    | Desugared.DatatypeDefinition (x, cnstrs) ->
-       let cnstrs = datatype_definition cnstrs in
-       let ctx = extend_datatype ~loc x cnstrs ctx in
-       ctx, Syntax.DatatypeDefinition (x, cnstrs)
+    | Desugared.TypeDefinition ty_defs ->
+       let ctx, ty_defs = ty_definition ~loc ctx ty_defs in
+       ctx, Syntax.TypeDefinition ty_defs
 
     | Desugared.DeclOperation (op, ty1, ty2) ->
        let ty1 = expr_ty ty1

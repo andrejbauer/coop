@@ -30,7 +30,7 @@
 %token OPERATION
 %token SIGNAL OF
 %token EXTERNAL
-%token TYPE
+%token TYPE AND
 
 (* End of input token *)
 %token EOF
@@ -118,11 +118,8 @@ toplevel_:
   | EXTERNAL x=var_name COLON t=ty EQUAL s=QUOTED_STRING
     { Sugared.External (x, t, s) }
 
-  | TYPE x=var_name EQUAL lst=constructor_clauses
-    { Sugared.DatatypeDefinition (x, lst) }
-
-  | TYPE x=var_name EQUAL t=ty
-    { Sugared.TypeAbbreviation (x, t) }
+  | TYPE lst=separated_list(AND, ty_definition)
+    { Sugared.TypeDefinition (lst) }
 
 
 (* Main syntax tree *)
@@ -361,6 +358,13 @@ simple_ty_:
 
   | LPAREN t=ty_ RPAREN
     { t }
+
+ty_definition:
+  | x=var_name EQUAL t=ty
+    { (x, Sugared.TydefAbbreviation t) }
+
+  | x=var_name EQUAL lst=constructor_clauses
+    { (x, Sugared.TydefDatatype lst) }
 
 constructor_clauses:
   | BAR? lst=separated_nonempty_list(BAR, constructor_clause)

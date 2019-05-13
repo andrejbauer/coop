@@ -23,7 +23,9 @@ and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
 and comodel_ty = Name.Set.t * expr_ty * signature
 
 (** The body of a datatype definition *)
-type ty_definition = (Name.t * expr_ty option) list
+type ty_definition =
+  | TydefAbbreviation of expr_ty
+  | TydefDatatype of (Name.t * expr_ty option) list
 
 (** Patterns *)
 type pattern =
@@ -70,8 +72,7 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopComp of comp * expr_ty
-  | TypeAbbreviation of Name.t * expr_ty
-  | DatatypeDefinition of Name.t * ty_definition
+  | TypeDefinition of (Name.t * ty_definition) list
   | DeclOperation of Name.t * expr_ty * expr_ty
   | DeclSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string
@@ -151,7 +152,7 @@ and print_signature {sig_ops; sig_sgs} ppf =
   Format.fprintf ppf "{%t}"
     (Print.sequence (Name.print ~parentheses:true) "," lst)
 
-let print_ty_definition lst ppf =
+let print_ty_definition ty_def ppf =
   let print_clause (cnstr, topt) ppf =
     match topt with
     | None ->
@@ -161,5 +162,14 @@ let print_ty_definition lst ppf =
          (Name.print cnstr)
          (print_expr_ty ~max_level:Level.product t)
   in
-  Format.fprintf ppf "@[<hov>%t@]"
-    (Print.sequence print_clause " |" lst)
+  match ty_def with
+
+  | (t, TydefAbbreviation abbrev) ->
+     Format.fprintf ppf "@[<hov>%t@ =@ %t@]"
+                    (Name.print t)
+                    (print_expr_ty abbrev)
+
+  | (t, TydefDatatype data) ->
+     Format.fprintf ppf "@[<hov>%t@ =@ %t@]"
+                    (Name.print t)
+                    (Print.sequence print_clause " |" data)

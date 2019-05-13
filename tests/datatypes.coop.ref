@@ -1,0 +1,4 @@
+type joker = Pun of batman | Joke of robin and
+robin = int × int and
+batman = Batman of joker | Robin of robin
+val catwoman : batman = Batman (Pun (Robin (2, 2)))

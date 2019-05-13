@@ -25,19 +25,19 @@ let rec print ?max_level v ppf =
   | Boolean b -> Format.fprintf ppf "%b" b
 
   | Constructor (Name.Ident (_, Name.Prefix) as x, Some (Tuple [e])) ->
-     Print.print ~at_level:Level.prefix ppf "%t@ %t"
+     Print.print ?max_level ~at_level:Level.prefix ppf "%t@ %t"
        (Name.print ~parentheses:false x)
        (print ~max_level:Level.prefix_arg e)
 
   | Constructor (Name.Ident (_, Name.Infix fixity) as x, Some (Tuple [e1; e2])) ->
      let lvl, lvl_left, lvl_right = Level.infix fixity in
-     Print.print ~at_level:lvl ppf "%t@ %t@ %t"
+     Print.print ?max_level ~at_level:lvl ppf "%t@ %t@ %t"
        (print ~max_level:lvl_left e1)
        (Name.print ~parentheses:false x)
        (print ~max_level:lvl_right e2)
 
   | Constructor (x, Some v) ->
-     Format.fprintf ppf "%t@ %t"
+     Print.print ?max_level ~at_level:Level.constr ppf "%t@ %t"
        (Name.print ~parentheses:true x)
        (print ~max_level:Level.constr_arg v)
 

@@ -1,0 +1,7 @@
+type batman = Batman of joker | Robin of robin
+
+and robin = int * int
+
+and joker = Pun of batman | Joke of robin
+
+let catwoman = Batman (Pun (Robin (2, 2)))

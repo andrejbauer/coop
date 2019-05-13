@@ -25,7 +25,9 @@ and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
 and comodel_ty = Name.Set.t * expr_ty * signature
 
 (** The body of a datatype definition *)
-type ty_definition = (Name.t * expr_ty option) list
+type ty_definition =
+  | TydefAbbreviation of expr_ty
+  | TydefDatatype of (Name.t * expr_ty option) list
 
 (** Patterns *)
 type pattern =
@@ -72,8 +74,7 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopComp of comp * expr_ty
-  | TypeAbbreviation of Name.t * expr_ty
-  | DatatypeDefinition of Name.t * ty_definition
+  | TypeDefinition of (Name.t * ty_definition) list
   | DeclOperation of Name.t * expr_ty * expr_ty
   | DeclSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string
@@ -103,4 +104,4 @@ val print_expr_ty : ?max_level:Level.t -> expr_ty -> Format.formatter -> unit
 val print_comp_ty : ?max_level:Level.t -> comp_ty -> Format.formatter -> unit
 
 (** Print the body of a type definition *)
-val print_ty_definition : ty_definition -> Format.formatter -> unit
+val print_ty_definition : Name.t * ty_definition -> Format.formatter -> unit
