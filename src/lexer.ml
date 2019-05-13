@@ -19,6 +19,7 @@ let reserved = [
   ("match", Parser.MATCH) ;
   ("of", Parser.OF) ;
   ("operation", Parser.OPERATION) ;
+  ("rec", Parser.REC) ;
   ("signal", Parser.SIGNAL);
   ("then", Parser.THEN) ;
   ("true", Parser.TRUE) ;

@@ -40,6 +40,7 @@ and term' =
   | Lambda of binder list * term
   | Apply of term * term
   | Let of pattern * term * term
+  | LetRec of (Name.t * binder list * ty * term) list * term
   | Sequence of term * term
   | LetFun of Name.t * binder list * term * term
   | Ascribe of term * ty
@@ -60,6 +61,7 @@ and toplevel' =
   | TopLoad of string
   | TopLet of pattern * term
   | TopLetFun of Name.t * binder list * term
+  | TopLetRec of (Name.t * binder list * ty * term) list
   | TopComp of term
   | TypeAlias of Name.t * ty
   | Datatype of (Name.t * datatype) list

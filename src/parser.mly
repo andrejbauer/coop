@@ -19,7 +19,7 @@
 %token FALSE TRUE IF THEN ELSE
 %token FUN
 %token COMODEL
-%token LET IN
+%token LET REC IN
 %token MATCH WITH BAR END
 %token USING FINALLY VAL
 
@@ -109,6 +109,9 @@ toplevel_:
   | LET f=var_name a=binder+ EQUAL e=term
     { Sugared.TopLetFun (f, a, e) }
 
+  | LET REC fs=separated_list(AND, recursive_fun)
+    { Sugared.TopLetRec fs }
+
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
     { Sugared.DeclOperation (op, t1, t2) }
 
@@ -142,6 +145,9 @@ term_:
 
   | LET f=var_name a=binder+ EQUAL c1=infix_term IN c2=term
     { Sugared.LetFun (f, a, c1, c2) }
+
+  | LET REC fs=separated_list(AND, recursive_fun) IN c2=term
+    { Sugared.LetRec (fs, c2) }
 
   | e1=infix_term SEMI e2=term
     { Sugared.Sequence (e1, e2) }
@@ -272,6 +278,10 @@ binder:
 
   | LPAREN p=pattern COLON t=ty RPAREN
     { (p, Some t) }
+
+recursive_fun:
+  | f=var_name a=binder+ COLON t=ty EQUAL c=term
+    { (f, a, t, c) }
 
 match_binder:
   | p=pattern
