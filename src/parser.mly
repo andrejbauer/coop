@@ -36,6 +36,7 @@
 %token EOF
 
 (* Precedence and fixity of infix operators *)
+
 %nonassoc INFIXOP0
 %left     INFIXOP1 EQUAL
 %right    INFIXOP2 AT
@@ -109,7 +110,7 @@ toplevel_:
   | LET f=var_name a=binder+ EQUAL e=term
     { Sugared.TopLetFun (f, a, e) }
 
-  | LET REC fs=separated_list(AND, recursive_fun)
+  | LET REC fs=separated_nonempty_list(AND, recursive_clause)
     { Sugared.TopLetRec fs }
 
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
@@ -146,7 +147,7 @@ term_:
   | LET f=var_name a=binder+ EQUAL c1=infix_term IN c2=term
     { Sugared.LetFun (f, a, c1, c2) }
 
-  | LET REC fs=separated_list(AND, recursive_fun) IN c2=term
+  | LET REC fs=separated_nonempty_list(AND, recursive_clause) IN c2=term
     { Sugared.LetRec (fs, c2) }
 
   | e1=infix_term SEMI e2=term
@@ -279,7 +280,7 @@ binder:
   | LPAREN p=pattern COLON t=ty RPAREN
     { (p, Some t) }
 
-recursive_fun:
+recursive_clause:
   | f=var_name a=binder+ COLON t=ty EQUAL c=term
     { (f, a, t, c) }
 
