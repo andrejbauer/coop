@@ -339,6 +339,28 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
        and ws2, e2 = expr ctx e2 in
        (ws1 @ ws2, locate (Desugared.ComodelTimes (e1, e2)))
 
+    | Sugared.ComodelRename (e, rnm) ->
+       let ws, e = expr ctx e in
+       let rnm =
+         List.map
+           (fun (x, y) ->
+             let x =
+               match lookup_ident x ctx with
+               | None -> error ~loc (UnknownIdentifier x)
+               | Some (Variable | Signal)-> error ~loc (OperationExpected x)
+               | Some Operation -> x
+             in
+             let y =
+               match lookup_ident y ctx with
+               | None -> error ~loc (UnknownIdentifier x)
+               | Some (Variable | Signal)-> error ~loc (OperationExpected x)
+               | Some Operation -> y
+             in
+             (x, y))
+           rnm
+       in
+       (ws, locate (Desugared.ComodelRename (e, rnm)))
+
     | (Sugared.Match _ | Sugared.If _ | Sugared.Apply _ | Sugared.Let _ |
        Sugared.LetRec _ | Sugared.Sequence _ | Sugared.LetFun _ | Sugared.Using _) ->
        let c = comp ctx e in
@@ -408,7 +430,7 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
     (* keep this case in front so that constructors are handled ocrrectly *)
     | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True |
        Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _ |
-       Sugared.ComodelPlus _ | Sugared.ComodelTimes _ |
+       Sugared.ComodelPlus _ | Sugared.ComodelTimes _ | Sugared.ComodelRename _ |
        Sugared.Apply ({Location.it=Sugared.Constructor _;_}, _)) ->
        let ws, e = expr ctx c in
        let return_e = locate (Desugared.Val e) in

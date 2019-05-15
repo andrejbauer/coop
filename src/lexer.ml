@@ -3,6 +3,7 @@
 (** Reserved words. *)
 let reserved = [
   ("and", Parser.AND) ;
+  ("as", Parser.AS) ;
   ("bool", Parser.BOOL) ;
   ("comodel", Parser.COMODEL) ;
   ("else", Parser.ELSE) ;

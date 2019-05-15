@@ -31,6 +31,7 @@ struct
   let subset = S.subset
   let union = S.union
   let inter = S.inter
+  let fold = S.fold
 
   let diff s1 s2 = S.diff s1 s2
 
@@ -51,6 +52,7 @@ struct
   let add = M.add
   let find = M.find_opt
   let merge = M.merge
+  let fold = M.fold
 end
 
 (** Create a fresh anonymous name. *)

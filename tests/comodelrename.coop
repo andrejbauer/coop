@@ -1,0 +1,17 @@
+operation cow : unit -> int
+operation bull : unit -> int
+
+operation dog : bool -> bool
+operation cat : bool -> bool
+
+let c =
+  comodel unit with
+  | cow () @ () -> (42, ())
+  | dog b @ () -> (true, ())
+  end
+
+let d = c with {dog as cat}
+
+let e = c with {dog as cat, cow as bull}
+
+let f = e with {cat as dog}

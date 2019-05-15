@@ -45,6 +45,8 @@ type error =
   | DuplicateOperation of Name.t
   | DuplicateSignal of Name.t
   | UnhandledOperationsSignals of Name.Set.t * Name.Set.t
+  | RenamingMismatch of Name.t * Name.t
+  | RenamingDomain of Name.t
 
 exception Error of error Location.located
 
@@ -158,6 +160,15 @@ let print_error err ppf =
         | [], _::_ -> "signals"
         | _::_, _::_ -> "operations and signals")
        (Print.sequence (Name.print ~parentheses:true) "," (ops @ sgs))
+
+  | RenamingMismatch (op, op') ->
+     Format.fprintf ppf "cannot rename %t to %t, they have different types"
+       (Name.print op)
+       (Name.print op')
+
+  | RenamingDomain op ->
+     Format.fprintf ppf "operation %t is not there and cannot be renamed"
+       (Name.print op)
 
 (** Extend the context with the type of deBruijn index 0 *)
 let extend_ident x ty ctx =
@@ -671,6 +682,33 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
      let sgn = join_signature sgn1 sgn2 in
      locate (Syntax.ComodelTimes (cmdl1, cmdl2)), Syntax.ComodelTy (ops, w_ty, sgn)
 
+  | Desugared.ComodelRename (e, rnm) ->
+     let e, (ops, w_ty, sgn) = infer_comodel ctx e in
+     begin
+       match List.find_opt (fun (op, _) -> not (Name.Set.mem op ops)) rnm with
+       | None -> ()
+       | Some (op, _) -> error ~loc (RenamingDomain op)
+     end ;
+     let ops', rnm' =
+       Name.Set.fold
+         (fun op (ops', rnm') ->
+           let (ty1, ty2) = lookup_operation ~loc op ctx in
+           let op' =
+             match List.assoc_opt op rnm with
+             | None -> op
+             | Some op' ->
+                let (ty1', ty2') = lookup_operation ~loc op' ctx in
+                if not (expr_eqtype ~loc ctx ty1 ty1' && expr_eqtype ~loc ctx ty2 ty2') then
+                  error ~loc (RenamingMismatch (op, op')) ;
+                op'
+           in
+           if Name.Set.mem op' ops' then error ~loc (DuplicateOperation op') ;
+           Name.Set.add op' ops', Name.Map.add op op' rnm')
+         ops
+         (Name.Set.empty, Name.Map.empty)
+     in
+     locate (Syntax.ComodelRename (e, rnm')), Syntax.ComodelTy (ops', w_ty, sgn)
+
 
 (** [infer_comp ctx c] infers the type [ty] of a computation [c]. It returns
     the processed computation [c] and its type [ty].  *)
@@ -905,7 +943,7 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
 
   | (Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
      Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Comodel _ |
-     Desugared.ComodelPlus _ | Desugared.ComodelTimes _) ->
+     Desugared.ComodelPlus _ | Desugared.ComodelTimes _ | Desugared.ComodelRename _) ->
      let e, ty' = infer_expr ctx e in
      if expr_subty ~loc ctx ty' ty
      then

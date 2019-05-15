@@ -42,6 +42,7 @@ and expr' =
   | Lambda of binder * comp
   | Comodel of ty * comodel_clause list
   | ComodelPlus of expr * expr
+  | ComodelRename of expr * (Name.t * Name.t) list
   | ComodelTimes of expr * expr
 
 (** Computations *)

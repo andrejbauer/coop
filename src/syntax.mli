@@ -51,6 +51,7 @@ and expr' =
   | Comodel of (Name.t * pattern * pattern * comp) list
   | ComodelPlus of expr * expr
   | ComodelTimes of expr * expr
+  | ComodelRename of expr * Name.t Name.Map.t
 
 (** Computations *)
 and comp = comp' Location.located

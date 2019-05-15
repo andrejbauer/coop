@@ -47,6 +47,7 @@ and term' =
   | Comodel of ty * comodel_clause list
   | ComodelPlus of term * term
   | ComodelTimes of term * term
+  | ComodelRename of term * (Name.t * Name.t) list
   | Using of term * term * term * finally_clause list
 
 and binder = pattern * ty option

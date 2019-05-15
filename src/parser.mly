@@ -18,7 +18,7 @@
 %token <int> NUMERAL
 %token FALSE TRUE IF THEN ELSE
 %token FUN
-%token COMODEL OPLUS OTIMES
+%token COMODEL OPLUS OTIMES AS
 %token LET REC IN
 %token MATCH WITH BAR END
 %token USING FINALLY VAL
@@ -164,6 +164,9 @@ term_:
 
   | USING cmdl=infix_term AT w=infix_term IN c=term FINALLY fin=finally END
     { Sugared.Using (cmdl, w, c, fin) }
+
+  | cmdl=infix_term WITH LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
+    { Sugared.ComodelRename (cmdl, lst) }
 
 infix_term: mark_location(infix_term_) { $1 }
 infix_term_:
@@ -401,6 +404,10 @@ constructor_clause:
 signature:
   | LBRACE lst=separated_list(COMMA, var_name) RBRACE
     { lst }
+
+op_renaming:
+  | op1=var_name AS op2=var_name
+    { (op1, op2) }
 
 mark_location(X):
   x=X

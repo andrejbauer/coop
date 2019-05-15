@@ -23,6 +23,7 @@ sig
   val union : t -> t -> t
   val inter : t -> t -> t
   val diff : t -> t -> t
+  val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
 end
 
 (** A map from identifiers. *)
@@ -34,6 +35,7 @@ sig
   val add : key -> 'a -> 'a t -> 'a t
   val find : key -> 'a t -> 'a option
   val merge : (key -> 'a option -> 'a option -> 'a option) -> 'a t -> 'a t -> 'a t
+  val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 end
 
 (** Are the given identifiers equal? *)

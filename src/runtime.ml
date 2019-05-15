@@ -5,6 +5,7 @@ type error =
   | UnhandledOperation of Name.t
   | UnhandledSignal of Name.t
   | UnknownExternal of string
+  | IllegalRenaming of Name.t
   | FunctionExpected
   | ComodelExpected
   | ComodelDoubleOperation of Name.t
@@ -29,6 +30,9 @@ let print_error err ppf =
 
   | UnknownExternal s ->
      Format.fprintf ppf "unknown external %s" s
+
+  | IllegalRenaming op ->
+     Format.fprintf ppf "illegal comodel renaming %t, please report" (Name.print op)
 
   | FunctionExpected ->
      Format.fprintf ppf "function expected, please report"
@@ -257,6 +261,17 @@ let rec eval_expr env {Location.it=e'; loc} =
      in
      Value.Comodel cmdl
 
+  | Syntax.ComodelRename (e, rnm) ->
+     let cmdl = as_comodel ~loc (eval_expr env e) in
+     let cmdl =
+       Name.Map.fold
+         (fun op f cmdl ->
+           match Name.Map.find op rnm with
+           | None -> error ~loc (IllegalRenaming op)
+           | Some op' -> Name.Map.add op' f cmdl)
+         cmdl Name.Map.empty
+     in
+     Value.Comodel cmdl
 
 and eval_comp env {Location.it=c'; loc} =
   match c' with
