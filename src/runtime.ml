@@ -166,11 +166,14 @@ let as_comodel ~loc = function
     | Value.Closure _ -> error ~loc ComodelExpected
 
 (** The result monad *)
+
 let rec bind r k =
   match r with
   | Value.Val v -> k v
   | Value.Operation (op, u, l) -> Value.Operation (op, u, fun x -> let r = l x in bind r k)
   | Value.Signal _ as v -> v
+
+let ( >>= ) = bind
 
 (*** Evaluation ***)
 
@@ -207,9 +210,9 @@ let rec eval_expr env {Location.it=e'; loc} =
        fun (u, w) ->
        let env = extend_pattern ~loc px u env in
        let env = extend_pattern ~loc pw w env in
-       let r = eval_comp env c in
-       let (v, w) = as_pair ~loc (as_value ~loc r) in
-       (v, w)
+       eval_comp env c >>= fun u ->
+       let (v, w) = as_pair ~loc u in
+       Value.Val (v, w)
      in
      let cmdl =
        List.fold_left
@@ -237,15 +240,15 @@ let rec eval_expr env {Location.it=e'; loc} =
   | Syntax.ComodelTimes (e1, e2) ->
      let wrap_fst f (v, w) =
          let (w1, w2) = as_pair ~loc w in
-         let (v', w1') = f (v, w1) in
+         f (v, w1) >>= fun (v', w1') ->
          let w' = Value.Tuple [w1'; w2] in
-         (v', w')
+         Value.Val (v', w')
      in
      let wrap_snd f (v, w) =
          let (w1, w2) = as_pair ~loc w in
-         let (v', w2') = f (v, w2) in
+         f (v, w2) >>= fun (v', w2') ->
          let w' = Value.Tuple [w1; w2'] in
-         (v', w')
+         Value.Val (v', w')
      in
      let cmdl1 = as_comodel ~loc (eval_expr env e1)
      and cmdl2 = as_comodel ~loc (eval_expr env e2) in
@@ -292,9 +295,8 @@ and eval_comp env {Location.it=c'; loc} =
      f v2
 
   | Syntax.Let (p, c1, c2) ->
-     let r = eval_comp env c1 in
-     let k v = eval_comp (extend_pattern ~loc p v env) c2 in
-     bind r k
+     eval_comp env c1 >>= fun v ->
+     eval_comp (extend_pattern ~loc p v env) c2
 
   | Syntax.LetRec (fs, c) ->
      let env = extend_rec ~loc fs env in
@@ -311,8 +313,8 @@ and eval_comp env {Location.it=c'; loc} =
   | Syntax.Using (cmdl, w, c, fin) ->
      let w = eval_expr env w in
      let cmdl = as_comodel ~loc (eval_expr env cmdl)
-     and r = eval_comp env c
-     and fin = eval_finally ~loc env fin in
+     and fin = eval_finally ~loc env fin
+     and r = eval_comp env c in
      using ~loc env cmdl w r fin
 
 and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_signals} =
@@ -355,8 +357,21 @@ and using ~loc env cmdl w r (fin_val, fin_signals) =
          match Name.Map.find op cmdl with
          | None -> error ~loc (UnhandledOperation op)
          | Some coop ->
-            let (v, w') = coop (u, w) in
-            tensor w' (k v)
+            let rec let_unless = function
+              | Value.Val _ as v -> v
+
+              | Value.Operation (op, u, k) ->
+                 Value.Operation (op, u, (fun v -> let_unless (k v)))
+
+              | Value.Signal (sgl, v) ->
+                 begin
+                   match Name.Map.find sgl fin_signals with
+                   | None -> error ~loc (UnhandledSignal sgl)
+                   | Some f -> f (v, w)
+                 end
+            in
+            let r = coop (u, w) >>= fun (v, w') -> tensor w' (k v) in
+            let_unless r
        end
 
     | Value.Signal (sgl, v) ->

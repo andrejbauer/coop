@@ -1,0 +1,32 @@
+operation get : unit -> int
+operation put : int -> unit
+operation tick : unit -> int
+
+let state =
+  comodel int with
+  | get t @ w -> (w, w)
+  | put x @ w -> ((), x)
+  end
+
+(* A ticker which uses state to tick *)
+let ticker =
+  comodel unit with
+  | tick () @ () ->
+     let x = get () in
+     put (x + 1) ;
+     (x, ())
+  end
+
+let demo =
+  using state @ 5 in
+    using ticker @ () in
+      let a = tick () in
+      let b = tick () in
+      let c = tick () in
+      (a, b, c)
+    finally
+      val v @ _ -> v
+    end
+  finally
+    val v @ w -> (v, w)
+  end

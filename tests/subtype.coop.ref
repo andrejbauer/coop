@@ -8,6 +8,4 @@ val c : {op} @ int ⇒ {croak} = <comodel>
 val demo : int → (int × int) × int ! {die} = <fun>
 - : (int × int) × int = ((1001, 1003), 5)
 - : int = 23
-Runtime error at file "./subtype.coop", line 13, charaters 6-44:
-terminated by signal croak
-
+- : (int × int) × int = ((1, -1), 1)

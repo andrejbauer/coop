@@ -1,13 +1,35 @@
+(** Standard state. *)
+
+(** The operations for accessing and modifyng state *)
 operation get : unit -> int
 operation put : int -> unit
 
+(** Another set of operations, used when we combined several states *)
+operation get' : unit -> int
+operation put' : int -> unit
+
+(** A signal used for the comodel that only allows positive integers *)
+signal negative of int
+
+(** Basic state *)
 let state =
   comodel int with
-  | get t @ w -> (w, w)
-  | put x @ w -> ((), x)
+  | get _ @ w -> (w, w)
+  | put w @ _ -> ((), w)
   end
 
-let demo =
+(** A copy of state with renamed operations *)
+let state' = state with {get as get', put as put'}
+
+(** State that only allows positive integers to be stored *)
+let positive_state =
+  comodel int with
+  | get _ @ w -> (w, w)
+  | put w @ _ -> if w < 0 then negative w else ((), w)
+  end
+
+(** This is how we use ordinary state, initialized with 1 *)
+let demo1 =
   using state @ 1 in
     let a = get () in
     put 2 ;
@@ -15,5 +37,33 @@ let demo =
     put 3 ;
     (a, b)
   finally
-    val x @ w -> (x, w)
+    val x @ _ -> x
+  end
+
+(* Combine two copies of state, one of which only allows positive values. *)
+let demo2 =
+  using state' ⊗ positive_state @ (0, 2) in
+    let a = get' () in
+    put 3 ;
+    put' (a + 10) ;
+    let b = get' () in
+    (a, b)
+  finally
+  | val x @ w -> (x, w)
+  | negative k @ w -> ((0, k), w)
+  end
+
+(* Combine two copies of state, one of which only allows positive values,
+   trigger a signal. *)
+let demo2 =
+  using state' ⊗ positive_state @ (0, 2) in
+    let a = get' () in
+    put 3 ;
+    put' (a + 10) ;
+    let b = get' () in
+    put (-1) ;
+    (a, b)
+  finally
+  | val x @ w -> (x, w)
+  | negative k @ w -> ((0, k), w)
   end

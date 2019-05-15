@@ -3,19 +3,17 @@ type t =
   | Boolean of bool
   | Constructor of Name.t * t option
   | Tuple of t list
-  | Closure of closure
+  | Closure of (t -> t result)
   | Comodel of cooperation Name.Map.t
 
 and world = t
 
-and result =
-  | Val of t
-  | Operation of Name.t * t * closure
+and 'a result =
+  | Val of 'a
+  | Operation of Name.t * t * (t -> 'a result)
   | Signal of Name.t * t
 
-and closure = t -> result
-
-and cooperation = t * world -> t * world
+and cooperation = t * world -> (t * world) result
 
 let rec print ?max_level v ppf =
   match v with
