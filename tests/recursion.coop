@@ -1,0 +1,41 @@
+let rec fact (n : int) : int =
+  if n <= 1 then 1 else n * fact (n - 1)
+
+let demo1 = fact 10
+
+type list = Nil | Cons of int * list
+
+let demo2 =
+  let rec range (a : int) (b : int) : list =
+    if a < b then Cons (a, range (a + 1) b) else Nil
+  in
+  range 10 20
+
+let not (b : bool) =
+  match b with
+  | false -> true 
+  | true -> false    
+  end
+
+let rec f (x : int) : int =
+  if x < 0 then 1 else 3 + g (x - 2)
+and g (y : int) : int =
+  2 * f (y - 1)
+
+let demo3 = g 5
+
+let rec even (n : int) : bool =
+  match n with
+  | 0 -> true
+  | 1 -> false
+  | _ -> not (odd (n - 1))
+  end
+
+and odd (n : int) : bool =
+  match n with
+  | 0 -> false
+  | 1 -> true
+  | _ -> not (even (n - 1))
+  end
+
+let demo6 = (even 17, odd 17)

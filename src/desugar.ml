@@ -321,8 +321,8 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
        let ws, lst = expr_tuple ctx lst in
        (ws, locate (Desugared.Tuple lst))
 
-    | Sugared.Lambda (a, c) ->
-       ([], abstract ~loc ctx a c)
+    | Sugared.Lambda (pxs, c) ->
+       ([], abstract ~loc ctx pxs c)
 
     | Sugared.Comodel (t, lst) ->
        let t = ty ctx t in
@@ -345,19 +345,27 @@ and expr_tuple ctx es =
   in
   fold es
 
-and abstract ~loc ctx a c =
+(** Abstract 0 or more times to get a computation *)
+and abstract0 ~loc ctx pxs c =
   let locate x = Location.locate ~loc x in
-  let ctx, lst = binders ctx a in
-  let c = comp ctx c in
-  let rec fold = function
-    | [] -> assert false
-    | [(x, topt)] -> locate (Desugared.Lambda ((x, topt), c))
-    | (x, topt) :: lst ->
-       let e = fold lst in
-       let c = locate (Desugared.Val e) in
-       locate (Desugared.Lambda ((x, topt), c))
+  let rec fold ctx = function
+    | [] -> comp ctx c
+    | px :: pxs ->
+       let ctx, px = binder ctx px in
+       let c = fold ctx pxs in
+       locate (Desugared.Val (locate (Desugared.Lambda (px, c))))
   in
-  fold lst
+  fold ctx pxs
+
+and abstract ~loc ctx pxs c =
+  match pxs with
+  | [] -> assert false
+
+  | px :: pxs ->
+     let ctx, px = binder ctx px in
+     let c = abstract0 ~loc ctx pxs c in
+     Location.locate ~loc (Desugared.Lambda (px, c))
+
 
 and comodel_clauses ~loc ctx lst = List.map (comodel_clause ~loc ctx) lst
 
@@ -447,7 +455,7 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        locate (Desugared.Let (p, c1, c2))
 
     | Sugared.LetRec (lst, c) ->
-       let ctx, lst, _ = rec_clauses ~loc ctx lst in
+       let ctx, lst = rec_clauses ~loc ctx lst in
        let c = comp ctx c in
        locate (Desugared.LetRec (lst, c))
 
@@ -457,8 +465,8 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let p = locate Desugared.PattAnonymous in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.LetFun (f, a, c1, c2) ->
-       let e = abstract ~loc ctx a c1 in
+    | Sugared.LetFun (f, pxs, c1, c2) ->
+       let e = abstract ~loc ctx pxs c1 in
        let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Val e) in
        let ctx = extend_ident f Variable ctx in
        let c2 = comp ctx c2 in
@@ -487,27 +495,25 @@ and rec_clauses ~loc ctx lst =
       ctx
       lst
   in
-  let rec fold clauses fts = function
-    | [] -> ctx, List.rev clauses, List.rev fts
+  let rec fold clauses = function
+    | [] -> ctx, List.rev clauses
 
     | (f, (p, u), pus, s, c) :: lst ->
-       let c =
-         Location.locate ~loc:c.Location.loc
-           (Desugared.Val
-              (abstract ~loc ctx (List.map (fun (p, _) -> (p, None)) ((p, u) :: pus)) c))
-       in
+       let u = ty ctx u in
        let t =
          List.fold_right
          (fun (_, u) t ->
            let u = ty ctx u in
            Location.locate ~loc:t.Location.loc (Desugared.Arrow (u, t)))
-         ((p, u) :: pus)
+         pus
          (ty ctx s)
        in
-       let _, p = pattern ctx p in
-       fold ((f, t, p, c) :: clauses) ((f, t) :: fts) lst
+       let ctx, p = pattern ctx p in
+       let c = abstract0 ~loc ctx (List.map (fun (p, _) -> (p, None)) pus) c
+       in
+       fold ((f, t, p, u, c) :: clauses) lst
   in
-  fold [] [] lst
+  fold [] lst
 
 and finally ~loc ctx lst =
   let rec fold fin_val fin_signals = function
@@ -549,16 +555,6 @@ and binder ctx (p, topt) =
   let ctx, p = pattern ctx p in
   let topt = ty_opt ctx topt in
   ctx, (p, topt)
-
-(** Desugar a lambda abstraction. *)
-and binders ctx pts =
-  let rec fold ctx pts = function
-    | [] -> ctx, List.rev pts
-    | ptopt :: lst ->
-       let ctx, ptopt = binder ctx ptopt in
-       fold ctx (ptopt :: pts) lst
-  in
-  fold ctx [] pts
 
 (** Desugar the clauses of a datatype definition. *)
 let datatype ~loc ctx lst =
@@ -620,8 +616,8 @@ let toplevel' ctx = function
        ctx, Desugared.TopLet (p, c)
 
     | Sugared.TopLetRec lst ->
-       let ctx, lst, fts = rec_clauses ~loc ctx lst in
-       ctx, Desugared.TopLetRec (lst, fts)
+       let ctx, lst = rec_clauses ~loc ctx lst in
+       ctx, Desugared.TopLetRec lst
 
     | Sugared.TopComp c ->
        let c = comp ctx c in

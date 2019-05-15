@@ -59,7 +59,7 @@ and binder = pattern * ty option
 
 and comodel_clause = Name.t * binder * binder * comp
 
-and rec_clause = Name.t * ty * pattern * comp
+and rec_clause = Name.t * ty * pattern * ty * comp
 
 and finally = {
     fin_val : binder * binder * comp ;
@@ -71,7 +71,7 @@ type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * comp
-  | TopLetRec of rec_clause list * (Name.t * ty) list
+  | TopLetRec of rec_clause list
   | TopComp of comp
   | TypeAlias of Name.t * ty
   | Datatype of (Name.t * datatype) list

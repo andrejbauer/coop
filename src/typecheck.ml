@@ -658,9 +658,9 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      locate (Syntax.Let (p, c1, c2)), c2_ty
 
   | Desugared.LetRec (fs, c) ->
-     let ctx, fs = infer_rec ~loc ctx fs in
+     let ctx, pcs, fts = infer_rec ~loc ctx fs in
      let c, c_ty = infer_comp ctx c in
-     locate (Syntax.LetRec (fs, c)), c_ty
+     locate (Syntax.LetRec (pcs, c)), c_ty
 
   | Desugared.Match (e, lst) ->
      let e, e_ty = infer_expr ctx e in
@@ -703,22 +703,23 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
 and infer_rec ~loc ctx fs =
   let ctx, fts =
     List.fold_left
-      (fun (ctx, fts) (f, (_, s), u, _) ->
-        let t = Syntax.Arrow (s, u) in
-        extend_ident f t ctx, (f, t) :: fts)
+      (fun (ctx, fts) (f, t, _, u, _) ->
+        let t = comp_ty t
+        and u = expr_ty u in
+        extend_ident f (Syntax.Arrow (u, t)) ctx,
+        (f, u, t) :: fts)
       (ctx, [])
       fs
   in
-  let fts = List.rev fts in
-  let fs =
-    List.map
-    (fun (_, (px, s), u, c) ->
-      let ctx, px = extend_binder ctx px s in
-      let c = check_comp ctx c u in
-      px, c)
-    fs
+  let pcs =
+    List.map2
+    (fun (_, _, p, _, c) (_, u, t) ->
+      let ctx, p = extend_pattern ~loc:p.Location.loc ctx p u in
+      let c = check_comp ctx c t in
+      (p, c))
+    fs fts
   in
-  ctx, fs
+  ctx, pcs, fts
 
 and infer_match_clauses ~loc ctx patt_ty lst =
   match lst with
@@ -925,6 +926,11 @@ and check_comp ctx ({Location.it=c'; loc} as c) check_ty =
      let c2 = check_comp ctx c2 check_ty in
      locate (Syntax.Let (p, c1, c2))
 
+  | Desugared.LetRec (fs, c) ->
+     let ctx, pcs, fts = infer_rec ~loc ctx fs in
+     let c = check_comp ctx c check_ty in
+     locate (Syntax.LetRec (pcs, c))
+
   | (Desugared.Apply _ | Desugared.AscribeComp _ | Desugared.Operation _ |
      Desugared.Signal _ | Desugared.Using _) ->
      let c, c_ty = infer_comp ctx c in
@@ -976,6 +982,11 @@ and toplevel ~quiet ctx {Location.it=d'; loc} =
        check_dirt ~loc c_ty Syntax.empty_signature ;
        let ctx, p, xts = top_extend_pattern ~loc ctx p c_ty' in
        ctx, Syntax.TopLet (p, xts, c)
+
+    | Desugared.TopLetRec fs ->
+       let ctx, pcs, fts = infer_rec ~loc ctx fs in
+       let fts = List.map (fun (f, u, t) -> (f, Syntax.Arrow (u, t))) fts in
+       ctx, Syntax.TopLetRec (pcs, fts)
 
     | Desugared.TopComp c ->
        let c, Syntax.{comp_ty=c_ty'; _} = infer_comp ctx c in
