@@ -67,35 +67,35 @@ let match_pattern p v =
     | Syntax.PattVar, _ ->
        Some (v :: us)
 
-  | Syntax.PattNumeral m, Value.Numeral n ->
-     if m = n then Some us else None
+    | Syntax.PattNumeral m, Value.Numeral n ->
+       if m = n then Some us else None
 
-  | Syntax.PattBoolean b, Value.Boolean b' ->
-     if b = b' then Some us else None
+    | Syntax.PattBoolean b, Value.Boolean b' ->
+       if b = b' then Some us else None
 
-  | Syntax.PattConstructor (cnstr, popt), Value.Constructor (cnstr', vopt) ->
-     begin
-     if not (Name.equal cnstr cnstr') then
+    | Syntax.PattConstructor (cnstr, popt), Value.Constructor (cnstr', vopt) ->
+       begin
+         if not (Name.equal cnstr cnstr') then
+           None
+         else
+           match popt, vopt with
+           | None, None -> Some us
+           | Some p, Some v -> fold us p v
+           | Some _, None | None, Some _ -> None
+       end
+
+    | Syntax.PattTuple ps, Value.Tuple vs ->
+       fold_tuple us ps vs
+
+    | _, Value.Closure _ -> None
+
+    | _, Value.Comodel _ -> None
+
+    | Syntax.PattNumeral _, (Value.Boolean _ | Value.Constructor _ | Value.Tuple _)
+      | Syntax.PattBoolean _, (Value.Numeral _ | Value.Constructor _ | Value.Tuple _)
+      | Syntax.PattConstructor _, (Value.Boolean _ | Value.Numeral _ | Value.Tuple _)
+      | Syntax.PattTuple _, (Value.Numeral _ | Value.Boolean _ | Value.Constructor _) ->
        None
-     else
-       match popt, vopt with
-       | None, None -> Some us
-       | Some p, Some v -> fold us p v
-       | Some _, None | None, Some _ -> None
-     end
-
-  | Syntax.PattTuple ps, Value.Tuple vs ->
-     fold_tuple us ps vs
-
-  | _, Value.Closure _ -> None
-
-  | _, Value.Comodel _ -> None
-
-  | Syntax.PattNumeral _, (Value.Boolean _ | Value.Constructor _ | Value.Tuple _)
-  | Syntax.PattBoolean _, (Value.Numeral _ | Value.Constructor _ | Value.Tuple _)
-  | Syntax.PattConstructor _, (Value.Boolean _ | Value.Numeral _ | Value.Tuple _)
-  | Syntax.PattTuple _, (Value.Numeral _ | Value.Boolean _ | Value.Constructor _) ->
-     None
 
   and fold_tuple us ps vs =
     match ps, vs with
@@ -139,13 +139,13 @@ let match_clauses ~loc env ps v =
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
   | Value.Closure _ | Value.Numeral _ | Value.Boolean _ | Value.Constructor _
-  | Value.Tuple ([] | [_] | _::_::_::_) | Value.Comodel _ ->
+    | Value.Tuple ([] | [_] | _::_::_::_) | Value.Comodel _ ->
      error ~loc PairExpected
 
 let as_closure ~loc = function
   | Value.Closure f -> f
   | Value.Numeral _ | Value.Boolean _ | Value.Constructor _ | Value.Tuple _
-  | Value.Comodel _ -> error ~loc FunctionExpected
+    | Value.Comodel _ -> error ~loc FunctionExpected
 
 let as_value ~loc = function
   | Value.Val v -> v
@@ -155,7 +155,7 @@ let as_value ~loc = function
 let as_comodel ~loc = function
   | Value.Comodel cmdl -> cmdl
   | Value.Numeral _ | Value.Boolean _ | Value.Tuple _ | Value.Constructor _
-  | Value.Closure _ -> error ~loc ComodelExpected
+    | Value.Closure _ -> error ~loc ComodelExpected
 
 (** The result monad *)
 let rec bind r k =
@@ -234,6 +234,10 @@ and eval_comp env {Location.it=c'; loc} =
      let k v = eval_comp (extend_pattern ~loc p v env) c2 in
      bind r k
 
+  | Syntax.LetRec (fs, c) ->
+     let env = extend_rec ~loc fs env in
+     eval_comp env c
+
   | Syntax.Operation (op, u) ->
      let u = eval_expr env u in
      Value.Operation (op, u, (fun v -> Value.Val v))
@@ -267,6 +271,16 @@ and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_si
       fin_signals
   in
   (fin_val, fin_signals)
+
+and extend_rec ~loc fs env =
+  let env' = ref env in
+  let mk_closure (p, c) =
+    Value.Closure (fun v -> eval_comp (extend_pattern ~loc p v !env') c)
+  in
+  let fs = List.map mk_closure fs in
+  let env = extends fs env in
+  env' := env ;
+  env
 
 and using ~loc env cmdl w r (fin_val, fin_signals) =
   let rec tensor w r =
@@ -306,10 +320,21 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
        List.iter2
          (fun (x, ty) v ->
            Format.printf "@[<hov>val %t@ :@ %t@ =@ %t@]@."
-             (Name.print x)
-             (Syntax.print_expr_ty ty)
-             (Value.print v))
+                         (Name.print x)
+                         (Syntax.print_expr_ty ty)
+                         (Value.print v))
          xts vs ;
+     env
+
+  | Syntax.TopLetRec (pcs, fts) ->
+     let env = extend_rec ~loc pcs env in
+     if not quiet then
+       List.iter
+         (fun (f, t) ->
+           Format.printf "@[<hov> val %t@ :@ %t@ =@ <fun>@]@."
+                         (Name.print f)
+                         (Syntax.print_expr_ty t))
+         fts ;
      env
 
   | Syntax.TopComp (c, ty) ->
@@ -317,37 +342,37 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
      let v = as_value ~loc r in
      if not quiet then
        Format.printf "@[<hov>- :@ %t@ =@ %t@]@."
-         (Syntax.print_expr_ty ty)
-         (Value.print v) ;
+                     (Syntax.print_expr_ty ty)
+                     (Value.print v) ;
      env
 
   | Syntax.TypeAlias (t, abbrev) ->
      if not quiet then
        Format.printf "@[<hov>type %t@ =@ %t@]@."
-         (Name.print t)
-         (Syntax.print_expr_ty abbrev) ;
+                     (Name.print t)
+                     (Syntax.print_expr_ty abbrev) ;
      env
 
   | Syntax.Datatype lst ->
      if not quiet then
        Format.printf "@[<v 5>type %t@]@."
-         (Print.sequence (Syntax.print_datatype) " and" lst) ;
+                     (Print.sequence (Syntax.print_datatype) " and" lst) ;
      env
 
   | Syntax.DeclOperation (op, ty1, ty2) ->
      if not quiet then
        Format.printf "@[<hov>operation %t@ :@ %t@ %s@ %t@]@."
-         (Name.print op)
-         (Syntax.print_expr_ty ty1)
-         (Print.char_arrow ())
-         (Syntax.print_expr_ty ty2) ;
+                     (Name.print op)
+                     (Syntax.print_expr_ty ty1)
+                     (Print.char_arrow ())
+                     (Syntax.print_expr_ty ty2) ;
      env
 
-| Syntax.DeclSignal (sgl, t) ->
-   if not quiet then
+  | Syntax.DeclSignal (sgl, t) ->
+     if not quiet then
        Format.printf "@[<hov>signal %t@ of@ %t@]@."
-         (Name.print sgl)
-         (Syntax.print_expr_ty t) ;
+                     (Name.print sgl)
+                     (Syntax.print_expr_ty t) ;
      env
 
 
@@ -359,9 +384,9 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
           let env = extend v env in
           if not quiet then
             Format.printf "@[<hov>external %t@ :@ %t = \"%s\"@]@."
-              (Name.print x)
-              (Syntax.print_expr_ty t)
-              s ;
+                          (Name.print x)
+                          (Syntax.print_expr_ty t)
+                          s ;
           env
      end
 

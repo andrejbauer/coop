@@ -40,7 +40,7 @@ and term' =
   | Lambda of binder list * term
   | Apply of term * term
   | Let of pattern * term * term
-  | LetRec of (Name.t * binder list * ty * term) list * term
+  | LetRec of rec_clause list * term
   | Sequence of term * term
   | LetFun of Name.t * binder list * term * term
   | Ascribe of term * ty
@@ -49,7 +49,11 @@ and term' =
 
 and binder = pattern * ty option
 
+and typed_binder = pattern * ty
+
 and comodel_clause = Name.t * binder * binder * term
+
+and rec_clause = Name.t * typed_binder * typed_binder list * ty * term
 
 and finally_clause =
   | FinVal of binder * binder * term
@@ -61,7 +65,7 @@ and toplevel' =
   | TopLoad of string
   | TopLet of pattern * term
   | TopLetFun of Name.t * binder list * term
-  | TopLetRec of (Name.t * binder list * ty * term) list
+  | TopLetRec of rec_clause list
   | TopComp of term
   | TypeAlias of Name.t * ty
   | Datatype of (Name.t * datatype) list

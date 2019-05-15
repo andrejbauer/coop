@@ -277,12 +277,16 @@ binder:
   | p=simple_pattern
     { (p, None) }
 
+  | pt=typed_binder
+    { let (p,t) = pt in (p, Some t) }
+
+typed_binder:
   | LPAREN p=pattern COLON t=ty RPAREN
-    { (p, Some t) }
+    { (p, t) }
 
 recursive_clause:
-  | f=var_name a=binder+ COLON t=ty EQUAL c=term
-    { (f, a, t, c) }
+  | f=var_name px=typed_binder pxs=typed_binder* COLON t=ty EQUAL c=term
+    { (f, px, pxs, t, c) }
 
 match_binder:
   | p=pattern

@@ -657,6 +657,11 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let c2_ty = Syntax.pollute c2_ty c1_sgn in
      locate (Syntax.Let (p, c1, c2)), c2_ty
 
+  | Desugared.LetRec (fs, c) ->
+     let ctx, fs = infer_rec ~loc ctx fs in
+     let c, c_ty = infer_comp ctx c in
+     locate (Syntax.LetRec (fs, c)), c_ty
+
   | Desugared.Match (e, lst) ->
      let e, e_ty = infer_expr ctx e in
      let lst, ty = infer_match_clauses ~loc ctx e_ty lst in
@@ -694,6 +699,26 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let fin_ty = Syntax.pollute fin_ty cmdl_sig in
      check_dirt ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
      locate (Syntax.Using (cmdl, w, c, fin)), fin_ty
+
+and infer_rec ~loc ctx fs =
+  let ctx, fts =
+    List.fold_left
+      (fun (ctx, fts) (f, (_, s), u, _) ->
+        let t = Syntax.Arrow (s, u) in
+        extend_ident f t ctx, (f, t) :: fts)
+      (ctx, [])
+      fs
+  in
+  let fts = List.rev fts in
+  let fs =
+    List.map
+    (fun (_, (px, s), u, c) ->
+      let ctx, px = extend_binder ctx px s in
+      let c = check_comp ctx c u in
+      px, c)
+    fs
+  in
+  ctx, fs
 
 and infer_match_clauses ~loc ctx patt_ty lst =
   match lst with

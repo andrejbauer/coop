@@ -1,4 +1,4 @@
-(** Desugared syntax of Coop. *)
+
 
 type signature = {
     sig_ops : Name.Set.t ;
@@ -48,6 +48,7 @@ and comp' =
   | AscribeComp of comp * ty
   | Val of expr
   | Let of pattern * comp * comp
+  | LetRec of rec_clause list * comp
   | Match of expr * (binder * comp) list
   | Apply of expr * expr
   | Operation of Name.t * expr
@@ -57,6 +58,8 @@ and comp' =
 and binder = pattern * ty option
 
 and comodel_clause = Name.t * binder * binder * comp
+
+and rec_clause = Name.t * ty * pattern * comp
 
 and finally = {
     fin_val : binder * binder * comp ;
@@ -68,6 +71,7 @@ type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * comp
+  | TopLetRec of rec_clause list * (Name.t * ty) list
   | TopComp of comp
   | TypeAlias of Name.t * ty
   | Datatype of (Name.t * datatype) list

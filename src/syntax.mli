@@ -55,6 +55,7 @@ and comp = comp' Location.located
 and comp' =
   | Val of expr
   | Let of pattern * comp * comp
+  | LetRec of (pattern * comp) list * comp
   | Match of expr * (pattern * comp) list
   | Apply of expr * expr
   | Operation of Name.t * expr
@@ -71,6 +72,7 @@ type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * comp
+  | TopLetRec of (pattern * comp) list * (Name.t * expr_ty) list
   | TopComp of comp * expr_ty
   | TypeAlias of Name.t * expr_ty
   | Datatype of (Name.t * datatype) list
