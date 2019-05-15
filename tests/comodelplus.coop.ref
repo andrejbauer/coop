@@ -1,0 +1,6 @@
+operation read : unit → int
+operation write : int → unit
+val reader : {read} @ int ⇒ {} = <comodel>
+val writer : {write} @ int ⇒ {} = <comodel>
+val state : {read, write} @ int ⇒ {} = <comodel>
+val demo : (int × unit × int) × int = ((3, (), 8), 8)

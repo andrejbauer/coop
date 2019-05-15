@@ -48,10 +48,9 @@ struct
   type 'a t = 'a M.t
 
   let empty = M.empty
-
   let add = M.add
-
   let find = M.find_opt
+  let merge = M.merge
 end
 
 (** Create a fresh anonymous name. *)

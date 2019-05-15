@@ -1,0 +1,17 @@
+operation op : unit -> unit
+
+signal sgl of unit
+
+let demo =
+  using
+    (comodel unit with
+     | op () @ () -> sgl ()
+     end)
+  @ ()
+  in
+    op ()
+  finally
+  | val _ @ _ -> 1
+  | op () @ _ -> 2
+  end
+

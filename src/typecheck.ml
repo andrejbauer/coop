@@ -38,6 +38,8 @@ type error =
   | TypeExpectedButConstructor of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
   | ComodelExpected of Syntax.expr_ty
+  | ComodelPlusWorldMismatch of Syntax.expr_ty * Syntax.expr_ty
+  | ComodelDoubleOperations of Name.Set.t
   | CannotInferArgument
   | CannotInferMatch
   | DuplicateOperation of Name.t
@@ -121,6 +123,16 @@ let print_error err ppf =
   | ComodelExpected ty ->
      Format.fprintf ppf "this expression should be a comodel but has type@ %t"
        (Syntax.print_expr_ty ty)
+
+  | ComodelPlusWorldMismatch (t1, t2) ->
+     Format.fprintf ppf "these comodels should hve the same world types, but thave@ %t and@ %t"
+       (Syntax.print_expr_ty t1)
+       (Syntax.print_expr_ty t2)
+
+  | ComodelDoubleOperations ops ->
+     let ops = Name.Set.elements ops in
+     Format.fprintf ppf "these comodels both handle the following operations:@ %t"
+       (Print.sequence (Name.print ~parentheses:true) "," ops)
 
   | CannotInferArgument ->
      Format.fprintf ppf "cannot infer the type of this argument"
@@ -632,8 +644,33 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
 
   | Desugared.Comodel (t, coops) ->
      let t = expr_ty t in
-     let coops, sgn1, sgn2 = infer_coops ~loc ctx t coops in
-     locate (Syntax.Comodel coops), Syntax.ComodelTy (sgn1, t, sgn2)
+     let coops, ops, sgn = infer_coops ~loc ctx t coops in
+     locate (Syntax.Comodel coops), Syntax.ComodelTy (ops, t, sgn)
+
+  | Desugared.ComodelPlus (e1, e2) ->
+     let cmdl1, (ops1, w1_ty, sgn1) = infer_comodel ctx e1
+     and cmdl2, (ops2, w2_ty, sgn2) = infer_comodel ctx e2 in
+     if not (expr_eqtype ~loc ctx w1_ty w2_ty) then
+       error ~loc (ComodelPlusWorldMismatch (w1_ty, w2_ty)) ;
+     let w_ty = w1_ty in
+     let ops' = Name.Set.inter ops1 ops2 in
+     if not (Name.Set.is_empty ops') then
+       error ~loc (ComodelDoubleOperations ops') ;
+     let ops = Name.Set.union ops1 ops2 in
+     let sgn = join_signature sgn1 sgn2 in
+     locate (Syntax.ComodelPlus (cmdl1, cmdl2)), Syntax.ComodelTy (ops, w_ty, sgn)
+
+  | Desugared.ComodelTimes (e1, e2) ->
+     let cmdl1, (ops1, w1_ty, sgn1) = infer_comodel ctx e1
+     and cmdl2, (ops2, w2_ty, sgn2) = infer_comodel ctx e2 in
+     let w_ty = Syntax.Product [w1_ty; w2_ty] in
+     let ops' = Name.Set.inter ops1 ops2 in
+     if not (Name.Set.is_empty ops') then
+       error ~loc (ComodelDoubleOperations ops') ;
+     let ops = Name.Set.union ops1 ops2 in
+     let sgn = join_signature sgn1 sgn2 in
+     locate (Syntax.ComodelTimes (cmdl1, cmdl2)), Syntax.ComodelTy (ops, w_ty, sgn)
+
 
 (** [infer_comp ctx c] infers the type [ty] of a computation [c]. It returns
     the processed computation [c] and its type [ty].  *)
@@ -867,7 +904,8 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
      end
 
   | (Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
-     Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Comodel _) ->
+     Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Comodel _ |
+     Desugared.ComodelPlus _ | Desugared.ComodelTimes _) ->
      let e, ty' = infer_expr ctx e in
      if expr_subty ~loc ctx ty' ty
      then

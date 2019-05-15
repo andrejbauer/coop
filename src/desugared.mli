@@ -41,6 +41,8 @@ and expr' =
   | Constructor of Name.t * expr option
   | Lambda of binder * comp
   | Comodel of ty * comodel_clause list
+  | ComodelPlus of expr * expr
+  | ComodelTimes of expr * expr
 
 (** Computations *)
 and comp = comp' Location.located

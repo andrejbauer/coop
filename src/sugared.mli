@@ -45,6 +45,8 @@ and term' =
   | LetFun of Name.t * binder list * term * term
   | Ascribe of term * ty
   | Comodel of ty * comodel_clause list
+  | ComodelPlus of term * term
+  | ComodelTimes of term * term
   | Using of term * term * term * finally_clause list
 
 and binder = pattern * ty option

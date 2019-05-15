@@ -1,0 +1,24 @@
+operation read : unit -> int
+operation write : int -> unit
+
+let reader =
+  comodel int with
+  | read () @ w -> (w, w)
+  end
+
+let writer =
+  comodel int with
+  | write w @ _ -> ((), w)
+  end
+
+let state = reader ⊕ writer
+
+let demo =
+  using state @ 3 in
+    let a = read () in
+    let b = write (a + 5) in
+    let c = read () in
+    (a, b, c)
+  finally
+  | val v @ w -> (v, w)
+  end

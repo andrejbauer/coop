@@ -1,0 +1,28 @@
+operation get : unit -> int
+operation put : int -> unit
+operation tick : unit -> int
+
+let state =
+  comodel int with
+  | get t @ w -> (w, w)
+  | put x @ w -> ((), x)
+  end
+
+let ticker =
+  comodel int with
+  | tick () @ w -> (w, w+1)
+  end
+
+let c = state ⊗ ticker
+
+let demo =
+  using c @ (10, 2) in
+    let a = get () in
+    put 2 ;
+    let b = tick () in
+    let c = tick () in
+    put 3 ;
+    (a, b, c)
+  finally
+    val x @ w -> (x, w)
+  end

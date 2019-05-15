@@ -18,7 +18,7 @@
 %token <int> NUMERAL
 %token FALSE TRUE IF THEN ELSE
 %token FUN
-%token COMODEL
+%token COMODEL OPLUS OTIMES
 %token LET REC IN
 %token MATCH WITH BAR END
 %token USING FINALLY VAL
@@ -40,8 +40,8 @@
 %nonassoc INFIXOP0
 %left     INFIXOP1 EQUAL
 %right    INFIXOP2 AT
-%left     INFIXOP3
-%left     INFIXOP4 STAR
+%left     INFIXOP3 OPLUS
+%left     INFIXOP4 OTIMES STAR
 %right    INFIXOP5
 
 %start <Sugared.toplevel list> file
@@ -176,6 +176,12 @@ infix_term_:
       let e1 = Location.locate ~loc (Sugared.Apply (op, e2)) in
       Sugared.Apply (e1, e3)
     }
+
+  | e1=infix_term OPLUS e2=infix_term
+    { Sugared.ComodelPlus (e1, e2) }
+
+  | e1=infix_term OTIMES e2=infix_term
+    { Sugared.ComodelTimes (e1, e2) }
 
 app_term: mark_location(app_term_) { $1 }
 app_term_:

@@ -1,0 +1,7 @@
+operation get : unit → int
+operation put : int → unit
+operation tick : unit → int
+val state : {get, put} @ int ⇒ {} = <comodel>
+val ticker : {tick} @ int ⇒ {} = <comodel>
+val c : {get, put, tick} @ int × int ⇒ {} = <comodel>
+val demo : (int × int × int) × (int × int) = ((10, 2, 3), (3, 4))

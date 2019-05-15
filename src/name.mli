@@ -33,6 +33,7 @@ sig
   val empty : 'a t
   val add : key -> 'a -> 'a t -> 'a t
   val find : key -> 'a t -> 'a option
+  val merge : (key -> 'a option -> 'a option -> 'a option) -> 'a t -> 'a t -> 'a t
 end
 
 (** Are the given identifiers equal? *)

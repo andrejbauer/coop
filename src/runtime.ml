@@ -7,6 +7,7 @@ type error =
   | UnknownExternal of string
   | FunctionExpected
   | ComodelExpected
+  | ComodelDoubleOperation of Name.t
   | PairExpected
   | PatternMismatch
 
@@ -34,6 +35,9 @@ let print_error err ppf =
 
   | ComodelExpected ->
      Format.fprintf ppf "comodel expected, please report"
+
+  | ComodelDoubleOperation op ->
+     Format.fprintf ppf "cannot combine models that both contain the coperation %t" (Name.print op)
 
   | PairExpected ->
      Format.fprintf ppf "pair expected, please report"
@@ -210,6 +214,49 @@ let rec eval_expr env {Location.it=e'; loc} =
          lst
      in
      Value.Comodel cmdl
+
+  | Syntax.ComodelPlus (e1, e2) ->
+     let cmdl1 = as_comodel ~loc (eval_expr env e1)
+     and cmdl2 = as_comodel ~loc (eval_expr env e2) in
+     let cmdl =
+       Name.Map.merge
+         (fun op f1 f2 ->
+           match f1, f2 with
+           | None, None -> None
+           | Some f1, None -> Some f1
+           | None, Some f2 -> Some f2
+           | Some _, Some _ -> error ~loc (ComodelDoubleOperation op))
+         cmdl1 cmdl2
+     in
+     Value.Comodel cmdl
+
+  | Syntax.ComodelTimes (e1, e2) ->
+     let wrap_fst f (v, w) =
+         let (w1, w2) = as_pair ~loc w in
+         let (v', w1') = f (v, w1) in
+         let w' = Value.Tuple [w1'; w2] in
+         (v', w')
+     in
+     let wrap_snd f (v, w) =
+         let (w1, w2) = as_pair ~loc w in
+         let (v', w2') = f (v, w2) in
+         let w' = Value.Tuple [w1; w2'] in
+         (v', w')
+     in
+     let cmdl1 = as_comodel ~loc (eval_expr env e1)
+     and cmdl2 = as_comodel ~loc (eval_expr env e2) in
+     let cmdl =
+       Name.Map.merge
+         (fun op f1 f2 ->
+           match f1, f2 with
+           | None, None -> None
+           | Some f1, None -> Some (wrap_fst f1)
+           | None, Some f2 -> Some (wrap_snd f2)
+           | Some _, Some _ -> error ~loc (ComodelDoubleOperation op))
+         cmdl1 cmdl2
+     in
+     Value.Comodel cmdl
+
 
 and eval_comp env {Location.it=c'; loc} =
   match c' with

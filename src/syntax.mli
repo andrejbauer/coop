@@ -49,6 +49,8 @@ and expr' =
   | Tuple of expr list
   | Lambda of pattern * comp
   | Comodel of (Name.t * pattern * pattern * comp) list
+  | ComodelPlus of expr * expr
+  | ComodelTimes of expr * expr
 
 (** Computations *)
 and comp = comp' Location.located
