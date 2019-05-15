@@ -1,5 +1,9 @@
 operation get : unit -> int
 operation put : int -> unit
+
+operation get' : unit -> int
+operation put' : int -> unit
+
 operation tick : unit -> int
 
 let state =
@@ -15,7 +19,7 @@ let ticker =
 
 let c = state ⊗ ticker
 
-let demo =
+let demo1 =
   using c @ (10, 2) in
     let a = get () in
     put 2 ;
@@ -23,6 +27,18 @@ let demo =
     let c = tick () in
     put 3 ;
     (a, b, c)
+  finally
+    val x @ w -> (x, w)
+  end
+
+let demo2 =
+  using state :*: (state with {get as get', put as put'}) @ (2, 3) in
+    let a = get () in
+    put' (a + 3) ;
+    put 7 ;
+    let b = get' () in
+    put' (b + 10) ;
+    (a, b)
   finally
     val x @ w -> (x, w)
   end
