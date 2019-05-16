@@ -1,28 +1,22 @@
-operation tick : unit -> unit
-operation read : unit -> int
+(** A counter *)
+operation tick : unit -> int
 
 let ticker =
   comodel int with
-  | tick () @ w -> ((), w+1)
-  | read () @ w -> (w, w)
+  | tick () @ w -> (w, w+1)
   end
 ;;
-let f (_ : unit) =
-  tick () ;
-  tick () ;
-  let a = read () in
-  tick () ;
-  let b = read () in
-  tick () ;
-  (a, b)
+let job (_ : unit) =
+  let a = tick () in
+  let _ = tick () in
+  let b = tick () in
+  a + b
 
 let demo =
   using ticker @ 0 in
-    let r1 = f () in
-    let r2 = f () in
+    let r1 = job () in
+    let r2 = job () in
     (r1, r2)
   finally
     val v @ _ -> v
   end
-
-  
