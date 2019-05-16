@@ -25,7 +25,7 @@ let state' = state with {get as get', put as put'}
 let positive_state =
   comodel int with
   | get _ @ w -> (w, w)
-  | put w @ _ -> if w < 0 then negative w else ((), w)
+  | put w @ _ -> if w <= 0 then negative w else ((), w)
   end
 
 (** This is how we use ordinary state, initialized with 1 *)
