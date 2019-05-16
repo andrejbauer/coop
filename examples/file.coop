@@ -1,28 +1,49 @@
 (* Simulate writing to a file where the disk becomes full. *)
 
+(* A file is a list of integers. *)
+type file = Nil | Cons of int * file
+
+(* The size of a file *)
+let rec length (f : file) : int =
+  match f with
+  | Nil -> 0
+  | Cons (_, f) -> 1 + length f
+  end
+
 operation write : int -> unit
+
 signal disk_full of unit
 
-let disk =
-  comodel int with
+(** A file writer that is full after n writes. *)
+let file_writer (n : int) =
+  comodel file with
   | write k @ w ->
-      let w = w - k in
-      (if w >= 0 then ((), w) else disk_full ())
+     if length w >= n then
+       disk_full ()
+     else
+       ((), Cons (k, w))
   end
 
 let job (_ : unit) =
+    write 1 ;
     write 2 ;
     write 3 ;
-    42
+    write 4 ;
+    write 5 ;
+    write 6
 
-let demo (n : int) =
-  using disk @ n in
+let demo1 =
+  using file_writer 10 @ Nil in
     job ()
   finally
-  | val x @ _ -> x
+  | val _ @ f -> f
+  | disk_full _ @ f -> f
   end
-;;
 
-demo 10 ;;
-
-demo 3 ;;
+let demo2 =
+  using file_writer 3 @ Nil in
+    job ()
+  finally
+  | val _ @ f -> f
+  | disk_full _ @ f -> f
+  end
