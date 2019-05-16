@@ -40,8 +40,35 @@ let demo1 =
     val x @ _ -> x
   end
 
-(* Combine two copies of state, one of which only allows positive values. *)
+(** Combine two states together, each has its own state *)
 let demo2 =
+  using state ⊗ state' @ (2, 3) in
+    let a = get' () in
+    put 3 ;
+    put' (a + 10) ;
+    let b = get' () in
+    (a, b)
+  finally
+  | val x @ w -> (x, w)
+  | negative k @ w -> ((0, k), w)
+  end
+
+(** Combine two states together, sharing state *)
+let demo2' =
+  using state ⊕ state' @ 2 in
+    let a = get' () in
+    put 3 ;
+    put' (a + 10) ;
+    let b = get' () in
+    (a, b)
+  finally
+  | val x @ w -> (x, w)
+  | negative k @ w -> ((0, k), w)
+  end
+
+
+(* Combine two copies of state, one of which only allows positive values. *)
+let demo3 =
   using state' ⊗ positive_state @ (0, 2) in
     let a = get' () in
     put 3 ;
@@ -55,7 +82,7 @@ let demo2 =
 
 (* Combine two copies of state, one of which only allows positive values,
    trigger a signal. *)
-let demo2 =
+let demo3' =
   using state' ⊗ positive_state @ (0, 2) in
     let a = get' () in
     put 3 ;
