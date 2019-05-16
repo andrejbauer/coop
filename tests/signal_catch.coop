@@ -1,0 +1,12 @@
+(* Catch a signal arising from the body of the using block. *)
+
+signal moo of unit ;;
+
+using
+  (comodel unit with end) @ ()
+in
+  moo ()
+finally
+| val _ @ _ -> 1
+| moo () @ _ -> 2
+end

@@ -374,10 +374,10 @@ and using ~loc env cmdl w r (fin_val, fin_signals) =
             let_unless r
        end
 
-    | Value.Signal (sgl, v) ->
+    | Value.Signal (sgl, v) as r ->
        begin
          match Name.Map.find sgl fin_signals with
-         | None -> error ~loc (UnhandledSignal sgl)
+         | None -> r
          | Some f -> f (v, w)
        end
   in

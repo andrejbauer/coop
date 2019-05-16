@@ -536,9 +536,6 @@ let check_pattern ~loc ctx patt ty =
 
     | _, Syntax.TyAlias _ -> assert false
 
-    | _, Syntax.SignalTy ->
-       error ~loc (PattTypeMismatch ty)
-
     | Desugared.PattAnonymous, _ ->
        Syntax.PattAnonymous, xts
 
@@ -571,10 +568,10 @@ let check_pattern ~loc ctx patt ty =
        let ps, xts = fold_tuple ~loc xts [] ps ts in
        Syntax.PattTuple ps, xts
 
-    | Desugared.PattNumeral _, (Syntax.Bool | Syntax.TyDatatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattBoolean _, (Syntax.Int | Syntax.TyDatatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattConstructor  _, (Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattTuple _, (Syntax.Int | Syntax.Bool | Syntax.TyDatatype _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
+    | Desugared.PattNumeral _, (Syntax.SignalTy | Syntax.Bool | Syntax.TyDatatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattBoolean _, (Syntax.SignalTy | Syntax.Int | Syntax.TyDatatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattConstructor  _, (Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattTuple _, (Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.TyDatatype _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
        error ~loc (PattTypeMismatch ty)
 
   and fold_tuple ~loc xts ps' ps ts =

@@ -1,0 +1,2 @@
+signal moo of unit
+- : int = 2
