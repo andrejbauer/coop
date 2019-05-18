@@ -1,5 +1,10 @@
 (* Pervasives loaded at startup. *)
 
+(* Access to the OS, at the moment the type of the world is fake. *)
+operation print : int -> unit
+type os = {print} @ unit ⇒ {}
+external os : os = "os"
+
 (* Arithmetic *)
 external ( + ) : int -> int -> int = "+"
 external ( - ) : int -> int -> int = "-"
