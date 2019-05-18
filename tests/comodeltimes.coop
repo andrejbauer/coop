@@ -6,21 +6,21 @@ operation put' : int -> unit
 
 operation tick : unit -> int
 
-let state =
-  comodel int with
+let state (w0 : int) =
+  comodel w0 with
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
   end
 
 let ticker =
-  comodel int with
+  comodel 0 with
   | tick () @ w -> (w, w+1)
   end
 
-let c = state ⊗ ticker
+let c (n : int) = state n ⊗ ticker
 
 let demo1 =
-  using c @ (10, 2) in
+  using c 10 in
     let a = get () in
     put 2 ;
     let b = tick () in
@@ -32,7 +32,7 @@ let demo1 =
   end
 
 let demo2 =
-  using state :*: (state with {get as get', put as put'}) @ (2, 3) in
+  using state 2 :*: (state 3 with {get as get', put as put'}) in
     let a = get () in
     put' (a + 3) ;
     put 7 ;

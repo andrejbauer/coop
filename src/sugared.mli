@@ -44,11 +44,10 @@ and term' =
   | Sequence of term * term
   | LetFun of Name.t * binder list * term * term
   | Ascribe of term * ty
-  | Comodel of ty * comodel_clause list
-  | ComodelPlus of term * term
+  | Comodel of term * comodel_clause list
   | ComodelTimes of term * term
   | ComodelRename of term * (Name.t * Name.t) list
-  | Using of term * term * term * finally_clause list
+  | Using of term * term * finally_clause list
 
 and binder = pattern * ty option
 

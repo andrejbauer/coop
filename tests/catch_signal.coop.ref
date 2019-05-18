@@ -1,4 +1,0 @@
-Type error at file "./catch_signal.coop", line 7, charaters 4-60:
-this computation should have type unit × unit ! {} but has type signal !
-{sgl}
-

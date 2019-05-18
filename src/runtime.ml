@@ -161,7 +161,7 @@ let as_value ~loc = function
   | Value.Signal (sgl, _) -> error ~loc (UnhandledSignal sgl)
 
 let as_comodel ~loc = function
-  | Value.Comodel cmdl -> cmdl
+  | Value.Comodel (w, cmdl) -> (w, cmdl)
   | Value.Numeral _ | Value.Boolean _ | Value.Tuple _ | Value.Constructor _
     | Value.Closure _ -> error ~loc ComodelExpected
 
@@ -204,7 +204,8 @@ let rec eval_expr env {Location.it=e'; loc} =
      in
      Value.Closure f
 
-  | Syntax.Comodel lst ->
+  | Syntax.Comodel (e, lst) ->
+     let w = eval_expr env e in
      let coop px pw c =
        let loc = c.Location.loc in
        fun (u, w) ->
@@ -220,22 +221,7 @@ let rec eval_expr env {Location.it=e'; loc} =
          Name.Map.empty
          lst
      in
-     Value.Comodel cmdl
-
-  | Syntax.ComodelPlus (e1, e2) ->
-     let cmdl1 = as_comodel ~loc (eval_expr env e1)
-     and cmdl2 = as_comodel ~loc (eval_expr env e2) in
-     let cmdl =
-       Name.Map.merge
-         (fun op f1 f2 ->
-           match f1, f2 with
-           | None, None -> None
-           | Some f1, None -> Some f1
-           | None, Some f2 -> Some f2
-           | Some _, Some _ -> error ~loc (ComodelDoubleOperation op))
-         cmdl1 cmdl2
-     in
-     Value.Comodel cmdl
+     Value.Comodel (w, cmdl)
 
   | Syntax.ComodelTimes (e1, e2) ->
      let wrap_fst f (v, w) =
@@ -250,8 +236,9 @@ let rec eval_expr env {Location.it=e'; loc} =
          let w' = Value.Tuple [w1; w2'] in
          Value.Val (v', w')
      in
-     let cmdl1 = as_comodel ~loc (eval_expr env e1)
-     and cmdl2 = as_comodel ~loc (eval_expr env e2) in
+     let (w1, cmdl1) = as_comodel ~loc (eval_expr env e1)
+     and (w2, cmdl2) = as_comodel ~loc (eval_expr env e2) in
+     let w = Value.Tuple [w1; w2] in
      let cmdl =
        Name.Map.merge
          (fun op f1 f2 ->
@@ -262,10 +249,10 @@ let rec eval_expr env {Location.it=e'; loc} =
            | Some _, Some _ -> error ~loc (ComodelDoubleOperation op))
          cmdl1 cmdl2
      in
-     Value.Comodel cmdl
+     Value.Comodel (w, cmdl)
 
   | Syntax.ComodelRename (e, rnm) ->
-     let cmdl = as_comodel ~loc (eval_expr env e) in
+     let (w, cmdl) = as_comodel ~loc (eval_expr env e) in
      let cmdl =
        Name.Map.fold
          (fun op f cmdl ->
@@ -274,7 +261,7 @@ let rec eval_expr env {Location.it=e'; loc} =
            | Some op' -> Name.Map.add op' f cmdl)
          cmdl Name.Map.empty
      in
-     Value.Comodel cmdl
+     Value.Comodel (w, cmdl)
 
 and eval_comp env {Location.it=c'; loc} =
   match c' with
@@ -310,9 +297,8 @@ and eval_comp env {Location.it=c'; loc} =
      let v = eval_expr env e in
      Value.Signal (sgl, v)
 
-  | Syntax.Using (cmdl, w, c, fin) ->
-     let w = eval_expr env w in
-     let cmdl = as_comodel ~loc (eval_expr env cmdl)
+  | Syntax.Using (e, c, fin) ->
+     let (w, cmdl) = as_comodel ~loc (eval_expr env e)
      and fin = eval_finally ~loc env fin
      and r = eval_comp env c in
      using ~loc env cmdl w r fin

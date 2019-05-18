@@ -3,10 +3,28 @@
 signal moo of unit ;;
 
 using
-  (comodel unit with end) @ ()
+  (comodel () with end)
 in
   moo ()
 finally
 | val _ @ _ -> 1
 | moo () @ _ -> 2
-end
+end ;;
+
+(* Catch a signal arising in a co-operation. *)
+
+operation op : unit -> unit
+signal sgl of unit
+
+let demo =
+  using
+    (comodel () with
+     | op () @ () -> sgl ()
+     end)
+  in
+    op ()
+  finally
+  | val _ @ _ -> 1
+  | sgl () @ _ -> 2
+  end
+

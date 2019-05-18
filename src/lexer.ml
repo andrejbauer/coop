@@ -112,7 +112,6 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | "->" | 8594 | 10230      -> f (); Parser.ARROW
   | "=>" | 8658              -> f (); Parser.DARROW
   | ":*:" | 8855             -> f (); Parser.OTIMES
-  | ":+:" | 8853             -> f (); Parser.OPLUS
 
   (* We record the location of operators here because menhir cannot handle %infix and
      mark_location simultaneously, it seems. *)

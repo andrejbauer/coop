@@ -40,8 +40,7 @@ and expr' =
   | Tuple of expr list
   | Constructor of Name.t * expr option
   | Lambda of binder * comp
-  | Comodel of ty * comodel_clause list
-  | ComodelPlus of expr * expr
+  | Comodel of expr * comodel_clause list
   | ComodelRename of expr * (Name.t * Name.t) list
   | ComodelTimes of expr * expr
 
@@ -56,7 +55,7 @@ and comp' =
   | Apply of expr * expr
   | Operation of Name.t * expr
   | Signal of Name.t * expr
-  | Using of expr * expr * comp * finally
+  | Using of expr * comp * finally
 
 and binder = pattern * ty option
 
