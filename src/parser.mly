@@ -18,7 +18,7 @@
 %token <int> NUMERAL
 %token FALSE TRUE IF THEN ELSE
 %token FUN
-%token COMODEL OPLUS OTIMES AS
+%token COMODEL OTIMES AS
 %token LET REC IN
 %token MATCH WITH BAR END
 %token USING FINALLY VAL
@@ -40,7 +40,7 @@
 %nonassoc INFIXOP0
 %left     INFIXOP1 EQUAL
 %right    INFIXOP2 AT
-%left     INFIXOP3 OPLUS
+%left     INFIXOP3
 %left     INFIXOP4 OTIMES STAR
 %right    INFIXOP5
 
@@ -159,11 +159,11 @@ term_:
   | IF e1=term THEN e2=term ELSE e3=term
     { Sugared.If (e1, e2, e3) }
 
-  | COMODEL t=ty WITH lst=comodel_clauses END
-    { Sugared.Comodel (t, lst) }
+  | COMODEL e=infix_term WITH lst=comodel_clauses END
+    { Sugared.Comodel (e, lst) }
 
-  | USING cmdl=infix_term AT w=infix_term IN c=term FINALLY fin=finally END
-    { Sugared.Using (cmdl, w, c, fin) }
+  | USING cmdl=infix_term IN c=term FINALLY fin=finally END
+    { Sugared.Using (cmdl, c, fin) }
 
   | cmdl=infix_term WITH LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
     { Sugared.ComodelRename (cmdl, lst) }
@@ -179,9 +179,6 @@ infix_term_:
       let e1 = Location.locate ~loc (Sugared.Apply (op, e2)) in
       Sugared.Apply (e1, e3)
     }
-
-  | e1=infix_term OPLUS e2=infix_term
-    { Sugared.ComodelPlus (e1, e2) }
 
   | e1=infix_term OTIMES e2=infix_term
     { Sugared.ComodelTimes (e1, e2) }

@@ -1,4 +1,4 @@
 operation get : unit → int
 operation put : int → unit
-val state : {get, put} @ int ⇒ {} = <comodel>
+val state : int → {get, put} @ int ⇒ {} ! {} = <fun>
 val demo : (int × int) × int = ((1, 2), 3)

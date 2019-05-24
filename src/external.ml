@@ -9,6 +9,27 @@ let as_int = function
   | Value.Constructor _ | Value.Boolean _ | Value.Tuple _ | Value.Closure _ | Value.Comodel _ ->
      error "integer expected"
 
+(** Wrappers that convert OCaml data to Coop data. *)
+
+let coop_unit = Value.Tuple []
+
+let mk_ident s = Name.Ident (s, Name.Word)
+
+let wrap_comodel w coops =
+  let coops =
+    List.fold_left
+      (fun coops (x, f) -> Name.Map.add (mk_ident x) f coops)
+      Name.Map.empty
+      coops
+  in
+  Value.Comodel (w, coops)
+
+let os =
+  [ ("print",
+     (fun (v, _) -> Format.printf "%t@." (Value.print v) ;
+                    Value.Val (coop_unit, coop_unit)))
+  ]
+
 (*
 let wrap1 f =
   Value.Closure (fun v -> Value.Val (f v))
@@ -53,6 +74,7 @@ let externals =
     (">",  wrap_int_int_bool ((>) : int -> int -> bool)) ;
     ("<=",  wrap_int_int_bool ((<=) : int -> int -> bool)) ;
     (">=",  wrap_int_int_bool ((>=) : int -> int -> bool)) ;
+    ("os", wrap_comodel coop_unit os) ;
   ]
 
 let lookup s = List.assoc_opt s externals

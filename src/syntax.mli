@@ -48,8 +48,7 @@ and expr' =
   | Constructor of Name.t * expr option
   | Tuple of expr list
   | Lambda of pattern * comp
-  | Comodel of (Name.t * pattern * pattern * comp) list
-  | ComodelPlus of expr * expr
+  | Comodel of expr * (Name.t * pattern * pattern * comp) list
   | ComodelTimes of expr * expr
   | ComodelRename of expr * Name.t Name.Map.t
 
@@ -63,7 +62,7 @@ and comp' =
   | Apply of expr * expr
   | Operation of Name.t * expr
   | Signal of Name.t * expr
-  | Using of expr * expr * comp * finally
+  | Using of expr * comp * finally
 
 and finally = {
     fin_val : pattern * pattern * comp ;

@@ -26,6 +26,7 @@ type error =
   | InvalidType of Name.t
   | PattTypeMismatch of Syntax.expr_ty
   | ExprTypeMismatch of Syntax.expr_ty * Syntax.expr_ty
+  | CoopTypeMismatch of Syntax.expr_ty * Syntax.expr_ty
   | ExprTypeExpected
   | WrongTupleLength of int * int
   | IllegalConstructor of Name.t
@@ -38,7 +39,6 @@ type error =
   | TypeExpectedButConstructor of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
   | ComodelExpected of Syntax.expr_ty
-  | ComodelPlusWorldMismatch of Syntax.expr_ty * Syntax.expr_ty
   | ComodelDoubleOperations of Name.Set.t
   | CannotInferArgument
   | CannotInferMatch
@@ -76,6 +76,11 @@ let print_error err ppf =
 
   | ExprTypeMismatch (ty_expected, ty_actual) ->
      Format.fprintf ppf "this expression should have type@ %t but has type@ %t"
+       (Syntax.print_expr_ty ty_expected)
+       (Syntax.print_expr_ty ty_actual)
+
+  | CoopTypeMismatch (ty_expected, ty_actual) ->
+     Format.fprintf ppf "this co-operation should return values of type@ %t but it returns values of type@ %t"
        (Syntax.print_expr_ty ty_expected)
        (Syntax.print_expr_ty ty_actual)
 
@@ -125,11 +130,6 @@ let print_error err ppf =
   | ComodelExpected ty ->
      Format.fprintf ppf "this expression should be a comodel but has type@ %t"
        (Syntax.print_expr_ty ty)
-
-  | ComodelPlusWorldMismatch (t1, t2) ->
-     Format.fprintf ppf "these comodels should hve the same world types, but thave@ %t and@ %t"
-       (Syntax.print_expr_ty t1)
-       (Syntax.print_expr_ty t2)
 
   | ComodelDoubleOperations ops ->
      let ops = Name.Set.elements ops in
@@ -650,23 +650,10 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
   | Desugared.Lambda ((p, None), _) ->
      error ~loc:p.Location.loc CannotInferArgument
 
-  | Desugared.Comodel (t, coops) ->
-     let t = expr_ty t in
-     let coops, ops, sgn = infer_coops ~loc ctx t coops in
-     locate (Syntax.Comodel coops), Syntax.ComodelTy (ops, t, sgn)
-
-  | Desugared.ComodelPlus (e1, e2) ->
-     let cmdl1, (ops1, w1_ty, sgn1) = infer_comodel ctx e1
-     and cmdl2, (ops2, w2_ty, sgn2) = infer_comodel ctx e2 in
-     if not (expr_eqtype ~loc ctx w1_ty w2_ty) then
-       error ~loc (ComodelPlusWorldMismatch (w1_ty, w2_ty)) ;
-     let w_ty = w1_ty in
-     let ops' = Name.Set.inter ops1 ops2 in
-     if not (Name.Set.is_empty ops') then
-       error ~loc (ComodelDoubleOperations ops') ;
-     let ops = Name.Set.union ops1 ops2 in
-     let sgn = join_signature sgn1 sgn2 in
-     locate (Syntax.ComodelPlus (cmdl1, cmdl2)), Syntax.ComodelTy (ops, w_ty, sgn)
+  | Desugared.Comodel (e, coops) ->
+     let e, e_ty = infer_expr ctx e in
+     let coops, ops, sgn = infer_coops ~loc ctx e_ty coops in
+     locate (Syntax.Comodel (e, coops)), Syntax.ComodelTy (ops, e_ty, sgn)
 
   | Desugared.ComodelTimes (e1, e2) ->
      let cmdl1, (ops1, w1_ty, sgn1) = infer_comodel ctx e1
@@ -761,16 +748,15 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let ty = Syntax.signal_ty sgl in
      locate (Syntax.Signal (sgl, e)), ty
 
-  | Desugared.Using (cmdl, w, c, fin) ->
+  | Desugared.Using (cmdl, c, fin) ->
      let cmdl, (ops, w_ty, Syntax.{sig_ops=cmdl_ops; sig_sgs=cmdl_sgs}) =
        infer_comodel ctx cmdl in
-     let w = check_expr ctx w w_ty in
      let c, (Syntax.{comp_ty=x_ty; _} as c_ty) = infer_comp ctx c in
      let fin, fin_sgs, fin_ty = infer_finally ~loc ctx x_ty w_ty fin in
      let cmdl_sig = Syntax.{sig_ops=cmdl_ops; sig_sgs = Name.Set.diff cmdl_sgs fin_sgs} in
      let fin_ty = Syntax.pollute fin_ty cmdl_sig in
      check_dirt ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
-     locate (Syntax.Using (cmdl, w, c, fin)), fin_ty
+     locate (Syntax.Using (cmdl, c, fin)), fin_ty
 
 and infer_rec ~loc ctx fs =
   let ctx, fts =
@@ -824,10 +810,10 @@ and infer_coops ~loc ctx w_ty lst =
          let (x_ty, op_ty) = lookup_operation ~loc op ctx in
          let ctx, px = extend_binder ctx px x_ty in
          let ctx, pw = extend_binder ctx pw w_ty in
-         let c, (Syntax.{comp_sig=c_sgn;_} as c_ty) = infer_comp ctx c in
-         let c_required = Syntax.pure (Syntax.Product [op_ty; w_ty]) in
-         if not (comp_subty ~loc ctx c_required c_ty) then
-           error ~loc (CompTypeMismatch (c_required, c_ty)) ;
+         let c, (Syntax.{comp_sig=c_sgn;comp_ty=c_ty'} as c_ty) = infer_comp ctx c in
+         let c_ty'' = Syntax.Product [op_ty; w_ty] in
+         if not (expr_subty ~loc ctx c_ty' c_ty'') then
+           error ~loc (CoopTypeMismatch (c_ty'', c_ty')) ;
          let coops = (op, px, pw, c) :: coops
          and ops = Name.Set.add op ops
          and sgn2 = join_signature sgn2 c_sgn in
@@ -940,7 +926,7 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
 
   | (Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
      Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Comodel _ |
-     Desugared.ComodelPlus _ | Desugared.ComodelTimes _ | Desugared.ComodelRename _) ->
+     Desugared.ComodelTimes _ | Desugared.ComodelRename _) ->
      let e, ty' = infer_expr ctx e in
      if expr_subty ~loc ctx ty' ty
      then

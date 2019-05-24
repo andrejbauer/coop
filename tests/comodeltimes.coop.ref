@@ -3,8 +3,8 @@ operation put : int → unit
 operation get' : unit → int
 operation put' : int → unit
 operation tick : unit → int
-val state : {get, put} @ int ⇒ {} = <comodel>
+val state : int → {get, put} @ int ⇒ {} ! {} = <fun>
 val ticker : {tick} @ int ⇒ {} = <comodel>
-val c : {get, put, tick} @ int × int ⇒ {} = <comodel>
-val demo1 : (int × int × int) × (int × int) = ((10, 2, 3), (3, 4))
+val c : int → {get, put, tick} @ int × int ⇒ {} ! {} = <fun>
+val demo1 : (int × int × int) × (int × int) = ((10, 0, 1), (3, 2))
 val demo2 : (int × int) × (int × int) = ((2, 5), (7, 15))

@@ -4,7 +4,7 @@ signal croak of int
 val apply : (int → int ! {die, op}) → (int → int ! {die, op}) ! {} =
 <fun>
 val g : int → int ! {die, op} = <fun>
-val c : {op} @ int ⇒ {croak} = <comodel>
+val c : int → {op} @ int ⇒ {croak} ! {} = <fun>
 val demo : int → (int × int) × int ! {die} = <fun>
 - : (int × int) × int = ((1001, 1003), 5)
 - : int = 23

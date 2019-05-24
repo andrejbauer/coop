@@ -11,6 +11,7 @@ type desugar_error =
   | UnknownOperation of Name.t
   | UnknownConstructor of Name.t
   | UnknownType of Name.t
+  | SignalExpected of Name.t
   | OperationExpected of Name.t
   | OperationOrSignalExpected of Name.t
   | ShadowOperation of Name.t
@@ -46,6 +47,9 @@ let print_error err ppf =
 
   | UnknownType ty ->
      Format.fprintf ppf "unknown type %t" (Name.print ty)
+
+  | SignalExpected x ->
+     Format.fprintf ppf "%t is not a signal" (Name.print x)
 
   | OperationExpected x ->
      Format.fprintf ppf "%t is not an operation" (Name.print x)
@@ -324,15 +328,10 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
     | Sugared.Lambda (pxs, c) ->
        ([], abstract ~loc ctx pxs c)
 
-    | Sugared.Comodel (t, lst) ->
-       let t = ty ctx t in
+    | Sugared.Comodel (e, lst) ->
+       let ws, e = expr ctx e in
        let lst = comodel_clauses ~loc ctx lst in
-       ([], locate (Desugared.Comodel (t, lst)))
-
-    | Sugared.ComodelPlus (e1, e2) ->
-       let ws1, e1 = expr ctx e1
-       and ws2, e2 = expr ctx e2 in
-       (ws1 @ ws2, locate (Desugared.ComodelPlus (e1, e2)))
+       (ws, locate (Desugared.Comodel (e, lst)))
 
     | Sugared.ComodelTimes (e1, e2) ->
        let ws1, e1 = expr ctx e1
@@ -430,7 +429,7 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
     (* keep this case in front so that constructors are handled ocrrectly *)
     | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True |
        Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _ |
-       Sugared.ComodelPlus _ | Sugared.ComodelTimes _ | Sugared.ComodelRename _ |
+       Sugared.ComodelTimes _ | Sugared.ComodelRename _ |
        Sugared.Apply ({Location.it=Sugared.Constructor _;_}, _)) ->
        let ws, e = expr ctx c in
        let return_e = locate (Desugared.Val e) in
@@ -507,12 +506,11 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let p = locate (Desugared.PattVar f) in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.Using (cmdl, e, c, fin) ->
-       let ws1, cmdl = expr ctx cmdl in
-       let ws2, e = expr ctx e in
+    | Sugared.Using (e, c, fin) ->
+       let ws, e = expr ctx e in
        let c = comp ctx c in
        let fin = finally ~loc ctx fin in
-       let_binds (ws1 @ ws2) (locate (Desugared.Using (cmdl, e, c, fin)))
+       let_binds ws (locate (Desugared.Using (e, c, fin)))
 
 and match_clauses ctx lst =
   List.map (match_clause ctx) lst
@@ -575,6 +573,7 @@ and finally ~loc ctx lst =
        begin match List.exists (fun (sgl', _, _, _) -> Name.equal sgl sgl') fin_signals with
        | true -> error ~loc (DoubleFinallySignal sgl)
        | false ->
+          if not (is_signal sgl ctx) then error ~loc (SignalExpected sgl) ;
           let ctx, px = binder ctx px in
           let ctx, pw = binder ctx pw in
           let c = comp ctx c in

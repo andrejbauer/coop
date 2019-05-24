@@ -7,14 +7,14 @@ let apply (h : int -> int ! {op, die}) (n : int) = h n
 let g (n : int) =
   if n > 0 then op n else die ()
 
-let c =
-  comodel int with
+let c (w0 : int) =
+  comodel w0 with
   | op k @ w ->
       if k > 10 then croak w else (w, k + w)
   end
 
 let demo (n : int) =
-  using c @ 1 in
+  using c 1 in
     let a = apply g n in
     let b = apply g n in
     (1000 + a, 1000 + b)
@@ -27,7 +27,7 @@ let demo (n : int) =
 
 demo 2 ;;
 
-using (comodel unit with end) @ () in
+using (comodel ()  with end) in
   demo (-3)
 finally
   | val x @ _ -> 42
