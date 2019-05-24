@@ -394,7 +394,7 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
      if not quiet then
        List.iter
          (fun (f, t) ->
-           Format.printf "@[<hov> val %t@ :@ %t@ =@ <fun>@]@."
+           Format.printf "@[<hov>val %t@ :@ %t@ =@ <fun>@]@."
                          (Name.print f)
                          (Syntax.print_expr_ty t))
          fts ;

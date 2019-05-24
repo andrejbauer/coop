@@ -186,6 +186,8 @@ let rec ty ctx {Location.it=t'; loc} =
   let t' =
     match t' with
 
+    | Sugared.Empty -> Desugared.Empty
+
     | Sugared.Int -> Desugared.Int
 
     | Sugared.Bool -> Desugared.Bool

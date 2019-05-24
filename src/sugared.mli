@@ -5,6 +5,7 @@ type signature = Name.t list
 (** Parsed type. *)
 type ty = ty' Location.located
 and ty' =
+  | Empty
   | Int
   | Bool
   | NamedTy of Name.t

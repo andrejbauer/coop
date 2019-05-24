@@ -488,6 +488,8 @@ and meet_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2;
 let rec expr_ty {Location.it=t'; loc} =
   match t' with
 
+  | Desugared.Empty -> Syntax.Empty
+
   | Desugared.Int -> Syntax.Int
 
   | Desugared.Bool -> Syntax.Bool
@@ -521,8 +523,9 @@ and comp_ty ({Location.it=t'; loc} as t) =
      and sgn = signature sgn in
      Syntax.{comp_ty=t; comp_sig=sgn}
 
-  | (Desugared.Int | Desugared.Bool | Desugared.Alias _  | Desugared.Datatype _ |
-     Desugared.Product _ | Desugared.Arrow _ | Desugared.ComodelTy _) ->
+  | (Desugared.Empty | Desugared.Int | Desugared.Bool | Desugared.Alias _  |
+     Desugared.Datatype _ | Desugared.Product _ | Desugared.Arrow _ |
+     Desugared.ComodelTy _) ->
      let t = expr_ty t in
      Syntax.{comp_ty=t; comp_sig=empty_signature}
 
@@ -1038,7 +1041,6 @@ and toplevel ~quiet ctx {Location.it=d'; loc} =
 
     | Desugared.TopLet (p, c) ->
        let c, (Syntax.{comp_ty=c_ty';_} as c_ty) = infer_comp ctx c in
-       check_dirt ~loc c_ty Syntax.empty_signature ;
        let ctx, p, xts = top_extend_pattern ~loc ctx p c_ty' in
        ctx, Syntax.TopLet (p, xts, c)
 

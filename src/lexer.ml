@@ -7,6 +7,7 @@ let reserved = [
   ("bool", Parser.BOOL) ;
   ("comodel", Parser.COMODEL) ;
   ("else", Parser.ELSE) ;
+  ("empty", Parser.EMPTY) ;
   ("end", Parser.END) ;
   ("external", Parser.EXTERNAL) ;
   ("false", Parser.FALSE) ;

@@ -7,7 +7,7 @@
 %token UNDERSCORE
 
 (* Primitive types *)
-%token INT UNIT BOOL
+%token EMPTY INT UNIT BOOL
 
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
@@ -368,6 +368,9 @@ prod_ty_:
 
 simple_ty: mark_location(simple_ty_) { $1 }
 simple_ty_:
+  | EMPTY
+    { Sugared.Empty }
+
   | INT
     { Sugared.Int }
 

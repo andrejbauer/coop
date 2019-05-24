@@ -8,6 +8,7 @@ type signature = {
 (** Types. *)
 type ty = ty' Location.located
 and ty' =
+  | Empty
   | Int
   | Bool
   | Alias of Name.t
