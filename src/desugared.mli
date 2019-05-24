@@ -5,12 +5,17 @@ type signature = {
     sig_sgs : Name.Set.t
   }
 
-(** Types. *)
-type ty = ty' Location.located
-and ty' =
+(** Primitive types *)
+type primitive =
   | Empty
   | Int
   | Bool
+  | StringTy
+
+(** Types. *)
+type ty = ty' Location.located
+and ty' =
+  | Primitive of primitive
   | Abstract of Name.t
   | Alias of Name.t
   | Datatype of Name.t
@@ -29,6 +34,7 @@ and pattern' =
   | PattVar of Name.t
   | PattNumeral of int
   | PattBoolean of bool
+  | PattString of string
   | PattConstructor of Name.t * pattern option
   | PattTuple of pattern list
 
@@ -39,6 +45,7 @@ and expr' =
   | Var of Name.t
   | Numeral of int
   | Boolean of bool
+  | String of string
   | Tuple of expr list
   | Constructor of Name.t * expr option
   | Lambda of binder * comp

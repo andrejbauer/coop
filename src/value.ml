@@ -1,6 +1,7 @@
 type t =
   | Numeral of int
   | Boolean of bool
+  | String of string
   | Constructor of Name.t * t option
   | Tuple of t list
   | Closure of (t -> t result)
@@ -21,6 +22,8 @@ let rec print ?max_level v ppf =
   | Numeral k -> Format.fprintf ppf "%d" k
 
   | Boolean b -> Format.fprintf ppf "%b" b
+
+  | String s -> Format.fprintf ppf "\"%s\"" (String.escaped s)
 
   | Constructor (Name.Ident (_, Name.Prefix) as x, Some (Tuple [e])) ->
      Print.print ?max_level ~at_level:Level.prefix ppf "%t@ %t"

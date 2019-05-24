@@ -7,7 +7,7 @@
 %token UNDERSCORE
 
 (* Primitive types *)
-%token EMPTY INT UNIT BOOL
+%token EMPTY INT UNIT BOOL STRING
 
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
@@ -222,6 +222,9 @@ simple_term_:
   | x=var_name
     { Sugared.Var x }
 
+  | s=QUOTED_STRING
+    { Sugared.String s }
+
   | LPAREN es=separated_list(COMMA, term) RPAREN
                 { match es with
                   | [e] -> e.Location.it
@@ -329,6 +332,9 @@ simple_pattern_:
   | FALSE
     { Sugared.PattBoolean false }
 
+  | s=QUOTED_STRING
+    { Sugared.PattString s }
+
   | cnstr=CONSTRUCTOR
     { Sugared.PattConstructor (cnstr, None) }
 
@@ -372,16 +378,19 @@ prod_ty_:
 simple_ty: mark_location(simple_ty_) { $1 }
 simple_ty_:
   | EMPTY
-    { Sugared.Empty }
+    { Sugared.Primitive Sugared.Empty }
 
   | INT
-    { Sugared.Int }
+    { Sugared.Primitive Sugared.Int }
 
   | UNIT
     { Sugared.Product [] }
 
   | BOOL
-    { Sugared.Bool }
+    { Sugared.Primitive Sugared.Bool }
+
+  | STRING
+    { Sugared.Primitive Sugared.StringTy }
 
   | t=var_name
     { Sugared.NamedTy t }

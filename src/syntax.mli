@@ -7,14 +7,19 @@ type signature = {
     sig_sgs : Name.Set.t
   }
 
+(** Primitive types *)
+type primitive =
+  | Empty
+  | Int
+  | Bool
+  | StringTy
+
 (** Expression type *)
 type expr_ty =
   | Abstract of Name.t
   | Alias of Name.t
   | Datatype of Name.t
-  | Empty
-  | Int
-  | Bool
+  | Primitive of primitive
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
   | ComodelTy of comodel_ty
@@ -34,6 +39,7 @@ type pattern =
   | PattVar
   | PattNumeral of int
   | PattBoolean of bool
+  | PattString of string
   | PattConstructor of Name.t * pattern option
   | PattTuple of pattern list
 
@@ -46,6 +52,7 @@ and expr' =
   | Var of index
   | Numeral of int
   | Boolean of bool
+  | String of string
   | Constructor of Name.t * expr option
   | Tuple of expr list
   | Lambda of pattern * comp

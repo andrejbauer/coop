@@ -182,16 +182,18 @@ let signature ~loc ctx lst =
 let operations ops =
   List.fold_left (fun ops op -> Name.Set.add op ops) Name.Set.empty ops
 
+let primitive = function
+  | Sugared.Empty -> Desugared.Empty
+  | Sugared.Int -> Desugared.Int
+  | Sugared.Bool -> Desugared.Bool
+  | Sugared.StringTy -> Desugared.StringTy
+
 (** Desugar a type, allowing named types to be from the given list. *)
 let rec ty ctx {Location.it=t'; loc} =
   let t' =
     match t' with
 
-    | Sugared.Empty -> Desugared.Empty
-
-    | Sugared.Int -> Desugared.Int
-
-    | Sugared.Bool -> Desugared.Bool
+    | Sugared.Primitive p -> Desugared.Primitive (primitive p)
 
     | Sugared.NamedTy t ->
        begin match lookup_ty t ctx with
@@ -244,6 +246,9 @@ let rec pattern ctx {Location.it=p'; loc} =
 
   | Sugared.PattBoolean b ->
      ctx, locate (Desugared.PattBoolean b)
+
+  | Sugared.PattString s ->
+     ctx, locate (Desugared.PattString s)
 
   | Sugared.PattConstructor (cnstr, None) ->
      begin
@@ -306,6 +311,9 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
 
     | Sugared.True ->
        ([], locate (Desugared.Boolean true))
+
+    | Sugared.String s ->
+       ([], locate (Desugared.String s))
 
     | Sugared.Constructor cnstr ->
        begin
@@ -431,7 +439,7 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
   in
   match c' with
     (* keep this case in front so that constructors are handled ocrrectly *)
-    | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True |
+    | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True | Sugared.String _ |
        Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _ |
        Sugared.ComodelTimes _ | Sugared.ComodelRename _ |
        Sugared.Apply ({Location.it=Sugared.Constructor _;_}, _)) ->
@@ -454,9 +462,9 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let w, e = expr ctx e in
        let e' =
          let loc x = Location.locate ~loc:e.Location.loc x in
-         loc (Desugared.AscribeExpr (e, loc Desugared.Bool))
+         loc (Desugared.AscribeExpr (e, loc (Desugared.Primitive Desugared.Bool)))
        in
-       let b = Location.locate ~loc Desugared.Bool in
+       let b = Location.locate ~loc (Desugared.Primitive Desugared.Bool) in
        let cl1 =
          let c1 = comp ctx c1 in
          let loc x = Location.locate ~loc:c1.Location.loc x in

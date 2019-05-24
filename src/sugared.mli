@@ -2,12 +2,17 @@
 
 type signature = Name.t list
 
-(** Parsed type. *)
-type ty = ty' Location.located
-and ty' =
+(** Primitive types *)
+type primitive =
   | Empty
   | Int
   | Bool
+  | StringTy
+
+(** Parsed type. *)
+type ty = ty' Location.located
+and ty' =
+  | Primitive of primitive
   | NamedTy of Name.t
   | Product of ty list
   | Arrow of ty * ty
@@ -24,6 +29,7 @@ and pattern' =
   | PattVar of Name.t
   | PattNumeral of int
   | PattBoolean of bool
+  | PattString of string
   | PattConstructor of Name.t * pattern option
   | PattTuple of pattern list
 
@@ -35,6 +41,7 @@ and term' =
   | False
   | True
   | Constructor of Name.t
+  | String of string
   | Tuple of term list
   | Match of term * (binder * term) list
   | If of term * term * term

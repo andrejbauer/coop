@@ -13,6 +13,7 @@ type error =
   | SysError of string
   | Unexpected of string
   | MalformedUTF8
+  | MalformedQuotedString
   | BadNumeral of string
   | UnclosedComment
 

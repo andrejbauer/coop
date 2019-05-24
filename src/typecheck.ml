@@ -249,7 +249,7 @@ let rec norm_ty ~loc ctx t =
      let t = lookup_tyabbrev ~loc x ctx in
      norm_ty ~loc ctx t
 
-  | (Syntax.Abstract _ | Syntax.Datatype _ |  Syntax.Empty | Syntax.Int | Syntax.Bool |
+  | (Syntax.Abstract _ | Syntax.Datatype _ |  Syntax.Primitive _ |
      Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
      t
 
@@ -260,7 +260,7 @@ let as_product ~loc ctx ty =
 
   | Syntax.Product ts -> Some ts
 
-  | (Syntax.Abstract _ | Syntax.Datatype _  | Syntax.Empty | Syntax.Int | Syntax.Bool |
+  | (Syntax.Abstract _ | Syntax.Datatype _  | Syntax.Primitive _ |
      Syntax.Arrow _ | Syntax.ComodelTy _) ->
      None
 
@@ -271,7 +271,7 @@ let as_arrow ~loc ctx ty =
 
   | Syntax.Arrow (t,u) -> Some (t, u)
 
-  | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Empty | Syntax.Int | Syntax.Bool |
+  | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Primitive _ |
      Syntax.Abstract _ | Syntax.ComodelTy _) ->
      None
 
@@ -283,8 +283,8 @@ let as_comodel ~loc ctx ty =
 
   | Syntax.ComodelTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
 
-  | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Empty | Syntax.Int |
-     Syntax.Bool | Syntax.Arrow _ | Syntax.Abstract _) ->
+  | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Primitive _ |
+     Syntax.Arrow _ | Syntax.Abstract _) ->
      None
 
 let as_datatype ~loc ctx ty =
@@ -296,8 +296,8 @@ let as_datatype ~loc ctx ty =
   | Syntax.Datatype ty ->
      Some (lookup_datatype ~loc ty ctx)
 
-  | (Syntax.Product _ | Syntax.Empty | Syntax.Int | Syntax.Bool |
-     Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _) ->
+  | (Syntax.Product _ | Syntax.Primitive _ | Syntax.Arrow _ |
+     Syntax.ComodelTy _ | Syntax.Abstract _) ->
      None
 
 
@@ -323,15 +323,13 @@ let rec expr_subty ~loc ctx t u =
   | Syntax.Datatype x, Syntax.Datatype y ->
      Name.equal x y
 
-  | Syntax.Empty, _ -> true
+  | Syntax.Primitive Syntax.Empty, _ -> true
 
-  | _, Syntax.Empty -> false
+  | _, Syntax.Primitive Syntax.Empty -> false
 
   | Syntax.Abstract t1, Syntax.Abstract t2 -> Name.equal t1 t2
 
-  | Syntax.Int, Syntax.Int -> true
-
-  | Syntax.Bool, Syntax.Bool -> true
+  | Syntax.Primitive p1, Syntax.Primitive p2 -> p1 = p2
 
   | Syntax.Product ts, Syntax.Product us ->
      let rec fold ts us =
@@ -348,7 +346,7 @@ let rec expr_subty ~loc ctx t u =
   | Syntax.ComodelTy (tsgn1, t, tsgn2), Syntax.ComodelTy (usgn1, u, usgn2) ->
      Name.Set.subset usgn1 tsgn1 && expr_eqtype ~loc ctx t u && subsignature  tsgn2 usgn2
 
-  | (Syntax.Datatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
+  | (Syntax.Datatype _ | Syntax.Primitive _ | Syntax.Product _ |
      Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _), _ ->
      false
 
@@ -388,13 +386,11 @@ let rec join_expr_ty ~loc ctx t1 t2 =
   | Syntax.Abstract x, Syntax.Abstract y when Name.equal x y ->
      t1
 
-  | Syntax.Empty, t2 -> t2
+  | Syntax.Primitive Syntax.Empty, t2 -> t2
 
-  | t1, Syntax.Empty -> t1
+  | t1, Syntax.Primitive Syntax.Empty -> t1
 
-  | Syntax.Int, Syntax.Int -> Syntax.Int
-
-  | Syntax.Bool, Syntax.Bool -> Syntax.Bool
+  | Syntax.Primitive p1, Syntax.Primitive p2 when p1 = p2 -> t1
 
   | Syntax.Product ts1, Syntax.Product ts2 ->
      let rec fold ts ts1 ts2 =
@@ -421,7 +417,7 @@ let rec join_expr_ty ~loc ctx t1 t2 =
      and sgn = join_signature sig1 sig2 in
      Syntax.ComodelTy  (ops, t, sgn)
 
-  | (Syntax.Datatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
+  | (Syntax.Datatype _ | Syntax.Primitive _ | Syntax.Product _ |
      Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
@@ -445,13 +441,11 @@ and meet_expr_ty ~loc ctx t1 t2 =
   | Syntax.Abstract x, Syntax.Abstract y when Name.equal x y ->
      t1
 
-  | Syntax.Empty, _ -> Syntax.Empty
+  | Syntax.Primitive Syntax.Empty, _ -> Syntax.Primitive Syntax.Empty
 
-  | _, Syntax.Empty -> Syntax.Empty
+  | _, Syntax.Primitive Syntax.Empty -> Syntax.Primitive Syntax.Empty
 
-  | Syntax.Int, Syntax.Int -> Syntax.Int
-
-  | Syntax.Bool, Syntax.Bool -> Syntax.Bool
+  | Syntax.Primitive p1, Syntax.Primitive p2 when p1 = p2 -> t1
 
   | Syntax.Product ts1, Syntax.Product ts2 ->
      let rec fold ts ts1 ts2 =
@@ -478,7 +472,7 @@ and meet_expr_ty ~loc ctx t1 t2 =
      and sgn = meet_signature sig1 sig2 in
      Syntax.ComodelTy  (ops, t, sgn)
 
-  | (Syntax.Datatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
+  | (Syntax.Datatype _ | Syntax.Primitive _ | Syntax.Product _ |
      Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
@@ -498,11 +492,15 @@ and meet_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2;
 let rec expr_ty {Location.it=t'; loc} =
   match t' with
 
-  | Desugared.Empty -> Syntax.Empty
-
-  | Desugared.Int -> Syntax.Int
-
-  | Desugared.Bool -> Syntax.Bool
+  | Desugared.Primitive p ->
+     let p =
+       match p with
+       | Desugared.Empty -> Syntax.Empty
+       | Desugared.Bool -> Syntax.Bool
+       | Desugared.StringTy -> Syntax.StringTy
+       | Desugared.Int -> Syntax.Int
+     in
+     Syntax.Primitive p
 
   | Desugared.Abstract t -> Syntax.Abstract t
 
@@ -535,7 +533,7 @@ and comp_ty ({Location.it=t'; loc} as t) =
      and sgn = signature sgn in
      Syntax.{comp_ty=t; comp_sig=sgn}
 
-  | (Desugared.Empty | Desugared.Int | Desugared.Bool | Desugared.Alias _  |
+  | (Desugared.Primitive _ | Desugared.Alias _  |
      Desugared.Datatype _ | Desugared.Product _ | Desugared.Arrow _ |
      Desugared.ComodelTy _ | Desugared.Abstract _) ->
      let t = expr_ty t in
@@ -547,51 +545,60 @@ and comp_ty ({Location.it=t'; loc} as t) =
 let check_pattern ~loc ctx patt ty =
   let rec fold xts {Location.it=p'; loc} t =
     let t = norm_ty ~loc ctx t in
-    match p', t with
+    match p' with
 
-    | _, Syntax.Alias _ -> assert false
-
-    | Desugared.PattAnonymous, _ ->
+    | Desugared.PattAnonymous ->
        Syntax.PattAnonymous, xts
 
-    | Desugared.PattVar x, _ ->
+    | Desugared.PattVar x ->
        Syntax.PattVar, (x, t) :: xts
 
-    | Desugared.PattNumeral n, Syntax.Int ->
-       Syntax.PattNumeral n, xts
-
-    | Desugared.PattBoolean b, Syntax.Bool ->
-       Syntax.PattBoolean b, xts
-
-    | Desugared.PattConstructor (cnstr, popt), Syntax.Datatype x ->
-       let lst = lookup_datatype ~loc x ctx in
-       begin match List.assoc_opt cnstr lst with
-         | None -> error ~loc (PattTypeMismatch ty)
-         | Some topt ->
-            begin
-              match popt, topt with
-              | None, None ->
-                 Syntax.PattConstructor (cnstr, None), xts
-              | Some p, Some t ->
-                 let p, xts = fold xts p t in
-                 Syntax.PattConstructor (cnstr, Some p), xts
-              | None, Some _ | Some _, None -> error ~loc  (PattTypeMismatch ty)
-            end
+    | Desugared.PattNumeral n ->
+       begin match t with
+       | Syntax.Primitive Syntax.Int -> Syntax.PattNumeral n, xts
+       | _ -> error ~loc (PattTypeMismatch ty)
        end
 
-    | Desugared.PattTuple ps, Syntax.Product ts ->
-       let ps, xts = fold_tuple ~loc xts [] ps ts in
-       Syntax.PattTuple ps, xts
+    | Desugared.PattBoolean b ->
+       begin match t with
+       | Syntax.Primitive Syntax.Bool -> Syntax.PattBoolean b, xts
+       | _ -> error ~loc (PattTypeMismatch ty)
+       end
 
-    | Desugared.PattNumeral _,
-      (Syntax.Abstract _ | Syntax.Empty | Syntax.Bool | Syntax.Datatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattBoolean _,
-      (Syntax.Abstract _ | Syntax.Empty | Syntax.Int | Syntax.Datatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattConstructor  _
-    , (Syntax.Abstract _ | Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattTuple _,
-      (Syntax.Abstract _ | Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Datatype _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
-       error ~loc (PattTypeMismatch ty)
+
+    | Desugared.PattString s ->
+       begin match t with
+       | Syntax.Primitive Syntax.StringTy -> Syntax.PattString s, xts
+       | _ -> error ~loc (PattTypeMismatch ty)
+       end
+
+    | Desugared.PattConstructor (cnstr, popt) ->
+       begin match t with
+       | Syntax.Datatype x ->
+          let lst = lookup_datatype ~loc x ctx in
+          begin match List.assoc_opt cnstr lst with
+          | None -> error ~loc (PattTypeMismatch ty)
+          | Some topt ->
+             begin
+               match popt, topt with
+               | None, None ->
+                  Syntax.PattConstructor (cnstr, None), xts
+               | Some p, Some t ->
+                  let p, xts = fold xts p t in
+                  Syntax.PattConstructor (cnstr, Some p), xts
+               | None, Some _ | Some _, None -> error ~loc  (PattTypeMismatch ty)
+            end
+          end
+       | _ -> error ~loc (PattTypeMismatch ty)
+       end
+
+    | Desugared.PattTuple ps ->
+       begin match t with
+       |  Syntax.Product ts ->
+           let ps, xts = fold_tuple ~loc xts [] ps ts in
+           Syntax.PattTuple ps, xts
+       | _ -> error ~loc (PattTypeMismatch ty)
+       end
 
   and fold_tuple ~loc xts ps' ps ts =
     match ps, ts with
@@ -646,10 +653,13 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
      e, t
 
   | Desugared.Numeral n ->
-     locate (Syntax.Numeral n), Syntax.Int
+     locate (Syntax.Numeral n), Syntax.(Primitive Int)
 
   | Desugared.Boolean b ->
-     locate (Syntax.Boolean b), Syntax.Bool
+     locate (Syntax.Boolean b), Syntax.(Primitive Bool)
+
+  | Desugared.String s ->
+     locate (Syntax.String s), Syntax.(Primitive StringTy)
 
   | Desugared.Constructor (cnstr, eopt) ->
      let ty, topt = lookup_constructor ~loc cnstr ctx in
@@ -943,7 +953,7 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
             error ~loc (TypeExpectedButTuple ty)
      end
 
-  | (Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
+  | (Desugared.String _ | Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
      Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Comodel _ |
      Desugared.ComodelTimes _ | Desugared.ComodelRename _) ->
      let e, ty' = infer_expr ctx e in

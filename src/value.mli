@@ -1,6 +1,7 @@
 type t =
   | Numeral of int
   | Boolean of bool
+  | String of string
   | Constructor of Name.t * t option
   | Tuple of t list
   | Closure of (t -> t result)

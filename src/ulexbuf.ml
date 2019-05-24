@@ -10,13 +10,16 @@ type error =
   | SysError of string
   | Unexpected of string
   | MalformedUTF8
+  | MalformedQuotedString
   | BadNumeral of string
   | UnclosedComment
 
 let print_error err ppf = match err with
   | SysError s -> Format.fprintf ppf "System error: %s" s
+  | Unexpected "" -> Format.fprintf ppf "Unexpected end of input"
   | Unexpected s -> Format.fprintf ppf "Unexpected %s" s
   | MalformedUTF8 -> Format.fprintf ppf "Malformed UTF8"
+  | MalformedQuotedString -> Format.fprintf ppf "Malformed quoted string"
   | BadNumeral s -> Format.fprintf ppf "Bad numeral %s" s
   | UnclosedComment -> Format.fprintf ppf "Input ended inside unclosed comment"
 

@@ -5,14 +5,19 @@ type signature = {
     sig_sgs : Name.Set.t
   }
 
+(** Primitive types *)
+type primitive =
+  | Empty
+  | Int
+  | Bool
+  | StringTy
+
 (** Expression type *)
 type expr_ty =
   | Abstract of Name.t
   | Alias of Name.t
   | Datatype of Name.t
-  | Empty
-  | Int
-  | Bool
+  | Primitive of primitive
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
   | ComodelTy of comodel_ty
@@ -32,6 +37,7 @@ type pattern =
   | PattVar
   | PattNumeral of int
   | PattBoolean of bool
+  | PattString of string
   | PattConstructor of Name.t * pattern option
   | PattTuple of pattern list
 
@@ -44,6 +50,7 @@ and expr' =
   | Var of index
   | Numeral of int
   | Boolean of bool
+  | String of string
   | Constructor of Name.t * expr option
   | Tuple of expr list
   | Lambda of pattern * comp
@@ -98,7 +105,7 @@ let operation_ty t op =
   }
 
 let signal_ty sgl =
-  { comp_ty = Empty ;
+  { comp_ty = Primitive Empty ;
     comp_sig = { sig_ops = Name.Set.empty ;
                  sig_sgs = Name.Set.add sgl Name.Set.empty }
   }
@@ -107,6 +114,17 @@ let pollute {comp_ty; comp_sig=sgn1} sgn2 =
     comp_sig = { sig_ops = Name.Set.union sgn1.sig_ops sgn2.sig_ops ;
                  sig_sgs = Name.Set.union sgn1.sig_sgs sgn2.sig_sgs }
   }
+
+
+(** Pretty-print a primitive type *)
+let print_primitive p ppf =
+  Format.fprintf ppf
+  (match p with
+  | Empty -> "empty"
+  | Int -> "int"
+  | Bool -> "bool"
+  | StringTy -> "string")
+
 
 (** Pretty-print an expresion type *)
 let rec print_expr_ty ?max_level ty ppf =
@@ -118,11 +136,7 @@ let rec print_expr_ty ?max_level ty ppf =
 
   | Datatype t -> Format.fprintf ppf "%t" (Name.print t)
 
-  | Empty -> Format.fprintf ppf "empty"
-
-  | Int -> Format.fprintf ppf "int"
-
-  | Bool -> Format.fprintf ppf "bool"
+  | Primitive p -> print_primitive p ppf
 
   | Product [] -> Format.fprintf ppf "unit"
 

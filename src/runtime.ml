@@ -68,42 +68,48 @@ let lookup ~loc i env =
 
 let match_pattern p v =
   let rec fold us p v =
-    match p, v with
+    match p with
 
-    | Syntax.PattAnonymous, _ -> Some us
+    | Syntax.PattAnonymous -> Some us
 
-    | Syntax.PattVar, _ ->
+    | Syntax.PattVar ->
        Some (v :: us)
 
-    | Syntax.PattNumeral m, Value.Numeral n ->
-       if m = n then Some us else None
+    | Syntax.PattNumeral m ->
+        begin match v with
+        | Value.Numeral n when m = n -> Some us
+        | _ -> None
+        end
 
-    | Syntax.PattBoolean b, Value.Boolean b' ->
-       if b = b' then Some us else None
+    | Syntax.PattBoolean b ->
+       begin match v with
+       | Value.Boolean b' when b = b' -> Some us
+       | _ -> None
+       end
 
-    | Syntax.PattConstructor (cnstr, popt), Value.Constructor (cnstr', vopt) ->
-       begin
-         if not (Name.equal cnstr cnstr') then
-           None
-         else
+    | Syntax.PattString s ->
+       begin match v with
+       | Value.String s' -> if String.equal s s' then Some us else None
+       | _ -> None
+       end
+
+    | Syntax.PattConstructor (cnstr, popt) ->
+       begin match v with
+       | Value.Constructor (cnstr', vopt) when Name.equal cnstr cnstr' ->
+          begin
            match popt, vopt with
            | None, None -> Some us
            | Some p, Some v -> fold us p v
            | Some _, None | None, Some _ -> None
+          end
+       | _ -> None
        end
 
-    | Syntax.PattTuple ps, Value.Tuple vs ->
-       fold_tuple us ps vs
-
-    | _, Value.Closure _ -> None
-
-    | _, Value.Comodel _ -> None
-
-    | Syntax.PattNumeral _, (Value.Boolean _ | Value.Constructor _ | Value.Tuple _)
-      | Syntax.PattBoolean _, (Value.Numeral _ | Value.Constructor _ | Value.Tuple _)
-      | Syntax.PattConstructor _, (Value.Boolean _ | Value.Numeral _ | Value.Tuple _)
-      | Syntax.PattTuple _, (Value.Numeral _ | Value.Boolean _ | Value.Constructor _) ->
-       None
+    | Syntax.PattTuple ps ->
+       begin match v with
+       | Value.Tuple vs -> fold_tuple us ps vs
+       | _ -> None
+       end
 
   and fold_tuple us ps vs =
     match ps, vs with
@@ -146,13 +152,13 @@ let match_clauses ~loc env ps v =
 
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
-  | Value.Closure _ | Value.Numeral _ | Value.Boolean _ | Value.Constructor _
+  | Value.Closure _ | Value.Numeral _ | Value.Boolean _ | Value.String _ | Value.Constructor _
     | Value.Tuple ([] | [_] | _::_::_::_) | Value.Comodel _ ->
      error ~loc PairExpected
 
 let as_closure ~loc = function
   | Value.Closure f -> f
-  | Value.Numeral _ | Value.Boolean _ | Value.Constructor _ | Value.Tuple _
+  | Value.Numeral _ | Value.Boolean _ | Value.String _ | Value.Constructor _ | Value.Tuple _
     | Value.Comodel _ -> error ~loc FunctionExpected
 
 let as_value ~loc = function
@@ -162,7 +168,7 @@ let as_value ~loc = function
 
 let as_comodel ~loc = function
   | Value.Comodel (w, cmdl) -> (w, cmdl)
-  | Value.Numeral _ | Value.Boolean _ | Value.Tuple _ | Value.Constructor _
+  | Value.Numeral _ | Value.Boolean _ | Value.String _ | Value.Tuple _ | Value.Constructor _
     | Value.Closure _ -> error ~loc ComodelExpected
 
 (** The result monad *)
@@ -183,6 +189,8 @@ let rec eval_expr env {Location.it=e'; loc} =
   | Syntax.Numeral k -> Value.Numeral k
 
   | Syntax.Boolean b -> Value.Boolean b
+
+  | Syntax.String s -> Value.String s
 
   | Syntax.Var i -> lookup ~loc i env
 

@@ -23,6 +23,7 @@ let reserved = [
   ("operation", Parser.OPERATION) ;
   ("rec", Parser.REC) ;
   ("signal", Parser.SIGNAL);
+  ("string", Parser.STRING);
   ("then", Parser.THEN) ;
   ("true", Parser.TRUE) ;
   ("type", Parser.TYPE) ;
@@ -63,7 +64,7 @@ let end_longcomment= [%sedlex.regexp? "*)"]
 let newline = [%sedlex.regexp? ('\n' | '\r' | "\n\r" | "\r\n")]
 let hspace  = [%sedlex.regexp? (' ' | '\t' | '\r')]
 
-let quoted_string = [%sedlex.regexp? '"', Star (Compl '"'), '"']
+let quoted_string = [%sedlex.regexp? '"', (Star (Compl '"' | ("\\", any))), '"']
 
 let update_eoi ({ Ulexbuf.pos_end; line_limit;_ } as lexbuf) =
   match line_limit with None -> () | Some line_limit ->
@@ -94,7 +95,14 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
      let n = ref 0 in
      String.iter (fun c -> if c = '\n' then incr n) s;
      Ulexbuf.new_line ~n:!n lexbuf;
-     Parser.QUOTED_STRING (String.sub s 1 (l - 2))
+     let s =
+       try
+         Scanf.unescaped (String.sub s 1 (l - 2))
+       with Stdlib.Scanf.Scan_failure _ ->
+         Format.printf "STRING IS [%s]@." s ;
+         Ulexbuf.error ~loc:(loc_of lexbuf) Ulexbuf.MalformedQuotedString
+     in
+     Parser.QUOTED_STRING s
   | '|'                      -> f (); Parser.BAR
   | '_'                      -> f (); Parser.UNDERSCORE
   | '('                      -> f (); Parser.LPAREN
