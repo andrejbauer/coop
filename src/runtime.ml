@@ -409,6 +409,11 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
                      (Value.print v) ;
      env
 
+  | Syntax.DefineAbstract t ->
+     if not quiet then
+       Format.printf "@[<hov>type %t@]@." (Name.print t) ;
+     env
+
   | Syntax.DefineAlias (t, abbrev) ->
      if not quiet then
        Format.printf "@[<hov>type %t@ =@ %t@]@."

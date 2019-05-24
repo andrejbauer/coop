@@ -98,6 +98,7 @@ type ident_kind =
   | Signal
 
 type tydef_kind =
+  | TydefAbstract
   | TydefAlias
   | TydefDatatype
 
@@ -196,6 +197,7 @@ let rec ty ctx {Location.it=t'; loc} =
        begin match lookup_ty t ctx with
        | Some TydefAlias -> Desugared.Alias t
        | Some TydefDatatype -> Desugared.Datatype t
+       | Some TydefAbstract -> Desugared.Abstract t
        | None -> error ~loc (UnknownType t)
        end
 
@@ -663,6 +665,11 @@ let toplevel' ctx = function
        let abbrev = ty ctx abbrev in
        let ctx = extend_type t TydefAlias ctx in
        ctx, Desugared.DefineAlias (t, abbrev)
+
+    | Sugared.DefineAbstract t ->
+       check_type_shadow ~loc t ctx ;
+       let ctx = extend_type t TydefAbstract ctx in
+       ctx, Desugared.DefineAbstract t
 
     | Sugared.DefineDatatype lst ->
        let ctx, lst = datatypes ~loc ctx lst in

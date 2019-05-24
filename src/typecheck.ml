@@ -249,7 +249,7 @@ let rec norm_ty ~loc ctx t =
      let t = lookup_tyabbrev ~loc x ctx in
      norm_ty ~loc ctx t
 
-  | (Syntax.Datatype _ |  Syntax.Empty | Syntax.Int | Syntax.Bool |
+  | (Syntax.Abstract _ | Syntax.Datatype _ |  Syntax.Empty | Syntax.Int | Syntax.Bool |
      Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
      t
 
@@ -260,7 +260,7 @@ let as_product ~loc ctx ty =
 
   | Syntax.Product ts -> Some ts
 
-  | (Syntax.Datatype _  | Syntax.Empty | Syntax.Int | Syntax.Bool |
+  | (Syntax.Abstract _ | Syntax.Datatype _  | Syntax.Empty | Syntax.Int | Syntax.Bool |
      Syntax.Arrow _ | Syntax.ComodelTy _) ->
      None
 
@@ -272,7 +272,7 @@ let as_arrow ~loc ctx ty =
   | Syntax.Arrow (t,u) -> Some (t, u)
 
   | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Empty | Syntax.Int | Syntax.Bool |
-     Syntax.ComodelTy _) ->
+     Syntax.Abstract _ | Syntax.ComodelTy _) ->
      None
 
 let as_comodel ~loc ctx ty =
@@ -283,7 +283,8 @@ let as_comodel ~loc ctx ty =
 
   | Syntax.ComodelTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
 
-  | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Arrow _) ->
+  | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Empty | Syntax.Int |
+     Syntax.Bool | Syntax.Arrow _ | Syntax.Abstract _) ->
      None
 
 let as_datatype ~loc ctx ty =
@@ -295,7 +296,8 @@ let as_datatype ~loc ctx ty =
   | Syntax.Datatype ty ->
      Some (lookup_datatype ~loc ty ctx)
 
-  | (Syntax.Product _ | Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Arrow _ | Syntax.ComodelTy _) ->
+  | (Syntax.Product _ | Syntax.Empty | Syntax.Int | Syntax.Bool |
+     Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _) ->
      None
 
 
@@ -325,6 +327,8 @@ let rec expr_subty ~loc ctx t u =
 
   | _, Syntax.Empty -> false
 
+  | Syntax.Abstract t1, Syntax.Abstract t2 -> Name.equal t1 t2
+
   | Syntax.Int, Syntax.Int -> true
 
   | Syntax.Bool, Syntax.Bool -> true
@@ -345,7 +349,7 @@ let rec expr_subty ~loc ctx t u =
      Name.Set.subset usgn1 tsgn1 && expr_eqtype ~loc ctx t u && subsignature  tsgn2 usgn2
 
   | (Syntax.Datatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
-     Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
+     Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _), _ ->
      false
 
 and comp_subty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} (Syntax.{comp_ty=t2; comp_sig=sig2}) =
@@ -379,6 +383,9 @@ let rec join_expr_ty ~loc ctx t1 t2 =
      join_expr_ty ~loc ctx t1 t2
 
   | Syntax.Datatype x, Syntax.Datatype y when Name.equal x y ->
+     t1
+
+  | Syntax.Abstract x, Syntax.Abstract y when Name.equal x y ->
      t1
 
   | Syntax.Empty, t2 -> t2
@@ -415,7 +422,7 @@ let rec join_expr_ty ~loc ctx t1 t2 =
      Syntax.ComodelTy  (ops, t, sgn)
 
   | (Syntax.Datatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
-     Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
+     Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
 and meet_expr_ty ~loc ctx t1 t2 =
@@ -433,6 +440,9 @@ and meet_expr_ty ~loc ctx t1 t2 =
      meet_expr_ty ~loc ctx t1 t2
 
   | Syntax.Datatype x, Syntax.Datatype y when Name.equal x y ->
+     t1
+
+  | Syntax.Abstract x, Syntax.Abstract y when Name.equal x y ->
      t1
 
   | Syntax.Empty, _ -> Syntax.Empty
@@ -469,7 +479,7 @@ and meet_expr_ty ~loc ctx t1 t2 =
      Syntax.ComodelTy  (ops, t, sgn)
 
   | (Syntax.Datatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
-     Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
+     Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
 and join_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2; comp_sig=sig2} =
@@ -493,6 +503,8 @@ let rec expr_ty {Location.it=t'; loc} =
   | Desugared.Int -> Syntax.Int
 
   | Desugared.Bool -> Syntax.Bool
+
+  | Desugared.Abstract t -> Syntax.Abstract t
 
   | Desugared.Alias t -> Syntax.Alias t
 
@@ -525,7 +537,7 @@ and comp_ty ({Location.it=t'; loc} as t) =
 
   | (Desugared.Empty | Desugared.Int | Desugared.Bool | Desugared.Alias _  |
      Desugared.Datatype _ | Desugared.Product _ | Desugared.Arrow _ |
-     Desugared.ComodelTy _) ->
+     Desugared.ComodelTy _ | Desugared.Abstract _) ->
      let t = expr_ty t in
      Syntax.{comp_ty=t; comp_sig=empty_signature}
 
@@ -571,10 +583,14 @@ let check_pattern ~loc ctx patt ty =
        let ps, xts = fold_tuple ~loc xts [] ps ts in
        Syntax.PattTuple ps, xts
 
-    | Desugared.PattNumeral _, (Syntax.Empty | Syntax.Bool | Syntax.Datatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattBoolean _, (Syntax.Empty | Syntax.Int | Syntax.Datatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattConstructor  _, (Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattTuple _, (Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Datatype _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
+    | Desugared.PattNumeral _,
+      (Syntax.Abstract _ | Syntax.Empty | Syntax.Bool | Syntax.Datatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattBoolean _,
+      (Syntax.Abstract _ | Syntax.Empty | Syntax.Int | Syntax.Datatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattConstructor  _
+    , (Syntax.Abstract _ | Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattTuple _,
+      (Syntax.Abstract _ | Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Datatype _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
        error ~loc (PattTypeMismatch ty)
 
   and fold_tuple ~loc xts ps' ps ts =
@@ -1057,6 +1073,9 @@ and toplevel ~quiet ctx {Location.it=d'; loc} =
        let abbrev = expr_ty abbrev in
        let ctx = extend_tyabbrev ~loc t abbrev ctx in
        ctx, Syntax.DefineAlias (t, abbrev)
+
+    | Desugared.DefineAbstract t ->
+       ctx, Syntax.DefineAbstract t
 
     | Desugared.DefineDatatype ty_defs ->
        let ctx, ty_defs = datatypes ~loc ctx ty_defs in

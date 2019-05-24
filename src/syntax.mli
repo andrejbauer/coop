@@ -9,6 +9,7 @@ type signature = {
 
 (** Expression type *)
 type expr_ty =
+  | Abstract of Name.t
   | Alias of Name.t
   | Datatype of Name.t
   | Empty
@@ -76,6 +77,7 @@ and toplevel' =
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopLetRec of (pattern * comp) list * (Name.t * expr_ty) list
   | TopComp of comp * expr_ty
+  | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty
   | DefineDatatype of (Name.t * datatype) list
   | DeclareOperation of Name.t * expr_ty * expr_ty

@@ -7,6 +7,7 @@ type signature = {
 
 (** Expression type *)
 type expr_ty =
+  | Abstract of Name.t
   | Alias of Name.t
   | Datatype of Name.t
   | Empty
@@ -74,6 +75,7 @@ and toplevel' =
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopLetRec of (pattern * comp) list * (Name.t * expr_ty) list
   | TopComp of comp * expr_ty
+  | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty
   | DefineDatatype of (Name.t * datatype) list
   | DeclareOperation of Name.t * expr_ty * expr_ty
@@ -109,6 +111,8 @@ let pollute {comp_ty; comp_sig=sgn1} sgn2 =
 (** Pretty-print an expresion type *)
 let rec print_expr_ty ?max_level ty ppf =
   match ty with
+
+  | Abstract t -> Format.fprintf ppf "%t" (Name.print t)
 
   | Alias t -> Format.fprintf ppf "%t" (Name.print t)
 

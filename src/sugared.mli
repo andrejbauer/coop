@@ -70,6 +70,7 @@ and toplevel' =
   | TopLetFun of Name.t * binder list * term
   | TopLetRec of rec_clause list
   | TopComp of term
+  | DefineAbstract of Name.t
   | DefineAlias of Name.t * ty
   | DefineDatatype of (Name.t * datatype) list
   | DeclareOperation of Name.t * ty * ty

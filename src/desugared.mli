@@ -11,6 +11,7 @@ and ty' =
   | Empty
   | Int
   | Bool
+  | Abstract of Name.t
   | Alias of Name.t
   | Datatype of Name.t
   | Arrow of ty * ty
@@ -76,6 +77,7 @@ and toplevel' =
   | TopLet of pattern * comp
   | TopLetRec of rec_clause list
   | TopComp of comp
+  | DefineAbstract of Name.t
   | DefineAlias of Name.t * ty
   | DefineDatatype of (Name.t * datatype) list
   | DeclareOperation of Name.t * ty * ty

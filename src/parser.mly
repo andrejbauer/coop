@@ -122,6 +122,9 @@ toplevel_:
   | EXTERNAL x=var_name COLON t=ty EQUAL s=QUOTED_STRING
     { Sugared.External (x, t, s) }
 
+  | TYPE x=var_name
+    { Sugared.DefineAbstract x }
+
   | TYPE x=var_name EQUAL t=ty
     { Sugared.DefineAlias (x, t) }
 
