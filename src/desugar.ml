@@ -186,7 +186,7 @@ let primitive = function
   | Sugared.Empty -> Desugared.Empty
   | Sugared.Int -> Desugared.Int
   | Sugared.Bool -> Desugared.Bool
-  | Sugared.StringTy -> Desugared.StringTy
+  | Sugared.String -> Desugared.String
 
 (** Desugar a type, allowing named types to be from the given list. *)
 let rec ty ctx {Location.it=t'; loc} =
@@ -247,8 +247,8 @@ let rec pattern ctx {Location.it=p'; loc} =
   | Sugared.PattBoolean b ->
      ctx, locate (Desugared.PattBoolean b)
 
-  | Sugared.PattString s ->
-     ctx, locate (Desugared.PattString s)
+  | Sugared.PattQuoted s ->
+     ctx, locate (Desugared.PattQuoted s)
 
   | Sugared.PattConstructor (cnstr, None) ->
      begin
@@ -312,8 +312,8 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
     | Sugared.True ->
        ([], locate (Desugared.Boolean true))
 
-    | Sugared.String s ->
-       ([], locate (Desugared.String s))
+    | Sugared.Quoted s ->
+       ([], locate (Desugared.Quoted s))
 
     | Sugared.Constructor cnstr ->
        begin
@@ -439,7 +439,7 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
   in
   match c' with
     (* keep this case in front so that constructors are handled ocrrectly *)
-    | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True | Sugared.String _ |
+    | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True | Sugared.Quoted _ |
        Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _ |
        Sugared.ComodelTimes _ | Sugared.ComodelRename _ |
        Sugared.Apply ({Location.it=Sugared.Constructor _;_}, _)) ->
@@ -462,9 +462,9 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let w, e = expr ctx e in
        let e' =
          let loc x = Location.locate ~loc:e.Location.loc x in
-         loc (Desugared.AscribeExpr (e, loc (Desugared.Primitive Desugared.Bool)))
+         loc (Desugared.AscribeExpr (e, loc (Desugared.(Primitive Bool))))
        in
-       let b = Location.locate ~loc (Desugared.Primitive Desugared.Bool) in
+       let b = Location.locate ~loc (Desugared.(Primitive Bool)) in
        let cl1 =
          let c1 = comp ctx c1 in
          let loc x = Location.locate ~loc:c1.Location.loc x in

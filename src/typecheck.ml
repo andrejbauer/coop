@@ -323,9 +323,9 @@ let rec expr_subty ~loc ctx t u =
   | Syntax.Datatype x, Syntax.Datatype y ->
      Name.equal x y
 
-  | Syntax.Primitive Syntax.Empty, _ -> true
+  | Syntax.(Primitive Empty), _ -> true
 
-  | _, Syntax.Primitive Syntax.Empty -> false
+  | _, Syntax.(Primitive Empty) -> false
 
   | Syntax.Abstract t1, Syntax.Abstract t2 -> Name.equal t1 t2
 
@@ -386,9 +386,9 @@ let rec join_expr_ty ~loc ctx t1 t2 =
   | Syntax.Abstract x, Syntax.Abstract y when Name.equal x y ->
      t1
 
-  | Syntax.Primitive Syntax.Empty, t2 -> t2
+  | Syntax.(Primitive Empty), t2 -> t2
 
-  | t1, Syntax.Primitive Syntax.Empty -> t1
+  | t1, Syntax.(Primitive Empty) -> t1
 
   | Syntax.Primitive p1, Syntax.Primitive p2 when p1 = p2 -> t1
 
@@ -441,9 +441,9 @@ and meet_expr_ty ~loc ctx t1 t2 =
   | Syntax.Abstract x, Syntax.Abstract y when Name.equal x y ->
      t1
 
-  | Syntax.Primitive Syntax.Empty, _ -> Syntax.Primitive Syntax.Empty
+  | Syntax.(Primitive Empty), _ -> Syntax.(Primitive Empty)
 
-  | _, Syntax.Primitive Syntax.Empty -> Syntax.Primitive Syntax.Empty
+  | _, Syntax.(Primitive Empty) -> Syntax.(Primitive Empty)
 
   | Syntax.Primitive p1, Syntax.Primitive p2 when p1 = p2 -> t1
 
@@ -497,7 +497,7 @@ let rec expr_ty {Location.it=t'; loc} =
        match p with
        | Desugared.Empty -> Syntax.Empty
        | Desugared.Bool -> Syntax.Bool
-       | Desugared.StringTy -> Syntax.StringTy
+       | Desugared.String -> Syntax.String
        | Desugared.Int -> Syntax.Int
      in
      Syntax.Primitive p
@@ -566,9 +566,9 @@ let check_pattern ~loc ctx patt ty =
        end
 
 
-    | Desugared.PattString s ->
+    | Desugared.PattQuoted s ->
        begin match t with
-       | Syntax.Primitive Syntax.StringTy -> Syntax.PattString s, xts
+       | Syntax.Primitive Syntax.String -> Syntax.PattQuoted s, xts
        | _ -> error ~loc (PattTypeMismatch ty)
        end
 
@@ -658,8 +658,8 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
   | Desugared.Boolean b ->
      locate (Syntax.Boolean b), Syntax.(Primitive Bool)
 
-  | Desugared.String s ->
-     locate (Syntax.String s), Syntax.(Primitive StringTy)
+  | Desugared.Quoted s ->
+     locate (Syntax.Quoted s), Syntax.(Primitive String)
 
   | Desugared.Constructor (cnstr, eopt) ->
      let ty, topt = lookup_constructor ~loc cnstr ctx in
@@ -953,7 +953,7 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
             error ~loc (TypeExpectedButTuple ty)
      end
 
-  | (Desugared.String _ | Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
+  | (Desugared.Quoted _ | Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
      Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Comodel _ |
      Desugared.ComodelTimes _ | Desugared.ComodelRename _) ->
      let e, ty' = infer_expr ctx e in

@@ -87,9 +87,9 @@ let match_pattern p v =
        | _ -> None
        end
 
-    | Syntax.PattString s ->
+    | Syntax.PattQuoted s ->
        begin match v with
-       | Value.String s' -> if String.equal s s' then Some us else None
+       | Value.Quoted s' -> if String.equal s s' then Some us else None
        | _ -> None
        end
 
@@ -152,14 +152,15 @@ let match_clauses ~loc env ps v =
 
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
-  | Value.Closure _ | Value.Numeral _ | Value.Boolean _ | Value.String _ | Value.Constructor _
-    | Value.Tuple ([] | [_] | _::_::_::_) | Value.Comodel _ ->
+  | Value.Closure _ | Value.Numeral _ | Value.Boolean _ | Value.Quoted _ | Value.Constructor _
+    | Value.Tuple ([] | [_] | _::_::_::_) | Value.Comodel _ | Value.Abstract ->
      error ~loc PairExpected
 
 let as_closure ~loc = function
   | Value.Closure f -> f
-  | Value.Numeral _ | Value.Boolean _ | Value.String _ | Value.Constructor _ | Value.Tuple _
-    | Value.Comodel _ -> error ~loc FunctionExpected
+  | Value.Numeral _ | Value.Boolean _ | Value.Quoted _ | Value.Constructor _ | Value.Tuple _ |
+    Value.Comodel _  | Value.Abstract ->
+     error ~loc FunctionExpected
 
 let as_value ~loc = function
   | Value.Val v -> v
@@ -168,8 +169,8 @@ let as_value ~loc = function
 
 let as_comodel ~loc = function
   | Value.Comodel (w, cmdl) -> (w, cmdl)
-  | Value.Numeral _ | Value.Boolean _ | Value.String _ | Value.Tuple _ | Value.Constructor _
-    | Value.Closure _ -> error ~loc ComodelExpected
+  | Value.Numeral _ | Value.Boolean _ | Value.Quoted _ | Value.Tuple _ | Value.Constructor _
+  | Value.Closure _  | Value.Abstract -> error ~loc ComodelExpected
 
 (** The result monad *)
 
@@ -190,7 +191,7 @@ let rec eval_expr env {Location.it=e'; loc} =
 
   | Syntax.Boolean b -> Value.Boolean b
 
-  | Syntax.String s -> Value.String s
+  | Syntax.Quoted s -> Value.Quoted s
 
   | Syntax.Var i -> lookup ~loc i env
 

@@ -1,9 +1,12 @@
 (* Pervasives loaded at startup. *)
 
-(* Access to the OS, at the moment the type of the world is fake. *)
-operation print : int -> unit
-type os = {print} @ unit ⇒ {}
-external os : os = "os"
+(* The abstract type of the IO world. *)
+type io
+
+operation print_int : int -> unit
+operation print_string : string -> unit
+operation flush : unit -> unit
+external io : {print_int, print_string, flush} @ io ⇒ {} = "io"
 
 (* Arithmetic *)
 external ( + ) : int -> int -> int = "+"
@@ -18,3 +21,6 @@ external ( < ) : int -> int -> bool = "<"
 external ( > ) : int -> int -> bool = ">"
 external ( <= ) : int -> int -> bool = "<="
 external ( >= ) : int -> int -> bool = ">="
+
+external ( ^ ) : string -> string -> string = "^"
+external string_of_int : int -> string = "string_of_int"

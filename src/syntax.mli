@@ -12,7 +12,7 @@ type primitive =
   | Empty
   | Int
   | Bool
-  | StringTy
+  | String
 
 (** Expression type *)
 type expr_ty =
@@ -39,7 +39,7 @@ type pattern =
   | PattVar
   | PattNumeral of int
   | PattBoolean of bool
-  | PattString of string
+  | PattQuoted of string
   | PattConstructor of Name.t * pattern option
   | PattTuple of pattern list
 
@@ -52,7 +52,7 @@ and expr' =
   | Var of index
   | Numeral of int
   | Boolean of bool
-  | String of string
+  | Quoted of string
   | Constructor of Name.t * expr option
   | Tuple of expr list
   | Lambda of pattern * comp

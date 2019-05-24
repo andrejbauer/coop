@@ -10,7 +10,7 @@ type primitive =
   | Empty
   | Int
   | Bool
-  | StringTy
+  | String
 
 (** Types. *)
 type ty = ty' Location.located
@@ -34,7 +34,7 @@ and pattern' =
   | PattVar of Name.t
   | PattNumeral of int
   | PattBoolean of bool
-  | PattString of string
+  | PattQuoted of string
   | PattConstructor of Name.t * pattern option
   | PattTuple of pattern list
 
@@ -45,7 +45,7 @@ and expr' =
   | Var of Name.t
   | Numeral of int
   | Boolean of bool
-  | String of string
+  | Quoted of string
   | Tuple of expr list
   | Constructor of Name.t * expr option
   | Lambda of binder * comp

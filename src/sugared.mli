@@ -7,7 +7,7 @@ type primitive =
   | Empty
   | Int
   | Bool
-  | StringTy
+  | String
 
 (** Parsed type. *)
 type ty = ty' Location.located
@@ -29,7 +29,7 @@ and pattern' =
   | PattVar of Name.t
   | PattNumeral of int
   | PattBoolean of bool
-  | PattString of string
+  | PattQuoted of string
   | PattConstructor of Name.t * pattern option
   | PattTuple of pattern list
 
@@ -41,7 +41,7 @@ and term' =
   | False
   | True
   | Constructor of Name.t
-  | String of string
+  | Quoted of string
   | Tuple of term list
   | Match of term * (binder * term) list
   | If of term * term * term

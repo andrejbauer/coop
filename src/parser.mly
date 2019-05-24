@@ -223,7 +223,7 @@ simple_term_:
     { Sugared.Var x }
 
   | s=QUOTED_STRING
-    { Sugared.String s }
+    { Sugared.Quoted s }
 
   | LPAREN es=separated_list(COMMA, term) RPAREN
                 { match es with
@@ -333,7 +333,7 @@ simple_pattern_:
     { Sugared.PattBoolean false }
 
   | s=QUOTED_STRING
-    { Sugared.PattString s }
+    { Sugared.PattQuoted s }
 
   | cnstr=CONSTRUCTOR
     { Sugared.PattConstructor (cnstr, None) }
@@ -390,7 +390,7 @@ simple_ty_:
     { Sugared.Primitive Sugared.Bool }
 
   | STRING
-    { Sugared.Primitive Sugared.StringTy }
+    { Sugared.Primitive Sugared.String }
 
   | t=var_name
     { Sugared.NamedTy t }
