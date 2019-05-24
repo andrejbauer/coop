@@ -7,9 +7,9 @@ type signature = {
 
 (** Expression type *)
 type expr_ty =
-  | TyAlias of Name.t
-  | TyDatatype of Name.t
-  | SignalTy
+  | Alias of Name.t
+  | Datatype of Name.t
+  | Empty
   | Int
   | Bool
   | Product of expr_ty list
@@ -74,10 +74,10 @@ and toplevel' =
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopLetRec of (pattern * comp) list * (Name.t * expr_ty) list
   | TopComp of comp * expr_ty
-  | TypeAlias of Name.t * expr_ty
-  | Datatype of (Name.t * datatype) list
-  | DeclOperation of Name.t * expr_ty * expr_ty
-  | DeclSignal of Name.t * expr_ty
+  | DefineAlias of Name.t * expr_ty
+  | DefineDatatype of (Name.t * datatype) list
+  | DeclareOperation of Name.t * expr_ty * expr_ty
+  | DeclareSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string
 
 (** The unit type *)
@@ -96,7 +96,7 @@ let operation_ty t op =
   }
 
 let signal_ty sgl =
-  { comp_ty = SignalTy ;
+  { comp_ty = Empty ;
     comp_sig = { sig_ops = Name.Set.empty ;
                  sig_sgs = Name.Set.add sgl Name.Set.empty }
   }
@@ -110,11 +110,11 @@ let pollute {comp_ty; comp_sig=sgn1} sgn2 =
 let rec print_expr_ty ?max_level ty ppf =
   match ty with
 
-  | TyAlias t -> Format.fprintf ppf "%t" (Name.print t)
+  | Alias t -> Format.fprintf ppf "%t" (Name.print t)
 
-  | TyDatatype t -> Format.fprintf ppf "%t" (Name.print t)
+  | Datatype t -> Format.fprintf ppf "%t" (Name.print t)
 
-  | SignalTy -> Format.fprintf ppf "signal"
+  | Empty -> Format.fprintf ppf "empty"
 
   | Int -> Format.fprintf ppf "int"
 

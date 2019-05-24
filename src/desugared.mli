@@ -10,8 +10,8 @@ type ty = ty' Location.located
 and ty' =
   | Int
   | Bool
-  | TyAlias of Name.t
-  | TyDatatype of Name.t
+  | Alias of Name.t
+  | Datatype of Name.t
   | Arrow of ty * ty
   | Product of ty list
   | ComodelTy of Name.Set.t * ty * signature
@@ -75,8 +75,8 @@ and toplevel' =
   | TopLet of pattern * comp
   | TopLetRec of rec_clause list
   | TopComp of comp
-  | TypeAlias of Name.t * ty
-  | Datatype of (Name.t * datatype) list
-  | DeclOperation of Name.t * ty * ty
-  | DeclSignal of Name.t * ty
+  | DefineAlias of Name.t * ty
+  | DefineDatatype of (Name.t * datatype) list
+  | DeclareOperation of Name.t * ty * ty
+  | DeclareSignal of Name.t * ty
   | External of Name.t * ty * string

@@ -69,8 +69,8 @@ and toplevel' =
   | TopLetFun of Name.t * binder list * term
   | TopLetRec of rec_clause list
   | TopComp of term
-  | TypeAlias of Name.t * ty
-  | Datatype of (Name.t * datatype) list
-  | DeclOperation of Name.t * ty * ty
-  | DeclSignal of Name.t * ty
+  | DefineAlias of Name.t * ty
+  | DefineDatatype of (Name.t * datatype) list
+  | DeclareOperation of Name.t * ty * ty
+  | DeclareSignal of Name.t * ty
   | External of Name.t * ty * string

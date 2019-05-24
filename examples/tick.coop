@@ -2,7 +2,7 @@
 operation tick : unit -> int
 
 let ticker =
-  comodel int with
+  comodel 0 with
   | tick () @ w -> (w, w+1)
   end
 ;;
@@ -13,7 +13,7 @@ let job (_ : unit) =
   a + b
 
 let demo =
-  using ticker @ 0 in
+  using ticker in
     let r1 = job () in
     let r2 = job () in
     (r1, r2)

@@ -192,8 +192,8 @@ let rec ty ctx {Location.it=t'; loc} =
 
     | Sugared.NamedTy t ->
        begin match lookup_ty t ctx with
-       | Some TydefAlias -> Desugared.TyAlias t
-       | Some TydefDatatype -> Desugared.TyDatatype t
+       | Some TydefAlias -> Desugared.Alias t
+       | Some TydefDatatype -> Desugared.Datatype t
        | None -> error ~loc (UnknownType t)
        end
 
@@ -656,28 +656,28 @@ let toplevel' ctx = function
        let c = comp ctx c in
        ctx, Desugared.TopComp c
 
-    | Sugared.TypeAlias (t, abbrev) ->
+    | Sugared.DefineAlias (t, abbrev) ->
        check_type_shadow ~loc t ctx ;
        let abbrev = ty ctx abbrev in
        let ctx = extend_type t TydefAlias ctx in
-       ctx, Desugared.TypeAlias (t, abbrev)
+       ctx, Desugared.DefineAlias (t, abbrev)
 
-    | Sugared.Datatype lst ->
+    | Sugared.DefineDatatype lst ->
        let ctx, lst = datatypes ~loc ctx lst in
-       ctx, Desugared.Datatype lst
+       ctx, Desugared.DefineDatatype lst
 
-    | Sugared.DeclOperation (op, t1, t2) ->
+    | Sugared.DeclareOperation (op, t1, t2) ->
        check_ident_shadow ~loc op ctx ;
        let t1 = ty ctx t1
        and t2 = ty ctx t2
        and ctx = extend_ident op Operation ctx in
-       ctx, Desugared.DeclOperation (op, t1, t2)
+       ctx, Desugared.DeclareOperation (op, t1, t2)
 
-    | Sugared.DeclSignal (sgl, t) ->
+    | Sugared.DeclareSignal (sgl, t) ->
        check_ident_shadow ~loc sgl ctx ;
        let t = ty ctx t in
        let ctx = extend_ident sgl Signal ctx in
-       ctx, Desugared.DeclSignal (sgl, t)
+       ctx, Desugared.DeclareSignal (sgl, t)
 
     | Sugared.External (x, t, s) ->
        let t = ty ctx t in

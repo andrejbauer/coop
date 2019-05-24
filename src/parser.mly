@@ -114,19 +114,19 @@ toplevel_:
     { Sugared.TopLetRec fs }
 
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
-    { Sugared.DeclOperation (op, t1, t2) }
+    { Sugared.DeclareOperation (op, t1, t2) }
 
   | SIGNAL sgl=var_name OF t=ty
-    { Sugared.DeclSignal (sgl, t) }
+    { Sugared.DeclareSignal (sgl, t) }
 
   | EXTERNAL x=var_name COLON t=ty EQUAL s=QUOTED_STRING
     { Sugared.External (x, t, s) }
 
   | TYPE x=var_name EQUAL t=ty
-    { Sugared.TypeAlias (x, t) }
+    { Sugared.DefineAlias (x, t) }
 
   | TYPE lst=separated_list(AND, datatype)
-    { Sugared.Datatype lst }
+    { Sugared.DefineDatatype lst }
 
 
 (* Main syntax tree *)

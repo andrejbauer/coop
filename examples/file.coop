@@ -16,7 +16,7 @@ signal disk_full of unit
 
 (** A file writer that is full after n writes. *)
 let file_writer (n : int) =
-  comodel file with
+  comodel Nil with
   | write k @ w ->
      if length w >= n then
        disk_full ()
@@ -33,7 +33,7 @@ let job (_ : unit) =
     write 6
 
 let demo1 =
-  using file_writer 10 @ Nil in
+  using file_writer 10 in
     job ()
   finally
   | val _ @ f -> f
@@ -41,7 +41,7 @@ let demo1 =
   end
 
 let demo2 =
-  using file_writer 3 @ Nil in
+  using file_writer 3 in
     job ()
   finally
   | val _ @ f -> f

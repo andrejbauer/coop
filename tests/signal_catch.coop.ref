@@ -1,2 +1,5 @@
 signal moo of unit
 - : int = 2
+operation op : unit → unit
+signal sgl of unit
+val demo : int = 2

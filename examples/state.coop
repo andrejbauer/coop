@@ -12,25 +12,25 @@ operation put' : int -> unit
 signal negative of int
 
 (** Basic state *)
-let state =
-  comodel int with
+let state (w0 : int) =
+  comodel w0 with
   | get () @ w -> (w, w)
   | put w' @ _ -> ((), w')
   end
 
 (** A copy of state with renamed operations *)
-let state' = state with {get as get', put as put'}
+let state' (w0 : int) = state w0 with {get as get', put as put'}
 
 (** State that only allows non-negative integers to be stored *)
-let positive_state =
-  comodel int with
+let positive_state (w0 : int) =
+  comodel w0 with
   | get _ @ w -> (w, w)
   | put w @ _ -> if w < 0 then negative w else ((), w)
   end
 
 (** This is how we use ordinary state, initialized with 1 *)
 let demo1 =
-  using state @ 1 in
+  using state 1 in
     let a = get () in
     put 2 ;
     let b = get () in
@@ -40,12 +40,11 @@ let demo1 =
     val x @ _ -> x
   end
 
-let state2 = state ⊗ state'
-let state3 = state ⊕ state'
+let state2 (u : int) (v : int) = state u ⊗ state' v
 
 (** Combine two states together, each has its own state *)
 let demo2 =
-  using state ⊗ state' @ (2, 3) in
+  using state 2 ⊗ state' 3 in
     let a = get' () in
     put 3 ;
     put' (a + 10) ;
@@ -53,24 +52,11 @@ let demo2 =
     (a, b)
   finally
   | val x @ w -> (x, w)
-  end
-
-(** Combine two states together, sharing state *)
-let demo2' =
-  using state ⊕ state' @ 2 in
-    let a = get' () in
-    put 3 ;
-    put' (a + 10) ;
-    let b = get' () in
-    (a, b)
-  finally
-  | val x @ w -> (x, w)
-  | negative k @ w -> ((0, k), w)
   end
 
 (* Combine two copies of state, one of which only allows positive values. *)
 let demo3 =
-  using state' ⊗ positive_state @ (0, 2) in
+  using state' 0 ⊗ positive_state 2 in
     let a = get' () in
     put 3 ;
     put' (a + 10) ;
@@ -84,7 +70,7 @@ let demo3 =
 (* Combine two copies of state, one of which only allows positive values,
    trigger a signal. *)
 let demo3' =
-  using state' ⊗ positive_state @ (0, 2) in
+  using state' 0 ⊗ positive_state 2 in
     let a = get' () in
     put 3 ;
     put' (a + 10) ;

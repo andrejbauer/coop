@@ -409,20 +409,20 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
                      (Value.print v) ;
      env
 
-  | Syntax.TypeAlias (t, abbrev) ->
+  | Syntax.DefineAlias (t, abbrev) ->
      if not quiet then
        Format.printf "@[<hov>type %t@ =@ %t@]@."
                      (Name.print t)
                      (Syntax.print_expr_ty abbrev) ;
      env
 
-  | Syntax.Datatype lst ->
+  | Syntax.DefineDatatype lst ->
      if not quiet then
        Format.printf "@[<v 5>type %t@]@."
                      (Print.sequence (Syntax.print_datatype) " and" lst) ;
      env
 
-  | Syntax.DeclOperation (op, ty1, ty2) ->
+  | Syntax.DeclareOperation (op, ty1, ty2) ->
      if not quiet then
        Format.printf "@[<hov>operation %t@ :@ %t@ %s@ %t@]@."
                      (Name.print op)
@@ -431,7 +431,7 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
                      (Syntax.print_expr_ty ty2) ;
      env
 
-  | Syntax.DeclSignal (sgl, t) ->
+  | Syntax.DeclareSignal (sgl, t) ->
      if not quiet then
        Format.printf "@[<hov>signal %t@ of@ %t@]@."
                      (Name.print sgl)

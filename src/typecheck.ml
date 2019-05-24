@@ -245,33 +245,33 @@ let signature Desugared.{sig_ops; sig_sgs} = Syntax.{sig_ops; sig_sgs}
 let rec norm_ty ~loc ctx t =
   match t with
 
-  | Syntax.TyAlias x ->
+  | Syntax.Alias x ->
      let t = lookup_tyabbrev ~loc x ctx in
      norm_ty ~loc ctx t
 
-  | (Syntax.TyDatatype _ |  Syntax.SignalTy | Syntax.Int | Syntax.Bool |
+  | (Syntax.Datatype _ |  Syntax.Empty | Syntax.Int | Syntax.Bool |
      Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
      t
 
 let as_product ~loc ctx ty =
   match norm_ty ~loc ctx ty with
 
-  | Syntax.TyAlias _ -> assert false
+  | Syntax.Alias _ -> assert false
 
   | Syntax.Product ts -> Some ts
 
-  | (Syntax.TyDatatype _  | Syntax.SignalTy | Syntax.Int | Syntax.Bool |
+  | (Syntax.Datatype _  | Syntax.Empty | Syntax.Int | Syntax.Bool |
      Syntax.Arrow _ | Syntax.ComodelTy _) ->
      None
 
 let as_arrow ~loc ctx ty =
   match norm_ty ~loc ctx ty with
 
-  | Syntax.TyAlias _ -> assert false
+  | Syntax.Alias _ -> assert false
 
   | Syntax.Arrow (t,u) -> Some (t, u)
 
-  | (Syntax.Product _ | Syntax.TyDatatype _ | Syntax.SignalTy | Syntax.Int | Syntax.Bool |
+  | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Empty | Syntax.Int | Syntax.Bool |
      Syntax.ComodelTy _) ->
      None
 
@@ -279,23 +279,23 @@ let as_comodel ~loc ctx ty =
 
   match norm_ty ~loc ctx ty with
 
-  | Syntax.TyAlias _ -> assert false
+  | Syntax.Alias _ -> assert false
 
   | Syntax.ComodelTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
 
-  | (Syntax.Product _ | Syntax.TyDatatype _ | Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.Arrow _) ->
+  | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Arrow _) ->
      None
 
 let as_datatype ~loc ctx ty =
 
   match norm_ty ~loc ctx ty with
 
-  | Syntax.TyAlias _ -> assert false
+  | Syntax.Alias _ -> assert false
 
-  | Syntax.TyDatatype ty ->
+  | Syntax.Datatype ty ->
      Some (lookup_datatype ~loc ty ctx)
 
-  | (Syntax.Product _ | Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.Arrow _ | Syntax.ComodelTy _) ->
+  | (Syntax.Product _ | Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Arrow _ | Syntax.ComodelTy _) ->
      None
 
 
@@ -308,22 +308,22 @@ let subsignature Syntax.{sig_ops=ops1; sig_sgs=sgs1} Syntax.{sig_ops=ops2; sig_s
 let rec expr_subty ~loc ctx t u =
   match t, u with
 
-  | Syntax.TyAlias x, Syntax.TyAlias y when Name.equal x y -> true
+  | Syntax.Alias x, Syntax.Alias y when Name.equal x y -> true
 
-  | Syntax.TyAlias _, _ ->
+  | Syntax.Alias _, _ ->
      let t = norm_ty ~loc ctx t in
      expr_subty ~loc ctx t u
 
-  | _, Syntax.TyAlias _ ->
+  | _, Syntax.Alias _ ->
      let u = norm_ty ~loc ctx u in
      expr_subty ~loc ctx t u
 
-  | Syntax.TyDatatype x, Syntax.TyDatatype y ->
+  | Syntax.Datatype x, Syntax.Datatype y ->
      Name.equal x y
 
-  | Syntax.SignalTy, _ -> true
+  | Syntax.Empty, _ -> true
 
-  | _, Syntax.SignalTy -> false
+  | _, Syntax.Empty -> false
 
   | Syntax.Int, Syntax.Int -> true
 
@@ -344,7 +344,7 @@ let rec expr_subty ~loc ctx t u =
   | Syntax.ComodelTy (tsgn1, t, tsgn2), Syntax.ComodelTy (usgn1, u, usgn2) ->
      Name.Set.subset usgn1 tsgn1 && expr_eqtype ~loc ctx t u && subsignature  tsgn2 usgn2
 
-  | (Syntax.TyDatatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
+  | (Syntax.Datatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
      Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
      false
 
@@ -367,23 +367,23 @@ let meet_signature Syntax.{sig_ops=ops1; sig_sgs=sgs1} Syntax.{sig_ops=ops2; sig
 let rec join_expr_ty ~loc ctx t1 t2 =
   match t1, t2 with
 
-  | Syntax.TyAlias x, Syntax.TyAlias y when Name.equal x y ->
+  | Syntax.Alias x, Syntax.Alias y when Name.equal x y ->
      t1
 
-  | Syntax.TyAlias _, _ ->
+  | Syntax.Alias _, _ ->
      let t1 = norm_ty ~loc ctx t1 in
      join_expr_ty ~loc ctx t1 t2
 
-  | _, Syntax.TyAlias _ ->
+  | _, Syntax.Alias _ ->
      let t2 = norm_ty ~loc ctx t2 in
      join_expr_ty ~loc ctx t1 t2
 
-  | Syntax.TyDatatype x, Syntax.TyDatatype y when Name.equal x y ->
+  | Syntax.Datatype x, Syntax.Datatype y when Name.equal x y ->
      t1
 
-  | Syntax.SignalTy, t2 -> t2
+  | Syntax.Empty, t2 -> t2
 
-  | t1, Syntax.SignalTy -> t1
+  | t1, Syntax.Empty -> t1
 
   | Syntax.Int, Syntax.Int -> Syntax.Int
 
@@ -414,30 +414,30 @@ let rec join_expr_ty ~loc ctx t1 t2 =
      and sgn = join_signature sig1 sig2 in
      Syntax.ComodelTy  (ops, t, sgn)
 
-  | (Syntax.TyDatatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
+  | (Syntax.Datatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
      Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
 and meet_expr_ty ~loc ctx t1 t2 =
   match t1, t2 with
 
-  | Syntax.TyAlias x, Syntax.TyAlias y when Name.equal x y ->
+  | Syntax.Alias x, Syntax.Alias y when Name.equal x y ->
      t1
 
-  | Syntax.TyAlias _, _ ->
+  | Syntax.Alias _, _ ->
      let t1 = norm_ty ~loc ctx t1 in
      meet_expr_ty ~loc ctx t1 t2
 
-  | _, Syntax.TyAlias _ ->
+  | _, Syntax.Alias _ ->
      let t2 = norm_ty ~loc ctx t2 in
      meet_expr_ty ~loc ctx t1 t2
 
-  | Syntax.TyDatatype x, Syntax.TyDatatype y when Name.equal x y ->
+  | Syntax.Datatype x, Syntax.Datatype y when Name.equal x y ->
      t1
 
-  | Syntax.SignalTy, _ -> Syntax.SignalTy
+  | Syntax.Empty, _ -> Syntax.Empty
 
-  | _, Syntax.SignalTy -> Syntax.SignalTy
+  | _, Syntax.Empty -> Syntax.Empty
 
   | Syntax.Int, Syntax.Int -> Syntax.Int
 
@@ -468,7 +468,7 @@ and meet_expr_ty ~loc ctx t1 t2 =
      and sgn = meet_signature sig1 sig2 in
      Syntax.ComodelTy  (ops, t, sgn)
 
-  | (Syntax.TyDatatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
+  | (Syntax.Datatype _ | Syntax.Int | Syntax.Bool | Syntax.Product _ |
      Syntax.Arrow _ | Syntax.ComodelTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
@@ -492,9 +492,9 @@ let rec expr_ty {Location.it=t'; loc} =
 
   | Desugared.Bool -> Syntax.Bool
 
-  | Desugared.TyAlias t -> Syntax.TyAlias t
+  | Desugared.Alias t -> Syntax.Alias t
 
-  | Desugared.TyDatatype t -> Syntax.TyDatatype t
+  | Desugared.Datatype t -> Syntax.Datatype t
 
   | Desugared.Product lst ->
      let lst = List.map expr_ty lst in
@@ -521,7 +521,7 @@ and comp_ty ({Location.it=t'; loc} as t) =
      and sgn = signature sgn in
      Syntax.{comp_ty=t; comp_sig=sgn}
 
-  | (Desugared.Int | Desugared.Bool | Desugared.TyAlias _  | Desugared.TyDatatype _ |
+  | (Desugared.Int | Desugared.Bool | Desugared.Alias _  | Desugared.Datatype _ |
      Desugared.Product _ | Desugared.Arrow _ | Desugared.ComodelTy _) ->
      let t = expr_ty t in
      Syntax.{comp_ty=t; comp_sig=empty_signature}
@@ -534,7 +534,7 @@ let check_pattern ~loc ctx patt ty =
     let t = norm_ty ~loc ctx t in
     match p', t with
 
-    | _, Syntax.TyAlias _ -> assert false
+    | _, Syntax.Alias _ -> assert false
 
     | Desugared.PattAnonymous, _ ->
        Syntax.PattAnonymous, xts
@@ -548,7 +548,7 @@ let check_pattern ~loc ctx patt ty =
     | Desugared.PattBoolean b, Syntax.Bool ->
        Syntax.PattBoolean b, xts
 
-    | Desugared.PattConstructor (cnstr, popt), Syntax.TyDatatype x ->
+    | Desugared.PattConstructor (cnstr, popt), Syntax.Datatype x ->
        let lst = lookup_datatype ~loc x ctx in
        begin match List.assoc_opt cnstr lst with
          | None -> error ~loc (PattTypeMismatch ty)
@@ -568,10 +568,10 @@ let check_pattern ~loc ctx patt ty =
        let ps, xts = fold_tuple ~loc xts [] ps ts in
        Syntax.PattTuple ps, xts
 
-    | Desugared.PattNumeral _, (Syntax.SignalTy | Syntax.Bool | Syntax.TyDatatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattBoolean _, (Syntax.SignalTy | Syntax.Int | Syntax.TyDatatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattConstructor  _, (Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
-    | Desugared.PattTuple _, (Syntax.SignalTy | Syntax.Int | Syntax.Bool | Syntax.TyDatatype _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
+    | Desugared.PattNumeral _, (Syntax.Empty | Syntax.Bool | Syntax.Datatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattBoolean _, (Syntax.Empty | Syntax.Int | Syntax.Datatype _ | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattConstructor  _, (Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _)
+    | Desugared.PattTuple _, (Syntax.Empty | Syntax.Int | Syntax.Bool | Syntax.Datatype _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
        error ~loc (PattTypeMismatch ty)
 
   and fold_tuple ~loc xts ps' ps ts =
@@ -635,7 +635,7 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
   | Desugared.Constructor (cnstr, eopt) ->
      let ty, topt = lookup_constructor ~loc cnstr ctx in
      let e = check_constructor ~loc ctx cnstr eopt topt in
-     locate (Syntax.Constructor (cnstr, e)), Syntax.TyDatatype ty
+     locate (Syntax.Constructor (cnstr, e)), Syntax.Datatype ty
 
   | Desugared.Tuple lst ->
      let lst = List.map (infer_expr ctx) lst in
@@ -1051,25 +1051,25 @@ and toplevel ~quiet ctx {Location.it=d'; loc} =
        let c, Syntax.{comp_ty=c_ty'; _} = infer_comp ctx c in
        ctx, Syntax.TopComp (c, c_ty')
 
-    | Desugared.TypeAlias (t, abbrev) ->
+    | Desugared.DefineAlias (t, abbrev) ->
        let abbrev = expr_ty abbrev in
        let ctx = extend_tyabbrev ~loc t abbrev ctx in
-       ctx, Syntax.TypeAlias (t, abbrev)
+       ctx, Syntax.DefineAlias (t, abbrev)
 
-    | Desugared.Datatype ty_defs ->
+    | Desugared.DefineDatatype ty_defs ->
        let ctx, ty_defs = datatypes ~loc ctx ty_defs in
-       ctx, Syntax.Datatype ty_defs
+       ctx, Syntax.DefineDatatype ty_defs
 
-    | Desugared.DeclOperation (op, ty1, ty2) ->
+    | Desugared.DeclareOperation (op, ty1, ty2) ->
        let ty1 = expr_ty ty1
        and ty2 = expr_ty ty2 in
        let ctx = declare_operation op ty1 ty2 ctx in
-       ctx, Syntax.DeclOperation (op, ty1, ty2)
+       ctx, Syntax.DeclareOperation (op, ty1, ty2)
 
-    | Desugared.DeclSignal (sgl, ty) ->
+    | Desugared.DeclareSignal (sgl, ty) ->
        let ty = expr_ty ty in
        let ctx = declare_signal sgl ty ctx in
-       ctx, Syntax.DeclSignal (sgl, ty)
+       ctx, Syntax.DeclareSignal (sgl, ty)
 
     | Desugared.External (x, t, s) ->
        let t = expr_ty t in

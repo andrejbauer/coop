@@ -9,9 +9,9 @@ type signature = {
 
 (** Expression type *)
 type expr_ty =
-  | TyAlias of Name.t
-  | TyDatatype of Name.t
-  | SignalTy
+  | Alias of Name.t
+  | Datatype of Name.t
+  | Empty
   | Int
   | Bool
   | Product of expr_ty list
@@ -76,10 +76,10 @@ and toplevel' =
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopLetRec of (pattern * comp) list * (Name.t * expr_ty) list
   | TopComp of comp * expr_ty
-  | TypeAlias of Name.t * expr_ty
-  | Datatype of (Name.t * datatype) list
-  | DeclOperation of Name.t * expr_ty * expr_ty
-  | DeclSignal of Name.t * expr_ty
+  | DefineAlias of Name.t * expr_ty
+  | DefineDatatype of (Name.t * datatype) list
+  | DeclareOperation of Name.t * expr_ty * expr_ty
+  | DeclareSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string
 
 (** The unit type *)
