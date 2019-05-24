@@ -80,7 +80,7 @@ let interactive_shell state =
          state
 
       | External.Error msg ->
-         Print.error "@[<hov>Error in external function, please report: %s@]@." msg ;
+         Print.error "@[<hov>Error in external function: %s@]@." msg ;
          state
 
       | Sys.Break ->

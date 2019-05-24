@@ -43,9 +43,20 @@ let io =
     Format.printf "%s" s ;
     r
 
+  and read_string (_, _) =
+    let s = Pervasives.input_line stdin in
+    Value.Val (Value.Quoted s, Value.Abstract)
+
+  and read_int (_, _) =
+    try
+      let k = Pervasives.read_int () in
+      Value.Val (Value.Numeral k, Value.Abstract)
+    with Failure _ -> error "malformed integer"
   in
   [ ("print_int", print_value);
     ("print_string", print_string);
+    ("read_string", read_string);
+    ("read_int", read_int);
     ("flush", fun (_, _) -> Format.printf "@." ; r)
   ]
 
