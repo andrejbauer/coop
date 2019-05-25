@@ -111,7 +111,6 @@ let externals =
     ("/", wrap_int_int_int (fun a b -> try a / b with Division_by_zero -> error "division by zero")) ;
     ("%", wrap_int_int_int (fun a b -> try a mod b with Division_by_zero -> error "division by zero")) ;
     ("~-", wrap_int_int ( ~- )) ;
-    ("=",  wrap_int_int_bool ((=) : int -> int -> bool)) ;
     ("<>",  wrap_int_int_bool ((<>) : int -> int -> bool)) ;
     ("<",  wrap_int_int_bool ((<) : int -> int -> bool)) ;
     (">",  wrap_int_int_bool ((>) : int -> int -> bool)) ;

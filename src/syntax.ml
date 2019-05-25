@@ -65,6 +65,7 @@ and comp' =
   | Let of pattern * comp * comp
   | LetRec of (pattern * comp) list * comp
   | Match of expr * (pattern * comp) list
+  | Equal of expr * expr
   | Apply of expr * expr
   | Operation of Name.t * expr
   | Signal of Name.t * expr
@@ -186,3 +187,10 @@ let print_datatype (t, cnstrs) ppf =
   Format.fprintf ppf "@[<hov -2>%t =@\n@[<hv>%t@]@]"
                  (Name.print t)
                  (Print.sequence print_clause "" cnstrs)
+
+let rec print_datatypes dfs ppf =
+  match dfs with
+  | [] -> ()
+  | [df] -> print_datatype df ppf
+  | df :: dfs ->
+     Format.fprintf ppf "%t@\n and %t" (print_datatype df) (print_datatypes dfs)

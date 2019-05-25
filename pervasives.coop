@@ -20,7 +20,6 @@ external ( * ) : int -> int -> int = "*"
 external ( / ) : int -> int -> int = "/"
 external ( % ) : int -> int -> int = "%"
 
-external ( = ) : int -> int -> bool = "="
 external ( <> ) : int -> int -> bool = "<>"
 external ( < ) : int -> int -> bool = "<"
 external ( > ) : int -> int -> bool = ">"

@@ -67,6 +67,7 @@ and comp' =
   | Let of pattern * comp * comp
   | LetRec of (pattern * comp) list * comp
   | Match of expr * (pattern * comp) list
+  | Equal of expr * expr
   | Apply of expr * expr
   | Operation of Name.t * expr
   | Signal of Name.t * expr
@@ -115,5 +116,8 @@ val print_expr_ty : ?max_level:Level.t -> expr_ty -> Format.formatter -> unit
 (** Print a computation type *)
 val print_comp_ty : ?max_level:Level.t -> comp_ty -> Format.formatter -> unit
 
-(** Print the body of a type definition *)
+(** Print the body of a datatype definition *)
 val print_datatype : Name.t * datatype -> Format.formatter -> unit
+
+(** Print the bodies of datatype definitions *)
+val print_datatypes : (Name.t * datatype) list -> Format.formatter -> unit

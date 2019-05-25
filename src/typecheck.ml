@@ -755,6 +755,11 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let lst, ty = infer_match_clauses ~loc ctx e_ty lst in
      locate (Syntax.Match (e, lst)), ty
 
+  | Desugared.Equal (e1, e2) ->
+     let e1, t = infer_expr ctx e1 in
+     let e2 = check_expr ctx e2 t in
+     locate (Syntax.Equal (e1, e2)), Syntax.(pure (Primitive Bool))
+
   | Desugared.Apply (e1, e2) ->
      let e1, t1 = infer_expr ctx e1 in
      begin match as_arrow ~loc:(e1.Location.loc) ctx t1 with
@@ -1019,8 +1024,8 @@ and check_comp ctx ({Location.it=c'; loc} as c) check_ty =
      let c = check_comp ctx c check_ty in
      locate (Syntax.LetRec (pcs, c))
 
-  | (Desugared.Apply _ | Desugared.AscribeComp _ | Desugared.Operation _ |
-     Desugared.Signal _ | Desugared.Using _) ->
+  | (Desugared.Equal _ | Desugared.Apply _ | Desugared.AscribeComp _ |
+     Desugared.Operation _ | Desugared.Signal _ | Desugared.Using _) ->
      let c, c_ty = infer_comp ctx c in
      if comp_subty ~loc ctx c_ty check_ty
      then

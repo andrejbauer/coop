@@ -373,7 +373,7 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
        (ws, locate (Desugared.ComodelRename (e, rnm)))
 
     | (Sugared.Match _ | Sugared.If _ | Sugared.Apply _ | Sugared.Let _ |
-       Sugared.LetRec _ | Sugared.Sequence _ | Sugared.Using _) ->
+       Sugared.LetRec _ | Sugared.Sequence _ | Sugared.Using _ | Sugared.Equal _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Desugared.Var x))
@@ -476,6 +476,12 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
          ((loc (Desugared.PattBoolean false), Some b), c2)
        in
        let_binds w (locate (Desugared.Match (e', [cl1; cl2])))
+
+    | Sugared.Equal (e1, e2) ->
+       let ws1, e1 = expr ctx e1 in
+       let ws2, e2 = expr ctx e2 in
+       let app = locate (Desugared.Equal (e1, e2)) in
+       let_binds (ws1 @ ws2) app
 
     | Sugared.Apply ({Location.it=Sugared.Var op; loc}, e) when is_operation op ctx ->
        let ws, e = expr ctx e in

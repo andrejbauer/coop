@@ -170,6 +170,9 @@ infix_term_:
   | e=app_term_
     { e }
 
+  | e1=infix_term EQUAL e2=infix_term
+    { Sugared.Equal (e1, e2) }
+
   | e2=infix_term oploc=infix e3=infix_term
     { let {Location.it=op; loc} = oploc in
       let op = Location.locate ~loc (Sugared.Var op) in
@@ -232,7 +235,6 @@ var_name:
 %inline infix:
   | op=INFIXOP0    { op }
   | op=INFIXOP1    { op }
-  | op=EQUAL       { op }
   | op=INFIXOP2    { op }
   | op=AT          { op }
   | op=INFIXOP3    { op }

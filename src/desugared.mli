@@ -61,6 +61,7 @@ and comp' =
   | Let of pattern * comp * comp
   | LetRec of rec_clause list * comp
   | Match of expr * (binder * comp) list
+  | Equal of expr * expr
   | Apply of expr * expr
   | Operation of Name.t * expr
   | Signal of Name.t * expr

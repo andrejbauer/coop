@@ -43,6 +43,7 @@ and term' =
   | Constructor of Name.t
   | Quoted of string
   | Tuple of term list
+  | Equal of term * term
   | Match of term * (binder * term) list
   | If of term * term * term
   | Lambda of binder list * term

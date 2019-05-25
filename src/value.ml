@@ -17,6 +17,26 @@ and 'a result =
 
 and cooperation = t * world -> (t * world) result
 
+let name = function
+  | Abstract -> "abstract value"
+  | Numeral _ -> "integer"
+  | Boolean _ -> "boolean"
+  | Quoted _ -> "string"
+  | Constructor _ -> "constructor"
+  | Tuple _ -> "tuple"
+  | Closure _ -> "function"
+  | Comodel _ -> "comodel"
+
+let names = function
+  | Abstract -> "abstract values"
+  | Numeral _ -> "integers"
+  | Boolean _ -> "booleans"
+  | Quoted _ -> "strings"
+  | Constructor _ -> "constructors"
+  | Tuple _ -> "tuples"
+  | Closure _ -> "functions"
+  | Comodel _ -> "comodels"
+
 let rec print ?max_level v ppf =
   match v with
   | Abstract -> Format.fprintf ppf "<abstr>"

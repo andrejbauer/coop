@@ -17,4 +17,7 @@ and 'a result =
 
 and cooperation = t * world -> (t * world) result
 
+val name : t -> string
+val names : t -> string
+
 val print : ?max_level:Level.t -> t -> Format.formatter -> unit

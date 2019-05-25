@@ -6,6 +6,7 @@ type error =
   | UnhandledSignal of Name.t
   | UnknownExternal of string
   | IllegalRenaming of Name.t
+  | IllegalComparison of Value.t
   | FunctionExpected
   | ComodelExpected
   | ComodelDoubleOperation of Name.t
@@ -33,6 +34,9 @@ let print_error err ppf =
 
   | IllegalRenaming op ->
      Format.fprintf ppf "illegal comodel renaming %t, please report" (Name.print op)
+
+  | IllegalComparison v ->
+     Format.fprintf ppf "cannot compare %s" (Value.names v)
 
   | FunctionExpected ->
      Format.fprintf ppf "function expected, please report"
@@ -172,6 +176,47 @@ let as_comodel ~loc = function
   | Value.Numeral _ | Value.Boolean _ | Value.Quoted _ | Value.Tuple _ | Value.Constructor _
   | Value.Closure _  | Value.Abstract -> error ~loc ComodelExpected
 
+
+(** Comparison of values *)
+let rec equal_value ~loc (v1 : Value.t) (v2 : Value.t) =
+  match v1, v2 with
+
+  | Value.(Abstract | Closure _ | Comodel _), _ ->
+     error ~loc (IllegalComparison v1)
+
+  | _, Value.(Abstract | Closure _ | Comodel _) ->
+     error ~loc (IllegalComparison v1)
+
+  | Value.(Numeral k1, Numeral k2) ->
+     k1 = k2
+
+  | Value.(Boolean b1, Boolean b2) ->
+     b1 = b2
+
+  | Value.(Quoted s1, Quoted s2) ->
+     String.equal s1 s2
+
+  | Value.(Constructor (cnstr1, v1opt), Constructor (cnstr2, v2opt)) ->
+     Name.equal cnstr1 cnstr2 && equal_value_opt ~loc v1opt v2opt
+
+ | (Value.Tuple lst1, Value.Tuple lst2) ->
+    equal_values ~loc lst1 lst2
+
+ | Value.(Numeral _ | Boolean _ | Quoted _ | Constructor _ | Tuple _), _ ->
+    false
+
+and equal_value_opt ~loc v1opt v2opt =
+  match v1opt, v2opt with
+  | None, None -> true
+  | Some v1, Some v2 -> equal_value ~loc v1 v2
+  | None, Some _ | Some _, None -> false
+
+and equal_values ~loc vs1 vs2 =
+  match vs1, vs2 with
+  | [], [] -> true
+  | v1 :: vs1, v2 :: vs2 -> equal_value ~loc v1 v2 && equal_values ~loc vs1 vs2
+  | [], _::_ | _::_, [] -> false
+
 (** The result monad *)
 
 let rec bind r k =
@@ -283,6 +328,12 @@ and eval_comp env {Location.it=c'; loc} =
      let v = eval_expr env e in
      let env, c = match_clauses ~loc env lst v in
      eval_comp env c
+
+  | Syntax.Equal (e1, e2) ->
+     let v1 = eval_expr env e1
+     and v2 = eval_expr env e2 in
+     let b = equal_value ~loc v1 v2 in
+     Value.Val (Value.Boolean b)
 
   | Syntax.Apply (e1, e2) ->
      let v1 = eval_expr env e1 in
@@ -432,8 +483,7 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
 
   | Syntax.DefineDatatype lst ->
      if not quiet then
-       Format.printf "@[<v>type %t@]@."
-                     (Print.sequence (Syntax.print_datatype) " and" lst) ;
+       Format.printf "@[<v>type %t@]@." (Syntax.print_datatypes lst) ;
      env
 
   | Syntax.DeclareOperation (op, ty1, ty2) ->
