@@ -98,6 +98,7 @@ let conversation2 (_ : unit) =
   let s = read_string () in
   print_string ("Hello " ^ s ^ " what is your age?") ;
   let k = read_int () in
+  print_string "Oh well." ;
   ()
 ;;
 
