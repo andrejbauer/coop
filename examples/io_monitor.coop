@@ -1,0 +1,121 @@
+(** We define two comodel, one for recording an IO interaction,
+    and one for replaing it. *)
+
+type io_action =
+  | PrintInt of int
+  | PrintString of string
+  | ReadInt of int
+  | ReadString of string
+  | Flush
+
+type io_record =
+  | Nil
+  | Cons of io_action * io_record
+
+let reverse (r : io_record) =
+  let rec rev (acc : io_record) (r : io_record) : io_record =
+    match r with
+    | Nil -> acc
+    | Cons (a, r) -> rev (Cons (a, acc)) r
+    end
+  in
+  rev Nil r
+
+let io_recorder =
+  comodel Nil with
+  | print_int k @ r -> print_int k ; ((), Cons (PrintInt k, r))
+  | print_string s @ r -> print_string s ; ((), Cons (PrintString s, r))
+  | read_int () @ r -> let k = read_int () in (k, Cons (ReadInt k, r))
+  | read_string () @ r -> let s = read_string () in (s, Cons (ReadString s, r))
+  | flush () @ r -> flush () ; ((), Cons (Flush, r))
+  end
+
+signal sync_error of unit
+
+let io_player (r : io_record) =
+  comodel r with
+
+  | print_int k @ r ->
+      match r with
+      | Cons (PrintInt m, r) ->
+        if k = m then
+          print_string "DEBUG PRINT: " ; print_int k ; flush () ;
+          ((), r)
+        else
+          sync_error ()
+      | _ -> sync_error ()
+      end
+
+   | print_string s @ r ->
+      match r with
+      | Cons (PrintString t, r) ->
+        if s = t then
+           print_string "DEBUG PRINT: " ; print_string s ; flush () ;
+           ((), r)
+        else
+           sync_error ()
+      | _ -> sync_error ()
+      end
+
+   | read_int () @ r ->
+      match r with
+      | Cons (ReadInt k, r) ->
+           print_string "DEBUG READ: " ; print_int k ; flush () ;
+           (k, r)
+      | _ -> sync_error ()
+      end
+
+   | read_string () @ r ->
+      match r with
+      | Cons (ReadString s, r) ->
+           print_string "DEBUG READ: " ; print_string s ; flush () ;
+           (s, r)
+      | _ -> sync_error ()
+      end
+
+    | flush () @ r ->
+      match r with
+      | Cons (Flush, r) ->
+           print_string "DEBUG FLUSH" ; flush () ;
+           ((), r)
+      | _ -> sync_error ()
+      end
+  end
+
+let conversation1 (_ : unit) =
+  print_string "What is your name?" ;
+  let s = read_string () in
+  print_string ("Hello " ^ s ^ " what is your age?") ;
+  let k = read_int () in
+  print_string "I wish you " ;
+  print_int (100 - k) ;
+  print_string " more years of happy life." ;
+  flush ()
+;;
+
+let conversation2 (_ : unit) =
+  print_string "What is your name?" ;
+  let s = read_string () in
+  print_string ("Hello " ^ s ^ " what is your age?") ;
+  let k = read_int () in
+  ()
+;;
+
+using io in
+  let r =
+    using io_recorder in
+      conversation1 ()
+    finally
+    | val _ @ r -> reverse r
+    end
+  in
+    using io_player r in
+      conversation2 ()
+    finally
+    | val v @ r -> (v, r)
+    | sync_error () @ _ -> sync_error ()
+    end
+finally
+| val v @ _ -> v
+| sync_error () @ _ -> sync_error ()
+end
