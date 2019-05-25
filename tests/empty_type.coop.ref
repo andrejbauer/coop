@@ -2,5 +2,5 @@ signal boom of unit
 val f : int → empty ! {boom} = <fun>
 val g : int → int ! {boom} = <fun>
 Runtime error at file "./empty_type.coop", line 14, charaters 0-4:
-terminated by signal boom
+terminated by signal boom ()
 

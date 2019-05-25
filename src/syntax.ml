@@ -168,11 +168,12 @@ and print_comodel_ty (ops, w_ty, sgn2) ppf =
     (print_signature sgn2)
 
 and print_signature {sig_ops; sig_sgs} ppf =
-  let lst =
-    List.sort Pervasives.compare (Name.Set.elements sig_ops @ Name.Set.elements sig_sgs)
-  in
-  Format.fprintf ppf "{%t}"
-    (Print.sequence (Name.print ~parentheses:true) "," lst)
+  let ops = List.sort Pervasives.compare (Name.Set.elements sig_ops)
+  and sgs =  List.sort Pervasives.compare (Name.Set.elements sig_sgs) in
+  Format.fprintf ppf "{%t%s%t}"
+    (Print.sequence (Name.print ~parentheses:true) "," ops)
+    (match ops, sgs with [], _ | _::_, [] -> "" | _::_, _::_ -> "; ")
+    (Print.sequence (Name.print ~parentheses:true) "," sgs)
 
 let print_datatype (t, cnstrs) ppf =
   let print_clause (cnstr, topt) ppf =

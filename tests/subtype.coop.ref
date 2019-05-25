@@ -1,9 +1,10 @@
 operation op : int → int
 signal die of unit
 signal croak of int
-val apply : (int → int ! {die, op}) → (int → int ! {die, op}) ! {} =
-<fun>
-val g : int → int ! {die, op} = <fun>
+val apply :
+  (int → int ! {op; die}) → (int → int ! {op; die}) ! {}
+  = <fun>
+val g : int → int ! {op; die} = <fun>
 val c : int → {op} @ int ⇒ {croak} ! {} = <fun>
 val demo : int → (int × int) × int ! {die} = <fun>
 - : (int × int) × int = ((1001, 1003), 5)
