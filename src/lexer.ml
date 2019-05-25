@@ -98,7 +98,7 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
      let s =
        try
          Scanf.unescaped (String.sub s 1 (l - 2))
-       with Stdlib.Scanf.Scan_failure _ ->
+       with Scanf.Scan_failure _ ->
          Format.printf "STRING IS [%s]@." s ;
          Ulexbuf.error ~loc:(loc_of lexbuf) Ulexbuf.MalformedQuotedString
      in
