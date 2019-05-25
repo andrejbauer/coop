@@ -47,10 +47,9 @@ and term' =
   | If of term * term * term
   | Lambda of binder list * term
   | Apply of term * term
-  | Let of pattern * term * term
+  | Let of let_binding * term
   | LetRec of rec_clause list * term
   | Sequence of term * term
-  | LetFun of Name.t * binder list * term * term
   | Ascribe of term * ty
   | Comodel of term * comodel_clause list
   | ComodelTimes of term * term
@@ -65,6 +64,10 @@ and comodel_clause = Name.t * binder * binder * term
 
 and rec_clause = Name.t * typed_binder * typed_binder list * ty * term
 
+and let_binding =
+  | BindVal of pattern * ty option * term
+  | BindFun of Name.t * binder list * ty option * term
+
 and finally_clause =
   | FinVal of binder * binder * term
   | FinSignal of Name.t * binder * binder * term
@@ -73,8 +76,7 @@ and finally_clause =
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of string
-  | TopLet of pattern * term
-  | TopLetFun of Name.t * binder list * term
+  | TopLet of let_binding
   | TopLetRec of rec_clause list
   | TopComp of term
   | DefineAbstract of Name.t

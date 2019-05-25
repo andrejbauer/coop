@@ -373,7 +373,7 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
        (ws, locate (Desugared.ComodelRename (e, rnm)))
 
     | (Sugared.Match _ | Sugared.If _ | Sugared.Apply _ | Sugared.Let _ |
-       Sugared.LetRec _ | Sugared.Sequence _ | Sugared.LetFun _ | Sugared.Using _) ->
+       Sugared.LetRec _ | Sugared.Sequence _ | Sugared.Using _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Desugared.Var x))
@@ -493,10 +493,30 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let app = locate (Desugared.Apply (e1, e2)) in
        let_binds (ws1 @ ws2) app
 
-    | Sugared.Let (p, c1, c2) ->
-       let c1 = comp ctx c1 in
+    | Sugared.(Let (BindVal (p, topt, c1), c2)) ->
+       let c1 =
+         match topt with
+         | None -> comp ctx c1
+         | Some t ->
+            let t = ty ctx t in
+            let c1 = comp ctx c1 in
+            Location.locate ~loc:c1.Location.loc (Desugared.AscribeComp (c1, t))
+       in
        let ctx, p = pattern ctx p in
        let c2 = comp ctx c2 in
+       locate (Desugared.Let (p, c1, c2))
+
+    | Sugared.(Let (BindFun (f, pxs, topt, c1), c2)) ->
+       let c1 =
+         match topt with
+         | None -> c1
+         | Some t -> Location.locate ~loc:c1.Location.loc (Sugared.Ascribe (c1, t))
+       in
+       let e = abstract ~loc ctx pxs c1 in
+       let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Val e) in
+       let ctx = extend_ident f Variable ctx in
+       let c2 = comp ctx c2 in
+       let p = locate (Desugared.PattVar f) in
        locate (Desugared.Let (p, c1, c2))
 
     | Sugared.LetRec (lst, c) ->
@@ -508,14 +528,6 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let c1 = comp ctx c1 in
        let c2 = comp ctx c2 in
        let p = locate Desugared.PattAnonymous in
-       locate (Desugared.Let (p, c1, c2))
-
-    | Sugared.LetFun (f, pxs, c1, c2) ->
-       let e = abstract ~loc ctx pxs c1 in
-       let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Val e) in
-       let ctx = extend_ident f Variable ctx in
-       let c2 = comp ctx c2 in
-       let p = locate (Desugared.PattVar f) in
        locate (Desugared.Let (p, c1, c2))
 
     | Sugared.Using (e, c, fin) ->
@@ -648,12 +660,23 @@ let toplevel' ctx = function
        let ctx, cmds = load ctx fn in
        ctx, Desugared.TopLoad cmds
 
-    | Sugared.TopLet (p, c) ->
-       let c = comp ctx c
+    | Sugared.(TopLet (BindVal (p, topt, c))) ->
+       let c =
+         match topt with
+         | None -> comp ctx c
+         | Some t ->
+            let t = ty ctx t in
+            let c1 = comp ctx c in
+            Location.locate ~loc:c1.Location.loc (Desugared.AscribeComp (c1, t))
        and ctx, p = pattern ctx p in
        ctx, Desugared.TopLet (p, c)
 
-    | Sugared.TopLetFun (f, a, c) ->
+    | Sugared.(TopLet (BindFun (f, a, topt, c))) ->
+       let c =
+         match topt with
+         | None -> c
+         | Some t -> Location.locate ~loc:c.Location.loc (Sugared.Ascribe (c, t))
+       in
        let e = abstract ~loc ctx a c in
        let c = Location.locate ~loc:c.Location.loc (Desugared.Val e) in
        let ctx = extend_ident f Variable ctx in

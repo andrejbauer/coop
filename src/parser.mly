@@ -85,10 +85,10 @@ filecontents_top:
 
 
 commandline:
-  | t=toplevel EOF
+  | t=toplevel SEMISEMI? EOF
     { t }
 
-  | t=topcomp EOF
+  | t=topcomp SEMISEMI? EOF
     { t }
 
 
@@ -104,11 +104,8 @@ toplevel_:
   | LOAD fn=QUOTED_STRING
     { Sugared.TopLoad fn }
 
-  | LET p=pattern EQUAL e=term
-    { Sugared.TopLet (p, e) }
-
-  | LET f=var_name a=binder+ EQUAL e=term
-    { Sugared.TopLetFun (f, a, e) }
+  | LET bnd=let_binding
+    { Sugared.TopLet bnd }
 
   | LET REC fs=separated_nonempty_list(AND, recursive_clause)
     { Sugared.TopLetRec fs }
@@ -144,11 +141,8 @@ term_:
   | FUN a=binder+ ARROW e=term
     { Sugared.Lambda (a, e) }
 
-  | LET p=pattern EQUAL c1=infix_term IN c2=term
-    { Sugared.Let (p, c1, c2) }
-
-  | LET f=var_name a=binder+ EQUAL c1=infix_term IN c2=term
-    { Sugared.LetFun (f, a, c1, c2) }
+  | LET bnd=let_binding IN c=term
+    { Sugared.Let (bnd, c) }
 
   | LET REC fs=separated_nonempty_list(AND, recursive_clause) IN c2=term
     { Sugared.LetRec (fs, c2) }
@@ -299,6 +293,17 @@ typed_binder:
 recursive_clause:
   | f=var_name px=typed_binder pxs=typed_binder* COLON t=ty EQUAL c=term
     { (f, px, pxs, t, c) }
+
+annot:
+  | COLON t = ty
+    { t }
+
+let_binding:
+  | p=pattern t=annot? EQUAL e=term
+    { Sugared.BindVal (p, t, e) }
+
+  | f=var_name a=binder+ t=annot? EQUAL e=term
+    { Sugared.BindFun (f, a, t, e) }
 
 match_binder:
   | p=pattern
