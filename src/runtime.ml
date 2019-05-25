@@ -391,7 +391,7 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
      if not quiet then
        List.iter2
          (fun (x, ty) v ->
-           Format.printf "@[<hov>val %t@ :@ %t@ =@ %t@]@."
+           Format.printf "@[<hv 2>val %t :@ @[<hov>%t@]@ @[<hov 2>= %t@]@]@."
                          (Name.print x)
                          (Syntax.print_expr_ty ty)
                          (Value.print v))
@@ -432,7 +432,7 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
 
   | Syntax.DefineDatatype lst ->
      if not quiet then
-       Format.printf "@[<v 5>type %t@]@."
+       Format.printf "@[<v>type %t@]@."
                      (Print.sequence (Syntax.print_datatype) " and" lst) ;
      env
 

@@ -177,12 +177,12 @@ let print_datatype (t, cnstrs) ppf =
   let print_clause (cnstr, topt) ppf =
     match topt with
     | None ->
-       Name.print cnstr ppf
+       Format.fprintf ppf "@[<h>| %t@]" (Name.print cnstr)
     | Some t ->
-       Format.fprintf ppf "@[<h>%t of %t@]"
+       Format.fprintf ppf "@[<h>| %t of %t@]"
          (Name.print cnstr)
          (print_expr_ty ~max_level:Level.product t)
   in
-  Format.fprintf ppf "@[<hov>%t@ =@ %t@]"
+  Format.fprintf ppf "@[<hov -2>%t =@\n@[<hv>%t@]@]"
                  (Name.print t)
-                 (Print.sequence print_clause " |" cnstrs)
+                 (Print.sequence print_clause "" cnstrs)
