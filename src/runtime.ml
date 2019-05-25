@@ -2,8 +2,8 @@ type environment = Value.t list
 
 type error =
   | InvalidDeBruijn of int
-  | UnhandledOperation of Name.t
-  | UnhandledSignal of Name.t
+  | UnhandledOperation of Name.t * Value.t
+  | UnhandledSignal of Name.t * Value.t
   | UnknownExternal of string
   | IllegalRenaming of Name.t
   | IllegalComparison of Value.t
@@ -23,11 +23,15 @@ let print_error err ppf =
   | InvalidDeBruijn i ->
      Format.fprintf ppf "invalid de Bruijn index %d, please report" i
 
-  | UnhandledOperation op ->
-     Format.fprintf ppf "unhandled operation %t" (Name.print op)
+  | UnhandledOperation (op, v) ->
+     Format.fprintf ppf "unhandled operation %t@ %t"
+       (Name.print op)
+       (Value.print ~max_level:Level.constr_arg v)
 
-  | UnhandledSignal sgl ->
-     Format.fprintf ppf "terminated by signal %t" (Name.print sgl)
+  | UnhandledSignal (sgl, v) ->
+     Format.fprintf ppf "terminated by signal %t@ %t"
+       (Name.print sgl)
+       (Value.print ~max_level:Level.constr_arg v)
 
   | UnknownExternal s ->
      Format.fprintf ppf "unknown external %s" s
@@ -168,8 +172,8 @@ let as_closure ~loc = function
 
 let as_value ~loc = function
   | Value.Val v -> v
-  | Value.Operation (op, _, _) -> error ~loc (UnhandledOperation op)
-  | Value.Signal (sgl, _) -> error ~loc (UnhandledSignal sgl)
+  | Value.Operation (op, v, _) -> error ~loc (UnhandledOperation (op, v))
+  | Value.Signal (sgl, v) -> error ~loc (UnhandledSignal (sgl, v))
 
 let as_comodel ~loc = function
   | Value.Comodel (w, cmdl) -> (w, cmdl)
@@ -401,7 +405,7 @@ and using ~loc env cmdl w r (fin_val, fin_signals) =
     | Value.Operation (op, u, k) ->
        begin
          match Name.Map.find op cmdl with
-         | None -> error ~loc (UnhandledOperation op)
+         | None -> error ~loc (UnhandledOperation (op, u))
          | Some coop ->
             let rec let_unless = function
               | Value.Val _ as v -> v
@@ -412,7 +416,7 @@ and using ~loc env cmdl w r (fin_val, fin_signals) =
               | Value.Signal (sgl, v) ->
                  begin
                    match Name.Map.find sgl fin_signals with
-                   | None -> error ~loc (UnhandledSignal sgl)
+                   | None -> error ~loc (UnhandledSignal (sgl, v))
                    | Some f -> f (v, w)
                  end
             in
