@@ -373,7 +373,7 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
        (ws, locate (Desugared.CohandlerRename (e, rnm)))
 
     | (Sugared.Match _ | Sugared.If _ | Sugared.Apply _ | Sugared.Let _ |
-       Sugared.LetRec _ | Sugared.Sequence _ | Sugared.Using _ | Sugared.Equal _) ->
+       Sugared.LetRec _ | Sugared.Sequence _ | Sugared.Use _ | Sugared.Equal _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Desugared.Var x))
@@ -536,11 +536,11 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let p = locate Desugared.PattAnonymous in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.Using (e, c, fin) ->
+    | Sugared.Use (e, c, fin) ->
        let ws, e = expr ctx e in
        let c = comp ctx c in
        let fin = finally ~loc ctx fin in
-       let_binds ws (locate (Desugared.Using (e, c, fin)))
+       let_binds ws (locate (Desugared.Use (e, c, fin)))
 
 and match_clauses ctx lst =
   List.map (match_clause ctx) lst

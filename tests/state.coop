@@ -8,7 +8,7 @@ let state (w0 : int) =
   end
 
 let demo =
-  using state 1 in
+  use state 1 in
     let a = get () in
     put 2 ;
     let b = get () in

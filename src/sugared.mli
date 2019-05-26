@@ -55,7 +55,7 @@ and term' =
   | Cohandler of term * cohandler_clause list
   | CohandlerTimes of term * term
   | CohandlerRename of term * (Name.t * Name.t) list
-  | Using of term * term * finally_clause list
+  | Use of term * term * finally_clause list
 
 and binder = pattern * ty option
 

@@ -20,7 +20,7 @@ let ticker =
 let c (n : int) = state n ⊗ ticker
 
 let demo1 =
-  using c 10 in
+  use c 10 in
     let a = get () in
     put 2 ;
     let b = tick () in
@@ -32,7 +32,7 @@ let demo1 =
   end
 
 let demo2 =
-  using state 2 :*: (state 3 with {get as get', put as put'}) in
+  use state 2 :*: (state 3 with {get as get', put as put'}) in
     let a = get () in
     put' (a + 3) ;
     put 7 ;

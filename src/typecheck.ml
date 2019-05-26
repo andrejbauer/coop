@@ -782,7 +782,7 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let ty = Syntax.signal_ty sgl in
      locate (Syntax.Signal (sgl, e)), ty
 
-  | Desugared.Using (cmdl, c, fin) ->
+  | Desugared.Use (cmdl, c, fin) ->
      let cmdl, (ops, w_ty, Syntax.{sig_ops=cmdl_ops; sig_sgs=cmdl_sgs}) =
        infer_cohandler ctx cmdl in
      let c, (Syntax.{comp_ty=x_ty; _} as c_ty) = infer_comp ctx c in
@@ -790,7 +790,7 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let cmdl_sig = Syntax.{sig_ops=cmdl_ops; sig_sgs = Name.Set.diff cmdl_sgs fin_sgs} in
      let fin_ty = Syntax.pollute fin_ty cmdl_sig in
      check_dirt ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
-     locate (Syntax.Using (cmdl, c, fin)), fin_ty
+     locate (Syntax.Use (cmdl, c, fin)), fin_ty
 
 and infer_rec ~loc ctx fs =
   let ctx, fts =
@@ -1025,7 +1025,7 @@ and check_comp ctx ({Location.it=c'; loc} as c) check_ty =
      locate (Syntax.LetRec (pcs, c))
 
   | (Desugared.Equal _ | Desugared.Apply _ | Desugared.AscribeComp _ |
-     Desugared.Operation _ | Desugared.Signal _ | Desugared.Using _) ->
+     Desugared.Operation _ | Desugared.Signal _ | Desugared.Use _) ->
      let c, c_ty = infer_comp ctx c in
      if comp_subty ~loc ctx c_ty check_ty
      then

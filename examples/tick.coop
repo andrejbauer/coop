@@ -13,7 +13,7 @@ let job (_ : unit) =
   a + b
 
 let demo =
-  using ticker in
+  use ticker in
     let r1 = job () in
     let r2 = job () in
     (r1, r2)

@@ -28,7 +28,7 @@ let reserved = [
   ("true", Parser.TRUE) ;
   ("type", Parser.TYPE) ;
   ("unit", Parser.UNIT) ;
-  ("using", Parser.USING) ;
+  ("use", Parser.USE) ;
   ("val", Parser.VAL) ;
   ("with", Parser.WITH) ;
 ]

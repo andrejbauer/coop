@@ -30,7 +30,7 @@ let positive_state (w0 : int) =
 
 (** This is how we use ordinary state, initialized with 1 *)
 let demo1 =
-  using state 1 in
+  use state 1 in
     let a = get () in
     put 2 ;
     let b = get () in
@@ -44,7 +44,7 @@ let state2 (u : int) (v : int) = state u ⊗ state' v
 
 (** Combine two states together, each has its own state *)
 let demo2 =
-  using state 2 ⊗ state' 3 in
+  use state 2 ⊗ state' 3 in
     let a = get' () in
     put 3 ;
     put' (a + 10) ;
@@ -56,7 +56,7 @@ let demo2 =
 
 (* Combine two copies of state, one of which only allows positive values. *)
 let demo3 =
-  using state' 0 ⊗ positive_state 2 in
+  use state' 0 ⊗ positive_state 2 in
     let a = get' () in
     put 3 ;
     put' (a + 10) ;
@@ -70,7 +70,7 @@ let demo3 =
 (* Combine two copies of state, one of which only allows positive values,
    trigger a signal. *)
 let demo3' =
-  using state' 0 ⊗ positive_state 2 in
+  use state' 0 ⊗ positive_state 2 in
     let a = get' () in
     put 3 ;
     put' (a + 10) ;

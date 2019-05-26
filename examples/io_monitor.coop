@@ -102,15 +102,15 @@ let conversation2 (_ : unit) =
   ()
 ;;
 
-using io in
+use io in
   let r =
-    using io_recorder in
+    use io_recorder in
       conversation1 ()
     finally
     | val _ @ r -> reverse r
     end
   in
-    using io_player r in
+    use io_player r in
       conversation2 ()
     finally
     | val v @ r -> (v, r)

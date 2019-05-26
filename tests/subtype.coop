@@ -14,7 +14,7 @@ let c (w0 : int) =
   end
 
 let demo (n : int) =
-  using c 1 in
+  use c 1 in
     let a = apply g n in
     let b = apply g n in
     (1000 + a, 1000 + b)
@@ -27,7 +27,7 @@ let demo (n : int) =
 
 demo 2 ;;
 
-using (cohandler ()  with end) in
+use (cohandler ()  with end) in
   demo (-3)
 finally
   | val x @ _ -> 42

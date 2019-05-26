@@ -361,11 +361,11 @@ and eval_comp env {Location.it=c'; loc} =
      let v = eval_expr env e in
      Value.Signal (sgl, v)
 
-  | Syntax.Using (e, c, fin) ->
+  | Syntax.Use (e, c, fin) ->
      let (w, cmdl) = as_cohandler ~loc (eval_expr env e)
      and fin = eval_finally ~loc env fin
      and r = eval_comp env c in
-     using ~loc env cmdl w r fin
+     use ~loc env cmdl w r fin
 
 and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_signals} =
   let fin_val (v, w) =
@@ -396,7 +396,7 @@ and extend_rec ~loc fs env =
   env' := env ;
   env
 
-and using ~loc env cmdl w r (fin_val, fin_signals) =
+and use ~loc env cmdl w r (fin_val, fin_signals) =
   let rec tensor w r =
     match r with
 

@@ -1,8 +1,8 @@
-(* Catch a signal arising from the body of the using block. *)
+(* Catch a signal arising from the body of the use block. *)
 
 signal moo of unit ;;
 
-using
+use
   (cohandler () with end)
 in
   moo ()
@@ -17,7 +17,7 @@ operation op : unit -> unit
 signal sgl of unit
 
 let demo =
-  using
+  use
     (cohandler () with
      | op () @ () -> sgl ()
      end)

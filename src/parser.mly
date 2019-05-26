@@ -21,7 +21,7 @@
 %token COHANDLER OTIMES AS
 %token LET REC IN
 %token MATCH WITH BAR END
-%token USING FINALLY VAL
+%token USE FINALLY VAL
 
 (* Toplevel commands *)
 
@@ -159,8 +159,8 @@ term_:
   | COHANDLER e=infix_term WITH lst=cohandler_clauses END
     { Sugared.Cohandler (e, lst) }
 
-  | USING cmdl=infix_term IN c=term FINALLY fin=finally END
-    { Sugared.Using (cmdl, c, fin) }
+  | USE cmdl=infix_term IN c=term FINALLY fin=finally END
+    { Sugared.Use (cmdl, c, fin) }
 
   | cmdl=infix_term WITH LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
     { Sugared.CohandlerRename (cmdl, lst) }

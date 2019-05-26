@@ -18,8 +18,8 @@ let ticker =
   end
 
 let demo =
-  using state 5 in
-    using ticker in
+  use state 5 in
+    use ticker in
       let a = tick () in
       let b = tick () in
       let c = tick () in

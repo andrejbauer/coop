@@ -69,7 +69,7 @@ and comp' =
   | Apply of expr * expr
   | Operation of Name.t * expr
   | Signal of Name.t * expr
-  | Using of expr * comp * finally
+  | Use of expr * comp * finally
 
 and finally = {
     fin_val : pattern * pattern * comp ;
