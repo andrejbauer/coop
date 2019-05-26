@@ -21,7 +21,7 @@ clean:
 # Build the documentation
 
 doc:
-	ocamlbuild -docflag -keep-code $(OCAMLBUILD_MENHIRFLAGS) $(OCAMLBUILD_FLAGS) coop.docdir/index.html
+	ocamlbuild -docflags -charset,utf8  $(OCAMLBUILD_MENHIRFLAGS) $(OCAMLBUILD_FLAGS) coop.docdir/index.html
 
 
 # "make test" to see if anything broke

@@ -1,3 +1,5 @@
+(** Bidirectional type-checking. *)
+
 (** The typing context *)
 type context
 

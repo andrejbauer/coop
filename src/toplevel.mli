@@ -1,4 +1,6 @@
-(** The top-level state of the proof assistant *)
+(** The toplevel execution environment. *)
+
+(** The top-level state of Coop. *)
 type state
 
 (** Initial top-level state. *)

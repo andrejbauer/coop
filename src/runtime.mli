@@ -1,3 +1,5 @@
+(** The runtime environment. *)
+
 (** Runtime environment *)
 type environment
 

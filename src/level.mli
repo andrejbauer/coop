@@ -1,4 +1,4 @@
-(** Precedence of operators *)
+(** Precedence of prefix and infix operators. *)
 
 (** Levels of precedence -- higher level is less likely to be parenthesized. *)
 type t
@@ -19,34 +19,53 @@ val least : t
 (** The level which never gets parenthesized (equal to [least]) *)
 val no_parens : t
 
-(** The level of a prefix operator and its argument *)
+(** The level of a prefix operator *)
 val prefix : t
+
+(** The level of the argument of a prefix operator *)
 val prefix_arg : t
 
 (** The level of an infix operator, and its left and right arguments *)
 val infix : infix -> t * t * t
 
-(** The level of a constructor application *)
+(** The level of a datatype constructor *)
 val constr : t
+
+(** The level of the argument of a constructor *)
 val constr_arg : t
 
-(** The level of a product type and its arguments *)
+(** The level of a product type *)
 val product : t
+
+(** The level of the argument of a product type *)
 val product_arg : t
 
+(** The level of a tuple *)
 val tuple : t
+
+(** The level of the arguments of a tuple *)
 val tuple_arg : t
 
-(** The level of an arrow and its arguments *)
+(** The level of an arrow type *)
 val arr : t
+
+(** The level of the left argument of an arrow type *)
 val arr_left : t
+
+(** The level of the right argument of an arrow type *)
 val arr_right : t
 
-(** The level of a cohandler type and its world argument *)
+(** The level of a cohandler type *)
 val cohandler_ty : t
+
+(** The level of the cohandler type world argument *)
 val cohandler_ty_world : t
 
 (** The level of a computation type with its dirt *)
 val comp_ty : t
+
+(** The level of the left argument of a computation type *)
 val comp_ty_left : t
+
+(** The level of the right argument of a computation type *)
 val comp_ty_right : t

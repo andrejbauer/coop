@@ -1,4 +1,6 @@
-(** Kinds of names. *)
+(** Handling of identifiers and variable names. *)
+
+(** Kinds of identifiers. *)
 type fixity =
   | Word (** an ordinary word *)
   | Anonymous of int (** an anonymous name _ *)
@@ -11,6 +13,8 @@ type t = Ident of string * fixity
 (** A set of identifiers. *)
 module Set :
 sig
+  (** These are just an interface to the [Map] module from the standard library. *)
+
   type elt = t
   type t
 
@@ -29,6 +33,8 @@ end
 (** A map from identifiers. *)
 module Map :
 sig
+  (** These are just an interface to the [Map] module from the standard library. *)
+
   type key = t
   type 'a t
   val empty : 'a t

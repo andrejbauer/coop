@@ -1,3 +1,14 @@
+(** The desugaring phase converts [Sugared] syntax to [Desugared] syntax. It
+   performs the following transformations.
+
+   The programmer may freely mix (effect-free) expressions and (effectful)
+   computations. The desugaring phase separtes them and hoists computations
+   which appear inside expressions into outer `let`-bindings, as necessary.
+
+   The desugaring phase also keeps track of known identifiers, operations,
+   signals and type names, and makes sure they do not get mixed up or shadowed.
+*)
+
 (** Desugaring errors *)
 type desugar_error
 

@@ -1,10 +1,3 @@
-(** Conversion from parsed syntax to abstract syntax.
-
-    The desugaring phase loads required files (but does not run them),
-    it converts variable names to de Bruijn indices, and it converts
-    the complex abstractions of [Input] to the simple ones of [Syntax].
-*)
-
 (** Desugaring errors *)
 type desugar_error =
   | UnknownIdentifier of Name.t

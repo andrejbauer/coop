@@ -1,5 +1,11 @@
+(** The desugared syntax. *)
 
+(** The desugared syntax is an intermediate phase between the
+    sugared syntax from {!module:Sugared} and the type-checked
+    syntax {!module:Syntax}.
+*)
 
+(** An signature of operations and signals. *)
 type signature = {
     sig_ops : Name.Set.t ;
     sig_sgs : Name.Set.t
