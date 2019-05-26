@@ -2,5 +2,5 @@ operation get : unit → int
 operation put : int → unit
 operation tick : unit → int
 val state : int → {get, put} @ int ⇒ {} ! {} = <fun>
-val ticker : {tick} @ unit ⇒ {get, put} = <comodel>
+val ticker : {tick} @ unit ⇒ {get, put} = <cohandler>
 val demo : (int × int × int) × int = ((5, 6, 7), 8)

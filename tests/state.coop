@@ -2,7 +2,7 @@ operation get : unit -> int
 operation put : int -> unit
 
 let state (w0 : int) =
-  comodel w0 with
+  cohandler w0 with
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
   end

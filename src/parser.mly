@@ -18,7 +18,7 @@
 %token <int> NUMERAL
 %token FALSE TRUE IF THEN ELSE
 %token FUN
-%token COMODEL OTIMES AS
+%token COHANDLER OTIMES AS
 %token LET REC IN
 %token MATCH WITH BAR END
 %token USING FINALLY VAL
@@ -156,14 +156,14 @@ term_:
   | IF e1=term THEN e2=term ELSE e3=term
     { Sugared.If (e1, e2, e3) }
 
-  | COMODEL e=infix_term WITH lst=comodel_clauses END
-    { Sugared.Comodel (e, lst) }
+  | COHANDLER e=infix_term WITH lst=cohandler_clauses END
+    { Sugared.Cohandler (e, lst) }
 
   | USING cmdl=infix_term IN c=term FINALLY fin=finally END
     { Sugared.Using (cmdl, c, fin) }
 
   | cmdl=infix_term WITH LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
-    { Sugared.ComodelRename (cmdl, lst) }
+    { Sugared.CohandlerRename (cmdl, lst) }
 
 infix_term: mark_location(infix_term_) { $1 }
 infix_term_:
@@ -181,7 +181,7 @@ infix_term_:
     }
 
   | e1=infix_term OTIMES e2=infix_term
-    { Sugared.ComodelTimes (e1, e2) }
+    { Sugared.CohandlerTimes (e1, e2) }
 
 app_term: mark_location(app_term_) { $1 }
 app_term_:
@@ -257,14 +257,14 @@ match_clause:
   | p=match_binder ARROW c=term
     { (p, c) }
 
-comodel_clauses:
-  | BAR lst=separated_nonempty_list(BAR, comodel_clause)
+cohandler_clauses:
+  | BAR lst=separated_nonempty_list(BAR, cohandler_clause)
     { lst }
 
-  | lst=separated_list(BAR, comodel_clause)
+  | lst=separated_list(BAR, cohandler_clause)
     { lst }
 
-comodel_clause:
+cohandler_clause:
   | op=var_name px=binder AT pw=binder ARROW c=term
     { (op, px, pw, c) }
 
@@ -361,7 +361,7 @@ ty_:
     { Sugared.Arrow (t1, t2) }
 
   | sgn1=signature AT tw=comp_ty DARROW sgn2=signature
-    { Sugared.ComodelTy (sgn1, tw, sgn2) }
+    { Sugared.CohandlerTy (sgn1, tw, sgn2) }
 
 
 comp_ty: mark_location(comp_ty_) { $1 }

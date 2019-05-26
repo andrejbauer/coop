@@ -7,13 +7,13 @@ let error msg = raise (Error msg)
 let as_int = function
   | Value.Numeral n -> n
   | Value.Constructor _ | Value.Boolean _ | Value.Quoted _ | Value.Tuple _ |
-    Value.Closure _ | Value.Comodel _ | Value.Abstract ->
+    Value.Closure _ | Value.Cohandler _ | Value.Abstract ->
      error "integer expected"
 
 let as_string = function
   | Value.Quoted s -> s
   | Value.Constructor _ | Value.Boolean _ | Value.Numeral _ | Value.Tuple _ |
-    Value.Closure _ | Value.Comodel _ | Value.Abstract ->
+    Value.Closure _ | Value.Cohandler _ | Value.Abstract ->
      error "string expected"
 
 (** Wrappers that convert OCaml data to Coop data. *)
@@ -22,14 +22,14 @@ let coop_unit = Value.Tuple []
 
 let mk_ident s = Name.Ident (s, Name.Word)
 
-let wrap_comodel w coops =
+let wrap_cohandler w coops =
   let coops =
     List.fold_left
       (fun coops (x, f) -> Name.Map.add (mk_ident x) f coops)
       Name.Map.empty
       coops
   in
-  Value.Comodel (w, coops)
+  Value.Cohandler (w, coops)
 
 let io =
   let r = Value.Val (coop_unit, Value.Abstract) in
@@ -120,7 +120,7 @@ let externals =
     (">=",  wrap_int_int_bool ((>=) : int -> int -> bool)) ;
     ("^",  wrap_string_string_string (^)) ;
     ("string_of_int", wrap_int_string (string_of_int)) ;
-    ("io", wrap_comodel Value.Abstract io) ;
+    ("io", wrap_cohandler Value.Abstract io) ;
   ]
 
 let lookup s = List.assoc_opt s externals

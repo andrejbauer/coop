@@ -7,13 +7,13 @@ operation put' : int -> unit
 operation tick : unit -> int
 
 let state (w0 : int) =
-  comodel w0 with
+  cohandler w0 with
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
   end
 
 let ticker =
-  comodel 0 with
+  cohandler 0 with
   | tick () @ w -> (w, w+1)
   end
 

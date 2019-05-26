@@ -212,11 +212,11 @@ let rec ty ctx {Location.it=t'; loc} =
        and t2 = ty ctx t2 in
        Desugared.Arrow (t1, t2)
 
-    | Sugared.ComodelTy (ops, t, sgn2) ->
+    | Sugared.CohandlerTy (ops, t, sgn2) ->
        let ops = operations ops
        and t = ty ctx t
        and sgn2 = signature ~loc ctx sgn2 in
-       Desugared.ComodelTy (ops, t, sgn2)
+       Desugared.CohandlerTy (ops, t, sgn2)
 
     | Sugared.CompTy (t, sgn) ->
        let t = ty ctx t
@@ -340,17 +340,17 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
     | Sugared.Lambda (pxs, c) ->
        ([], abstract ~loc ctx pxs c)
 
-    | Sugared.Comodel (e, lst) ->
+    | Sugared.Cohandler (e, lst) ->
        let ws, e = expr ctx e in
-       let lst = comodel_clauses ~loc ctx lst in
-       (ws, locate (Desugared.Comodel (e, lst)))
+       let lst = cohandler_clauses ~loc ctx lst in
+       (ws, locate (Desugared.Cohandler (e, lst)))
 
-    | Sugared.ComodelTimes (e1, e2) ->
+    | Sugared.CohandlerTimes (e1, e2) ->
        let ws1, e1 = expr ctx e1
        and ws2, e2 = expr ctx e2 in
-       (ws1 @ ws2, locate (Desugared.ComodelTimes (e1, e2)))
+       (ws1 @ ws2, locate (Desugared.CohandlerTimes (e1, e2)))
 
-    | Sugared.ComodelRename (e, rnm) ->
+    | Sugared.CohandlerRename (e, rnm) ->
        let ws, e = expr ctx e in
        let rnm =
          List.map
@@ -370,7 +370,7 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
              (x, y))
            rnm
        in
-       (ws, locate (Desugared.ComodelRename (e, rnm)))
+       (ws, locate (Desugared.CohandlerRename (e, rnm)))
 
     | (Sugared.Match _ | Sugared.If _ | Sugared.Apply _ | Sugared.Let _ |
        Sugared.LetRec _ | Sugared.Sequence _ | Sugared.Using _ | Sugared.Equal _) ->
@@ -410,9 +410,9 @@ and abstract ~loc ctx pxs c =
      Location.locate ~loc (Desugared.Lambda (px, c))
 
 
-and comodel_clauses ~loc ctx lst = List.map (comodel_clause ~loc ctx) lst
+and cohandler_clauses ~loc ctx lst = List.map (cohandler_clause ~loc ctx) lst
 
-and comodel_clause ~loc ctx (op, px, pw, c) =
+and cohandler_clause ~loc ctx (op, px, pw, c) =
   match lookup_ident op ctx with
 
   | None -> error ~loc (UnknownOperation op)
@@ -440,8 +440,8 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
   match c' with
     (* keep this case in front so that constructors are handled ocrrectly *)
     | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True | Sugared.Quoted _ |
-       Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Comodel _ |
-       Sugared.ComodelTimes _ | Sugared.ComodelRename _ |
+       Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Cohandler _ |
+       Sugared.CohandlerTimes _ | Sugared.CohandlerRename _ |
        Sugared.Apply ({Location.it=Sugared.Constructor _;_}, _)) ->
        let ws, e = expr ctx c in
        let return_e = locate (Desugared.Val e) in

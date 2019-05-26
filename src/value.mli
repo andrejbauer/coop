@@ -6,7 +6,7 @@ type t =
   | Constructor of Name.t * t option
   | Tuple of t list
   | Closure of (t -> t result)
-  | Comodel of t * cooperation Name.Map.t
+  | Cohandler of t * cooperation Name.Map.t
 
 and world = t
 

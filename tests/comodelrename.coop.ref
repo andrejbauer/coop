@@ -2,7 +2,7 @@ operation cow : unit → int
 operation bull : unit → int
 operation dog : bool → bool
 operation cat : bool → bool
-val c : {cow, dog} @ unit ⇒ {} = <comodel>
-val d : {cat, cow} @ unit ⇒ {} = <comodel>
-val e : {bull, cat} @ unit ⇒ {} = <comodel>
-val f : {bull, dog} @ unit ⇒ {} = <comodel>
+val c : {cow, dog} @ unit ⇒ {} = <cohandler>
+val d : {cat, cow} @ unit ⇒ {} = <cohandler>
+val e : {bull, cat} @ unit ⇒ {} = <cohandler>
+val f : {bull, dog} @ unit ⇒ {} = <cohandler>

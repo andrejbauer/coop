@@ -8,7 +8,7 @@ let g (n : int) =
   if n > 0 then op n else die ()
 
 let c (w0 : int) =
-  comodel w0 with
+  cohandler w0 with
   | op k @ w ->
       if k > 10 then croak w else (w, k + w)
   end
@@ -27,7 +27,7 @@ let demo (n : int) =
 
 demo 2 ;;
 
-using (comodel ()  with end) in
+using (cohandler ()  with end) in
   demo (-3)
 finally
   | val x @ _ -> 42

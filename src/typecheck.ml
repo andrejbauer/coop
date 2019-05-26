@@ -38,8 +38,8 @@ type error =
   | TypeExpectedButUnit of Syntax.expr_ty
   | TypeExpectedButConstructor of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
-  | ComodelExpected of Syntax.expr_ty
-  | ComodelDoubleOperations of Name.Set.t
+  | CohandlerExpected of Syntax.expr_ty
+  | CohandlerDoubleOperations of Name.Set.t
   | CannotInferArgument
   | CannotInferMatch
   | DuplicateOperation of Name.t
@@ -127,13 +127,13 @@ let print_error err ppf =
      Format.fprintf ppf "this expression should be a function but has type@ %t"
        (Syntax.print_expr_ty ty)
 
-  | ComodelExpected ty ->
-     Format.fprintf ppf "this expression should be a comodel but has type@ %t"
+  | CohandlerExpected ty ->
+     Format.fprintf ppf "this expression should be a cohandler but has type@ %t"
        (Syntax.print_expr_ty ty)
 
-  | ComodelDoubleOperations ops ->
+  | CohandlerDoubleOperations ops ->
      let ops = Name.Set.elements ops in
-     Format.fprintf ppf "these comodels both handle the following operations:@ %t"
+     Format.fprintf ppf "these cohandlers both handle the following operations:@ %t"
        (Print.sequence (Name.print ~parentheses:true) "," ops)
 
   | CannotInferArgument ->
@@ -250,7 +250,7 @@ let rec norm_ty ~loc ctx t =
      norm_ty ~loc ctx t
 
   | (Syntax.Abstract _ | Syntax.Datatype _ |  Syntax.Primitive _ |
-     Syntax.Product _ | Syntax.Arrow _ | Syntax.ComodelTy _) ->
+     Syntax.Product _ | Syntax.Arrow _ | Syntax.CohandlerTy _) ->
      t
 
 let as_product ~loc ctx ty =
@@ -261,7 +261,7 @@ let as_product ~loc ctx ty =
   | Syntax.Product ts -> Some ts
 
   | (Syntax.Abstract _ | Syntax.Datatype _  | Syntax.Primitive _ |
-     Syntax.Arrow _ | Syntax.ComodelTy _) ->
+     Syntax.Arrow _ | Syntax.CohandlerTy _) ->
      None
 
 let as_arrow ~loc ctx ty =
@@ -272,16 +272,16 @@ let as_arrow ~loc ctx ty =
   | Syntax.Arrow (t,u) -> Some (t, u)
 
   | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Primitive _ |
-     Syntax.Abstract _ | Syntax.ComodelTy _) ->
+     Syntax.Abstract _ | Syntax.CohandlerTy _) ->
      None
 
-let as_comodel ~loc ctx ty =
+let as_cohandler ~loc ctx ty =
 
   match norm_ty ~loc ctx ty with
 
   | Syntax.Alias _ -> assert false
 
-  | Syntax.ComodelTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
+  | Syntax.CohandlerTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
 
   | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Primitive _ |
      Syntax.Arrow _ | Syntax.Abstract _) ->
@@ -297,7 +297,7 @@ let as_datatype ~loc ctx ty =
      Some (lookup_datatype ~loc ty ctx)
 
   | (Syntax.Product _ | Syntax.Primitive _ | Syntax.Arrow _ |
-     Syntax.ComodelTy _ | Syntax.Abstract _) ->
+     Syntax.CohandlerTy _ | Syntax.Abstract _) ->
      None
 
 
@@ -343,11 +343,11 @@ let rec expr_subty ~loc ctx t u =
   | Syntax.Arrow (t1, t2), Syntax.Arrow (u1, u2) ->
      expr_subty ~loc ctx u1 t1 && comp_subty ~loc ctx t2 u2
 
-  | Syntax.ComodelTy (tsgn1, t, tsgn2), Syntax.ComodelTy (usgn1, u, usgn2) ->
+  | Syntax.CohandlerTy (tsgn1, t, tsgn2), Syntax.CohandlerTy (usgn1, u, usgn2) ->
      Name.Set.subset usgn1 tsgn1 && expr_eqtype ~loc ctx t u && subsignature  tsgn2 usgn2
 
   | (Syntax.Datatype _ | Syntax.Primitive _ | Syntax.Product _ |
-     Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _), _ ->
+     Syntax.Arrow _ | Syntax.CohandlerTy _ | Syntax.Abstract _), _ ->
      false
 
 and comp_subty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} (Syntax.{comp_ty=t2; comp_sig=sig2}) =
@@ -411,14 +411,14 @@ let rec join_expr_ty ~loc ctx t1 t2 =
      let t = join_comp_ty ~loc ctx t1 t2 in
      Syntax.Arrow (u, t)
 
-  | Syntax.ComodelTy (ops1, t1, sig1), Syntax.ComodelTy (ops2, t2, sig2) ->
+  | Syntax.CohandlerTy (ops1, t1, sig1), Syntax.CohandlerTy (ops2, t2, sig2) ->
      let ops = Name.Set.inter ops1 ops2
      and t = meet_expr_ty ~loc ctx t1 t2
      and sgn = join_signature sig1 sig2 in
-     Syntax.ComodelTy  (ops, t, sgn)
+     Syntax.CohandlerTy  (ops, t, sgn)
 
   | (Syntax.Datatype _ | Syntax.Primitive _ | Syntax.Product _ |
-     Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _), _ ->
+     Syntax.Arrow _ | Syntax.CohandlerTy _ | Syntax.Abstract _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
 and meet_expr_ty ~loc ctx t1 t2 =
@@ -466,14 +466,14 @@ and meet_expr_ty ~loc ctx t1 t2 =
      let t = meet_comp_ty ~loc ctx t1 t2 in
      Syntax.Arrow (u, t)
 
-  | Syntax.ComodelTy (ops1, t1, sig1), Syntax.ComodelTy (ops2, t2, sig2) ->
+  | Syntax.CohandlerTy (ops1, t1, sig1), Syntax.CohandlerTy (ops2, t2, sig2) ->
      let ops = Name.Set.union ops1 ops2
      and t = join_expr_ty ~loc ctx t1 t2
      and sgn = meet_signature sig1 sig2 in
-     Syntax.ComodelTy  (ops, t, sgn)
+     Syntax.CohandlerTy  (ops, t, sgn)
 
   | (Syntax.Datatype _ | Syntax.Primitive _ | Syntax.Product _ |
-     Syntax.Arrow _ | Syntax.ComodelTy _ | Syntax.Abstract _), _ ->
+     Syntax.Arrow _ | Syntax.CohandlerTy _ | Syntax.Abstract _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
 and join_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2; comp_sig=sig2} =
@@ -517,10 +517,10 @@ let rec expr_ty {Location.it=t'; loc} =
      and t2 = comp_ty t2 in
      Syntax.Arrow (t1, t2)
 
-  | Desugared.ComodelTy (ops, t, sgn2) ->
+  | Desugared.CohandlerTy (ops, t, sgn2) ->
      let t = expr_ty t
      and sgn2 = signature sgn2 in
-     Syntax.ComodelTy (ops, t, sgn2)
+     Syntax.CohandlerTy (ops, t, sgn2)
 
   | Desugared.CompTy _ ->
      error ~loc ExprTypeExpected
@@ -535,7 +535,7 @@ and comp_ty ({Location.it=t'; loc} as t) =
 
   | (Desugared.Primitive _ | Desugared.Alias _  |
      Desugared.Datatype _ | Desugared.Product _ | Desugared.Arrow _ |
-     Desugared.ComodelTy _ | Desugared.Abstract _) ->
+     Desugared.CohandlerTy _ | Desugared.Abstract _) ->
      let t = expr_ty t in
      Syntax.{comp_ty=t; comp_sig=empty_signature}
 
@@ -679,24 +679,24 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
   | Desugared.Lambda ((p, None), _) ->
      error ~loc:p.Location.loc CannotInferArgument
 
-  | Desugared.Comodel (e, coops) ->
+  | Desugared.Cohandler (e, coops) ->
      let e, e_ty = infer_expr ctx e in
      let coops, ops, sgn = infer_coops ~loc ctx e_ty coops in
-     locate (Syntax.Comodel (e, coops)), Syntax.ComodelTy (ops, e_ty, sgn)
+     locate (Syntax.Cohandler (e, coops)), Syntax.CohandlerTy (ops, e_ty, sgn)
 
-  | Desugared.ComodelTimes (e1, e2) ->
-     let cmdl1, (ops1, w1_ty, sgn1) = infer_comodel ctx e1
-     and cmdl2, (ops2, w2_ty, sgn2) = infer_comodel ctx e2 in
+  | Desugared.CohandlerTimes (e1, e2) ->
+     let cmdl1, (ops1, w1_ty, sgn1) = infer_cohandler ctx e1
+     and cmdl2, (ops2, w2_ty, sgn2) = infer_cohandler ctx e2 in
      let w_ty = Syntax.Product [w1_ty; w2_ty] in
      let ops' = Name.Set.inter ops1 ops2 in
      if not (Name.Set.is_empty ops') then
-       error ~loc (ComodelDoubleOperations ops') ;
+       error ~loc (CohandlerDoubleOperations ops') ;
      let ops = Name.Set.union ops1 ops2 in
      let sgn = join_signature sgn1 sgn2 in
-     locate (Syntax.ComodelTimes (cmdl1, cmdl2)), Syntax.ComodelTy (ops, w_ty, sgn)
+     locate (Syntax.CohandlerTimes (cmdl1, cmdl2)), Syntax.CohandlerTy (ops, w_ty, sgn)
 
-  | Desugared.ComodelRename (e, rnm) ->
-     let e, (ops, w_ty, sgn) = infer_comodel ctx e in
+  | Desugared.CohandlerRename (e, rnm) ->
+     let e, (ops, w_ty, sgn) = infer_cohandler ctx e in
      begin
        match List.find_opt (fun (op, _) -> not (Name.Set.mem op ops)) rnm with
        | None -> ()
@@ -720,7 +720,7 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
          ops
          (Name.Set.empty, Name.Map.empty)
      in
-     locate (Syntax.ComodelRename (e, rnm')), Syntax.ComodelTy (ops', w_ty, sgn)
+     locate (Syntax.CohandlerRename (e, rnm')), Syntax.CohandlerTy (ops', w_ty, sgn)
 
 
 (** [infer_comp ctx c] infers the type [ty] of a computation [c]. It returns
@@ -784,7 +784,7 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
 
   | Desugared.Using (cmdl, c, fin) ->
      let cmdl, (ops, w_ty, Syntax.{sig_ops=cmdl_ops; sig_sgs=cmdl_sgs}) =
-       infer_comodel ctx cmdl in
+       infer_cohandler ctx cmdl in
      let c, (Syntax.{comp_ty=x_ty; _} as c_ty) = infer_comp ctx c in
      let fin, fin_sgs, fin_ty = infer_finally ~loc ctx x_ty w_ty fin in
      let cmdl_sig = Syntax.{sig_ops=cmdl_ops; sig_sgs = Name.Set.diff cmdl_sgs fin_sgs} in
@@ -855,15 +855,15 @@ and infer_coops ~loc ctx w_ty lst =
   in
   fold [] Name.Set.empty Syntax.empty_signature lst
 
-and infer_comodel ctx cmdl =
+and infer_cohandler ctx cmdl =
   let e, e_ty = infer_expr ctx cmdl in
-  match as_comodel ~loc:cmdl.Location.loc ctx e_ty with
+  match as_cohandler ~loc:cmdl.Location.loc ctx e_ty with
 
     | Some (ops, t, sgn2) ->
        e, (ops, t, sgn2)
 
     | None ->
-       error ~loc:cmdl.Location.loc (ComodelExpected e_ty)
+       error ~loc:cmdl.Location.loc (CohandlerExpected e_ty)
 
 
 and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_signals} =
@@ -959,8 +959,8 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
      end
 
   | (Desugared.Quoted _ | Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
-     Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Comodel _ |
-     Desugared.ComodelTimes _ | Desugared.ComodelRename _) ->
+     Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Cohandler _ |
+     Desugared.CohandlerTimes _ | Desugared.CohandlerRename _) ->
      let e, ty' = infer_expr ctx e in
      if expr_subty ~loc ctx ty' ty
      then

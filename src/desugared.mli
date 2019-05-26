@@ -21,7 +21,7 @@ and ty' =
   | Datatype of Name.t
   | Arrow of ty * ty
   | Product of ty list
-  | ComodelTy of Name.Set.t * ty * signature
+  | CohandlerTy of Name.Set.t * ty * signature
   | CompTy of ty * signature
 
 (** The body of a datatype definition *)
@@ -49,9 +49,9 @@ and expr' =
   | Tuple of expr list
   | Constructor of Name.t * expr option
   | Lambda of binder * comp
-  | Comodel of expr * comodel_clause list
-  | ComodelRename of expr * (Name.t * Name.t) list
-  | ComodelTimes of expr * expr
+  | Cohandler of expr * cohandler_clause list
+  | CohandlerRename of expr * (Name.t * Name.t) list
+  | CohandlerTimes of expr * expr
 
 (** Computations *)
 and comp = comp' Location.located
@@ -69,7 +69,7 @@ and comp' =
 
 and binder = pattern * ty option
 
-and comodel_clause = Name.t * binder * binder * comp
+and cohandler_clause = Name.t * binder * binder * comp
 
 and rec_clause = Name.t * ty * pattern * ty * comp
 

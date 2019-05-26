@@ -3,7 +3,7 @@ signal boom of unit
 let rec f (x : int) : empty ! {boom} = boom ()
 
 let g (x : int) =
-  using (comodel () with end) in
+  using (cohandler () with end) in
     (match f x with end) : int ! {boom}
   finally
   | val x @ _ -> x

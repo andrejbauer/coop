@@ -20,13 +20,13 @@ type expr_ty =
   | Primitive of primitive
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
-  | ComodelTy of comodel_ty
+  | CohandlerTy of cohandler_ty
 
 (** Computation type *)
 and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
 
-(** Comodel *)
-and comodel_ty = Name.Set.t * expr_ty * signature
+(** Cohandler *)
+and cohandler_ty = Name.Set.t * expr_ty * signature
 
 (** The body of a datatype definition *)
 type datatype = (Name.t * expr_ty option) list
@@ -54,9 +54,9 @@ and expr' =
   | Constructor of Name.t * expr option
   | Tuple of expr list
   | Lambda of pattern * comp
-  | Comodel of expr * (Name.t * pattern * pattern * comp) list
-  | ComodelTimes of expr * expr
-  | ComodelRename of expr * Name.t Name.Map.t
+  | Cohandler of expr * (Name.t * pattern * pattern * comp) list
+  | CohandlerTimes of expr * expr
+  | CohandlerRename of expr * Name.t Name.Map.t
 
 (** Computations *)
 and comp = comp' Location.located
@@ -152,18 +152,18 @@ let rec print_expr_ty ?max_level ty ppf =
        (Print.char_arrow ())
        (print_comp_ty ~max_level:Level.arr_right t2)
 
-  | ComodelTy cmdl_ty -> print_comodel_ty cmdl_ty ppf
+  | CohandlerTy cmdl_ty -> print_cohandler_ty cmdl_ty ppf
 
 and print_comp_ty ?max_level {comp_ty; comp_sig} ppf =
   Print.print ?max_level ~at_level:Level.comp_ty ppf "%t@ !@ %t"
     (print_expr_ty ~max_level:Level.comp_ty_left comp_ty)
     (print_signature comp_sig)
 
-and print_comodel_ty (ops, w_ty, sgn2) ppf =
+and print_cohandler_ty (ops, w_ty, sgn2) ppf =
   let ops = List.sort Pervasives.compare (Name.Set.elements ops) in
   Format.fprintf ppf "{%t}@ @@@ %t %s@ %t"
     (Print.sequence (Name.print ~parentheses:true) "," ops)
-    (print_expr_ty ~max_level:Level.comodel_ty_world w_ty)
+    (print_expr_ty ~max_level:Level.cohandler_ty_world w_ty)
     (Print.char_darrow ())
     (print_signature sgn2)
 

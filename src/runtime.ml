@@ -8,8 +8,8 @@ type error =
   | IllegalRenaming of Name.t
   | IllegalComparison of Value.t
   | FunctionExpected
-  | ComodelExpected
-  | ComodelDoubleOperation of Name.t
+  | CohandlerExpected
+  | CohandlerDoubleOperation of Name.t
   | PairExpected
   | PatternMismatch
 
@@ -37,7 +37,7 @@ let print_error err ppf =
      Format.fprintf ppf "unknown external %s" s
 
   | IllegalRenaming op ->
-     Format.fprintf ppf "illegal comodel renaming %t, please report" (Name.print op)
+     Format.fprintf ppf "illegal cohandler renaming %t, please report" (Name.print op)
 
   | IllegalComparison v ->
      Format.fprintf ppf "cannot compare %s" (Value.names v)
@@ -45,10 +45,10 @@ let print_error err ppf =
   | FunctionExpected ->
      Format.fprintf ppf "function expected, please report"
 
-  | ComodelExpected ->
-     Format.fprintf ppf "comodel expected, please report"
+  | CohandlerExpected ->
+     Format.fprintf ppf "cohandler expected, please report"
 
-  | ComodelDoubleOperation op ->
+  | CohandlerDoubleOperation op ->
      Format.fprintf ppf "cannot combine models that both contain the coperation %t" (Name.print op)
 
   | PairExpected ->
@@ -161,13 +161,13 @@ let match_clauses ~loc env ps v =
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
   | Value.Closure _ | Value.Numeral _ | Value.Boolean _ | Value.Quoted _ | Value.Constructor _
-    | Value.Tuple ([] | [_] | _::_::_::_) | Value.Comodel _ | Value.Abstract ->
+    | Value.Tuple ([] | [_] | _::_::_::_) | Value.Cohandler _ | Value.Abstract ->
      error ~loc PairExpected
 
 let as_closure ~loc = function
   | Value.Closure f -> f
   | Value.Numeral _ | Value.Boolean _ | Value.Quoted _ | Value.Constructor _ | Value.Tuple _ |
-    Value.Comodel _  | Value.Abstract ->
+    Value.Cohandler _  | Value.Abstract ->
      error ~loc FunctionExpected
 
 let as_value ~loc = function
@@ -175,20 +175,20 @@ let as_value ~loc = function
   | Value.Operation (op, v, _) -> error ~loc (UnhandledOperation (op, v))
   | Value.Signal (sgl, v) -> error ~loc (UnhandledSignal (sgl, v))
 
-let as_comodel ~loc = function
-  | Value.Comodel (w, cmdl) -> (w, cmdl)
+let as_cohandler ~loc = function
+  | Value.Cohandler (w, cmdl) -> (w, cmdl)
   | Value.Numeral _ | Value.Boolean _ | Value.Quoted _ | Value.Tuple _ | Value.Constructor _
-  | Value.Closure _  | Value.Abstract -> error ~loc ComodelExpected
+  | Value.Closure _  | Value.Abstract -> error ~loc CohandlerExpected
 
 
 (** Comparison of values *)
 let rec equal_value ~loc (v1 : Value.t) (v2 : Value.t) =
   match v1, v2 with
 
-  | Value.(Abstract | Closure _ | Comodel _), _ ->
+  | Value.(Abstract | Closure _ | Cohandler _), _ ->
      error ~loc (IllegalComparison v1)
 
-  | _, Value.(Abstract | Closure _ | Comodel _) ->
+  | _, Value.(Abstract | Closure _ | Cohandler _) ->
      error ~loc (IllegalComparison v1)
 
   | Value.(Numeral k1, Numeral k2) ->
@@ -262,7 +262,7 @@ let rec eval_expr env {Location.it=e'; loc} =
      in
      Value.Closure f
 
-  | Syntax.Comodel (e, lst) ->
+  | Syntax.Cohandler (e, lst) ->
      let w = eval_expr env e in
      let coop px pw c =
        let loc = c.Location.loc in
@@ -279,9 +279,9 @@ let rec eval_expr env {Location.it=e'; loc} =
          Name.Map.empty
          lst
      in
-     Value.Comodel (w, cmdl)
+     Value.Cohandler (w, cmdl)
 
-  | Syntax.ComodelTimes (e1, e2) ->
+  | Syntax.CohandlerTimes (e1, e2) ->
      let wrap_fst f (v, w) =
          let (w1, w2) = as_pair ~loc w in
          f (v, w1) >>= fun (v', w1') ->
@@ -294,8 +294,8 @@ let rec eval_expr env {Location.it=e'; loc} =
          let w' = Value.Tuple [w1; w2'] in
          Value.Val (v', w')
      in
-     let (w1, cmdl1) = as_comodel ~loc (eval_expr env e1)
-     and (w2, cmdl2) = as_comodel ~loc (eval_expr env e2) in
+     let (w1, cmdl1) = as_cohandler ~loc (eval_expr env e1)
+     and (w2, cmdl2) = as_cohandler ~loc (eval_expr env e2) in
      let w = Value.Tuple [w1; w2] in
      let cmdl =
        Name.Map.merge
@@ -304,13 +304,13 @@ let rec eval_expr env {Location.it=e'; loc} =
            | None, None -> None
            | Some f1, None -> Some (wrap_fst f1)
            | None, Some f2 -> Some (wrap_snd f2)
-           | Some _, Some _ -> error ~loc (ComodelDoubleOperation op))
+           | Some _, Some _ -> error ~loc (CohandlerDoubleOperation op))
          cmdl1 cmdl2
      in
-     Value.Comodel (w, cmdl)
+     Value.Cohandler (w, cmdl)
 
-  | Syntax.ComodelRename (e, rnm) ->
-     let (w, cmdl) = as_comodel ~loc (eval_expr env e) in
+  | Syntax.CohandlerRename (e, rnm) ->
+     let (w, cmdl) = as_cohandler ~loc (eval_expr env e) in
      let cmdl =
        Name.Map.fold
          (fun op f cmdl ->
@@ -319,7 +319,7 @@ let rec eval_expr env {Location.it=e'; loc} =
            | Some op' -> Name.Map.add op' f cmdl)
          cmdl Name.Map.empty
      in
-     Value.Comodel (w, cmdl)
+     Value.Cohandler (w, cmdl)
 
 and eval_comp env {Location.it=c'; loc} =
   match c' with
@@ -362,7 +362,7 @@ and eval_comp env {Location.it=c'; loc} =
      Value.Signal (sgl, v)
 
   | Syntax.Using (e, c, fin) ->
-     let (w, cmdl) = as_comodel ~loc (eval_expr env e)
+     let (w, cmdl) = as_cohandler ~loc (eval_expr env e)
      and fin = eval_finally ~loc env fin
      and r = eval_comp env c in
      using ~loc env cmdl w r fin

@@ -16,7 +16,7 @@ and ty' =
   | NamedTy of Name.t
   | Product of ty list
   | Arrow of ty * ty
-  | ComodelTy of Name.t list * ty * signature
+  | CohandlerTy of Name.t list * ty * signature
   | CompTy of ty * signature
 
 (** The body of a datatype definition *)
@@ -52,16 +52,16 @@ and term' =
   | LetRec of rec_clause list * term
   | Sequence of term * term
   | Ascribe of term * ty
-  | Comodel of term * comodel_clause list
-  | ComodelTimes of term * term
-  | ComodelRename of term * (Name.t * Name.t) list
+  | Cohandler of term * cohandler_clause list
+  | CohandlerTimes of term * term
+  | CohandlerRename of term * (Name.t * Name.t) list
   | Using of term * term * finally_clause list
 
 and binder = pattern * ty option
 
 and typed_binder = pattern * ty
 
-and comodel_clause = Name.t * binder * binder * term
+and cohandler_clause = Name.t * binder * binder * term
 
 and rec_clause = Name.t * typed_binder * typed_binder list * ty * term
 

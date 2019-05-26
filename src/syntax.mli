@@ -22,13 +22,13 @@ type expr_ty =
   | Primitive of primitive
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
-  | ComodelTy of comodel_ty
+  | CohandlerTy of cohandler_ty
 
 (** Computation type *)
 and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
 
-(** Comodel *)
-and comodel_ty = Name.Set.t * expr_ty * signature
+(** Cohandler *)
+and cohandler_ty = Name.Set.t * expr_ty * signature
 
 (** The body of a datatype definition *)
 type datatype = (Name.t * expr_ty option) list
@@ -56,9 +56,9 @@ and expr' =
   | Constructor of Name.t * expr option
   | Tuple of expr list
   | Lambda of pattern * comp
-  | Comodel of expr * (Name.t * pattern * pattern * comp) list
-  | ComodelTimes of expr * expr
-  | ComodelRename of expr * Name.t Name.Map.t
+  | Cohandler of expr * (Name.t * pattern * pattern * comp) list
+  | CohandlerTimes of expr * expr
+  | CohandlerRename of expr * Name.t Name.Map.t
 
 (** Computations *)
 and comp = comp' Location.located

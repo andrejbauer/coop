@@ -3,14 +3,14 @@ operation put : int -> unit
 operation tick : unit -> int
 
 let state (w : int) =
-  comodel w with
+  cohandler w with
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
   end
 
 (* A ticker which uses state to tick *)
 let ticker =
-  comodel () with
+  cohandler () with
   | tick () @ () ->
      let x = get () in
      put (x + 1) ;

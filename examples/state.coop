@@ -8,12 +8,12 @@ operation put : int -> unit
 operation get' : unit -> int
 operation put' : int -> unit
 
-(** A signal used for the comodel that only allows positive integers *)
+(** A signal used for the cohandler that only allows positive integers *)
 signal negative of int
 
 (** Basic state *)
 let state (w0 : int) =
-  comodel w0 with
+  cohandler w0 with
   | get () @ w -> (w, w)
   | put w' @ _ -> ((), w')
   end
@@ -23,7 +23,7 @@ let state' (w0 : int) = state w0 with {get as get', put as put'}
 
 (** State that only allows non-negative integers to be stored *)
 let positive_state (w0 : int) =
-  comodel w0 with
+  cohandler w0 with
   | get _ @ w -> (w, w)
   | put w @ _ -> if w < 0 then negative w else ((), w)
   end

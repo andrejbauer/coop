@@ -1,4 +1,4 @@
-(** We define two comodel, one for recording an IO interaction,
+(** We define two cohandlers, one for recording an IO interaction,
     and one for replaing it. *)
 
 type io_action =
@@ -22,7 +22,7 @@ let reverse (r : io_record) =
   rev Nil r
 
 let io_recorder =
-  comodel Nil with
+  cohandler Nil with
   | print_int k @ r -> print_int k ; ((), Cons (PrintInt k, r))
   | print_string s @ r -> print_string s ; ((), Cons (PrintString s, r))
   | read_int () @ r -> let k = read_int () in (k, Cons (ReadInt k, r))
@@ -33,7 +33,7 @@ let io_recorder =
 signal sync_error of unit
 
 let io_player (r : io_record) =
-  comodel r with
+  cohandler r with
 
   | print_int k @ r ->
       match r with

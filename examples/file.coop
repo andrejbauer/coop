@@ -16,7 +16,7 @@ signal disk_full of unit
 
 (** A file writer that is full after n writes. *)
 let file_writer (n : int) =
-  comodel Nil with
+  cohandler Nil with
   | write k @ w ->
      if length w >= n then
        disk_full ()

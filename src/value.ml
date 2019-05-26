@@ -6,7 +6,7 @@ type t =
   | Constructor of Name.t * t option
   | Tuple of t list
   | Closure of (t -> t result)
-  | Comodel of t * cooperation Name.Map.t
+  | Cohandler of t * cooperation Name.Map.t
 
 and world = t
 
@@ -25,7 +25,7 @@ let name = function
   | Constructor _ -> "constructor"
   | Tuple _ -> "tuple"
   | Closure _ -> "function"
-  | Comodel _ -> "comodel"
+  | Cohandler _ -> "cohandler"
 
 let names = function
   | Abstract -> "abstract values"
@@ -35,7 +35,7 @@ let names = function
   | Constructor _ -> "constructors"
   | Tuple _ -> "tuples"
   | Closure _ -> "functions"
-  | Comodel _ -> "comodels"
+  | Cohandler _ -> "cohandlers"
 
 let rec print ?max_level v ppf =
   match v with
@@ -72,7 +72,7 @@ let rec print ?max_level v ppf =
 
   | Closure _ -> Format.fprintf ppf "<fun>"
 
-  | Comodel _ -> Format.fprintf ppf "<comodel>"
+  | Cohandler _ -> Format.fprintf ppf "<cohandler>"
 
 and print_tuple lst ppf =
   Print.sequence (print ~max_level:Level.tuple_arg) "," lst ppf
