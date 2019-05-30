@@ -1,4 +1,7 @@
-type environment = Value.t list
+type environment = {
+    env_vars : Value.t list ;
+    env_shell : Value.shell
+}
 
 type error =
   | InvalidDeBruijn of int
@@ -57,20 +60,24 @@ let print_error err ppf =
   | PatternMismatch ->
      Format.fprintf ppf "pattern mismatch"
 
-let initial = []
+let initial = {
+    env_vars = [] ;
+    env_shell = Value.pure_shell
+}
 
-let extend v env = v :: env
+(** Extend the environment with a variable *)
+let extend_var v vars = v :: vars
 
-let rec extends vs env =
+let rec extend_vars vs vars =
   match vs with
-  | [] -> env
+  | [] -> vars
   | v :: vs ->
-     let env = extend v env in
-     extends vs env
+     let vars = extend_var v vars in
+     extend_vars vs vars
 
-let lookup ~loc i env =
+let lookup_var ~loc i vars =
   try
-    List.nth env i
+    List.nth vars i
   with
   | Failure _ -> error ~loc (InvalidDeBruijn i)
 
@@ -139,12 +146,12 @@ let match_pattern p v =
 let extend_pattern ~loc p v env =
   match match_pattern p v with
   | None -> error ~loc PatternMismatch
-  | Some us -> extends us env
+  | Some us -> extend_vars us env
 
 let top_extend_pattern ~loc p v env =
   match match_pattern p v with
   | None -> error ~loc PatternMismatch
-  | Some us -> extends us env, us
+  | Some us -> extend_vars us env, us
 
 let match_clauses ~loc env ps v =
   let rec fold = function
@@ -153,7 +160,7 @@ let match_clauses ~loc env ps v =
        begin
          match match_pattern p v with
          | None -> fold lst
-         | Some us -> (extends us env, c)
+         | Some us -> (extend_vars us env, c)
        end
   in
   fold ps
@@ -242,7 +249,7 @@ let rec eval_expr env {Location.it=e'; loc} =
 
   | Syntax.Quoted s -> Value.Quoted s
 
-  | Syntax.Var i -> lookup ~loc i env
+  | Syntax.Var i -> lookup_var ~loc i env
 
   | Syntax.Constructor (cnstr, None) ->
      Value.Constructor (cnstr, None)
@@ -392,7 +399,7 @@ and extend_rec ~loc fs env =
     Value.Closure (fun v -> eval_comp (extend_pattern ~loc p v !env') c)
   in
   let fs = List.map mk_closure fs in
-  let env = extends fs env in
+  let env = extend_vars fs env in
   env' := env ;
   env
 
@@ -433,16 +440,37 @@ and use ~loc env cmdl w r (fin_val, fin_signals) =
   in
   tensor w r
 
-let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
+let top_eval_comp {env_vars; env_shell=(w, coops)} ({Location.loc; _} as c) =
+  let rec tensor w r =
+    match r with
+    | Value.Val v -> v
+
+    | Value.Operation (op, u, k) ->
+       begin
+         match Name.Map.find op coops with
+         | None -> error ~loc (UnhandledOperation (op, u))
+         | Some coop ->
+            let (v, w) = coop (u, w) in
+            let r = k v in
+            tensor w r
+       end
+
+    | Signal (sgl, v) -> error ~loc (UnhandledSignal (sgl, v))
+  in
+  let r = eval_comp env_vars c in
+  tensor w r
+
+
+let rec eval_toplevel ~quiet ({env_vars; env_shell} as env) {Location.it=d'; loc} =
   match d' with
 
   | Syntax.TopLoad cs ->
-     eval_topfile ~quiet env cs
+     eval_topfile ~quiet {env_vars; env_shell} cs
 
   | Syntax.TopLet (p, xts, c) ->
-     let r = eval_comp env c in
+     let r = eval_comp env_vars c in
      let v = as_value ~loc r in
-     let env, vs = top_extend_pattern ~loc p v env in
+     let env_vars, vs = top_extend_pattern ~loc p v env_vars in
      if not quiet then
        List.iter2
          (fun (x, ty) v ->
@@ -451,10 +479,10 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
                          (Syntax.print_expr_ty ty)
                          (Value.print v))
          xts vs ;
-     env
+     { env with env_vars }
 
   | Syntax.TopLetRec (pcs, fts) ->
-     let env = extend_rec ~loc pcs env in
+     let env_vars = extend_rec ~loc pcs env_vars in
      if not quiet then
        List.iter
          (fun (f, t) ->
@@ -462,10 +490,10 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
                          (Name.print f)
                          (Syntax.print_expr_ty t))
          fts ;
-     env
+     { env with env_vars }
 
   | Syntax.TopComp (c, ty) ->
-     let r = eval_comp env c in
+     let r = eval_comp env_vars c in
      let v = as_value ~loc r in
      if not quiet then
        Format.printf "@[<hov>- :@ %t@ =@ %t@]@."
@@ -506,19 +534,18 @@ let rec eval_toplevel ~quiet env {Location.it=d'; loc} =
                      (Syntax.print_expr_ty t) ;
      env
 
-
   | Syntax.External (x, t, s) ->
      begin
        match External.lookup s with
        | None -> error ~loc (UnknownExternal s)
        | Some v ->
-          let env = extend v env in
+          let env_vars = extend_var v env_vars in
           if not quiet then
             Format.printf "@[<hov>external %t@ :@ %t = \"%s\"@]@."
                           (Name.print x)
                           (Syntax.print_expr_ty t)
                           s ;
-          env
+          { env with env_vars }
      end
 
 and eval_topfile ~quiet env lst =

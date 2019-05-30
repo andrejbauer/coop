@@ -17,6 +17,8 @@ and 'a result =
 
 and cooperation = t * world -> (t * world) result
 
+type shell = t * (t * world -> t * world) Name.Map.t
+
 let name = function
   | Abstract -> "abstract value"
   | Numeral _ -> "integer"
@@ -36,6 +38,8 @@ let names = function
   | Tuple _ -> "tuples"
   | Closure _ -> "functions"
   | Cohandler _ -> "cohandlers"
+
+let pure_shell = (Abstract,  Name.Map.empty)
 
 let rec print ?max_level v ppf =
   match v with

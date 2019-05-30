@@ -20,11 +20,16 @@ and 'a result =
 
 and cooperation = t * world -> (t * world) result
 
+type shell = t * (t * world -> t * world) Name.Map.t
+
 (** Give a descriptive name of a value. *)
 val name : t -> string
 
 (** Give a descriptive name of a value, in plural. *)
 val names : t -> string
+
+(** The empty shell *)
+val pure_shell : shell
 
 (** Pretty-print a value. *)
 val print : ?max_level:Level.t -> t -> Format.formatter -> unit
