@@ -11,9 +11,11 @@ let g (x : int) =
   end
 ;;
 
+use stdio ;;
+
 use (cohandler () with end) in
   g 43
 finally
  | val x @ _ -> print_int x
- | boom _ @ _ -> print_string "Boom!"
+ | boom _ @ _ -> print_string "Boom!\n"
 end
