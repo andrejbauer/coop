@@ -9,9 +9,10 @@ type t =
   | Constructor of Name.t * t option
   | Tuple of t list
   | Closure of (t -> t result)
-  | Cohandler of t * cooperation Name.Map.t
+  | Cohandler of world * cooperation Name.Map.t
+  | Shell of shell
 
-and world = t
+and world = World of t
 
 and 'a result =
   | Val of 'a
@@ -20,7 +21,7 @@ and 'a result =
 
 and cooperation = t * world -> (t * world) result
 
-type shell = t * (t * world -> t * world) Name.Map.t
+and shell = (t * world -> t * world) Name.Map.t * world
 
 (** Give a descriptive name of a value. *)
 val name : t -> string

@@ -6,14 +6,14 @@ let error msg = raise (Error msg)
 
 let as_int = function
   | Value.Numeral n -> n
-  | Value.Constructor _ | Value.Boolean _ | Value.Quoted _ | Value.Tuple _ |
-    Value.Closure _ | Value.Cohandler _ | Value.Abstract ->
+  | Value.(Constructor _ | Boolean _ | Quoted _ | Tuple _ |
+    Closure _ | Cohandler _ | Abstract | Shell _) ->
      error "integer expected"
 
 let as_string = function
   | Value.Quoted s -> s
-  | Value.Constructor _ | Value.Boolean _ | Value.Numeral _ | Value.Tuple _ |
-    Value.Closure _ | Value.Cohandler _ | Value.Abstract ->
+  | Value.(Constructor _ | Boolean _ | Numeral _ | Tuple _ |
+    Closure _ | Cohandler _ | Abstract | Shell _) ->
      error "string expected"
 
 (** Wrappers that convert OCaml data to Coop data. *)
@@ -22,44 +22,43 @@ let coop_unit = Value.Tuple []
 
 let mk_ident s = Name.Ident (s, Name.Word)
 
-let wrap_cohandler w coops =
+let wrap_shell coops w =
   let coops =
     List.fold_left
       (fun coops (x, f) -> Name.Map.add (mk_ident x) f coops)
       Name.Map.empty
       coops
   in
-  Value.Cohandler (w, coops)
+  Value.Shell (coops, Value.World w)
 
 let io =
-  let r = Value.Val (coop_unit, Value.Abstract) in
 
   let print_value (v, _) =
     Format.printf "%t" (Value.print v) ;
-    r
+    (coop_unit, Value.(World Abstract))
 
   and print_string (v, _) =
     let s = as_string v in
     Format.printf "%s" s ;
-    r
+    (coop_unit, Value.(World Abstract))
 
   and read_string (_, _) =
     Format.printf "@." ;
     let s = Pervasives.input_line stdin in
-    Value.Val (Value.Quoted s, Value.Abstract)
+    (Value.Quoted s, Value.(World Abstract))
 
   and read_int (_, _) =
     try
       Format.printf "@." ;
       let k = Pervasives.read_int () in
-      Value.Val (Value.Numeral k, Value.Abstract)
+      (Value.Numeral k, Value.(World Abstract))
     with Failure _ -> error "malformed integer"
   in
   [ ("print_int", print_value);
     ("print_string", print_string);
     ("read_string", read_string);
     ("read_int", read_int);
-    ("flush", fun (_, _) -> Format.printf "@." ; r)
+    ("flush", fun (_, _) -> Format.printf "@." ; (coop_unit, Value.(World Abstract)))
   ]
 
 (*
@@ -120,7 +119,7 @@ let externals =
     (">=",  wrap_int_int_bool ((>=) : int -> int -> bool)) ;
     ("^",  wrap_string_string_string (^)) ;
     ("string_of_int", wrap_int_string (string_of_int)) ;
-    ("io", wrap_cohandler Value.Abstract io) ;
+    ("io", wrap_shell io Value.Abstract) ;
   ]
 
 let lookup s = List.assoc_opt s externals

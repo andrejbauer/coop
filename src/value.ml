@@ -6,9 +6,10 @@ type t =
   | Constructor of Name.t * t option
   | Tuple of t list
   | Closure of (t -> t result)
-  | Cohandler of t * cooperation Name.Map.t
+  | Cohandler of world * cooperation Name.Map.t
+  | Shell of shell
 
-and world = t
+and world = World of t
 
 and 'a result =
   | Val of 'a
@@ -17,7 +18,7 @@ and 'a result =
 
 and cooperation = t * world -> (t * world) result
 
-type shell = t * (t * world -> t * world) Name.Map.t
+and shell = (t * world -> t * world) Name.Map.t * world
 
 let name = function
   | Abstract -> "abstract value"
@@ -28,6 +29,7 @@ let name = function
   | Tuple _ -> "tuple"
   | Closure _ -> "function"
   | Cohandler _ -> "cohandler"
+  | Shell _ -> "shell"
 
 let names = function
   | Abstract -> "abstract values"
@@ -38,8 +40,9 @@ let names = function
   | Tuple _ -> "tuples"
   | Closure _ -> "functions"
   | Cohandler _ -> "cohandlers"
+  | Shell _ -> "shell"
 
-let pure_shell = (Abstract,  Name.Map.empty)
+let pure_shell = (Name.Map.empty, World Abstract)
 
 let rec print ?max_level v ppf =
   match v with
@@ -77,6 +80,8 @@ let rec print ?max_level v ppf =
   | Closure _ -> Format.fprintf ppf "<fun>"
 
   | Cohandler _ -> Format.fprintf ppf "<cohandler>"
+
+  | Shell _ -> Format.fprintf ppf "<shell>"
 
 and print_tuple lst ppf =
   Print.sequence (print ~max_level:Level.tuple_arg) "," lst ppf

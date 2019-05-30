@@ -167,32 +167,28 @@ let match_clauses ~loc env ps v =
 
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
-  | Value.Closure _ | Value.Numeral _ | Value.Boolean _ | Value.Quoted _ | Value.Constructor _
-    | Value.Tuple ([] | [_] | _::_::_::_) | Value.Cohandler _ | Value.Abstract ->
+  | Value.(Closure _ | Numeral _ | Boolean _ | Quoted _ | Constructor _
+    | Tuple ([] | [_] | _::_::_::_) | Cohandler _ | Abstract | Shell _) ->
      error ~loc PairExpected
 
 let as_closure ~loc = function
   | Value.Closure f -> f
-  | Value.Numeral _ | Value.Boolean _ | Value.Quoted _ | Value.Constructor _ | Value.Tuple _ |
-    Value.Cohandler _  | Value.Abstract ->
+  | Value.(Numeral _ | Boolean _ | Quoted _ | Constructor _ | Tuple _ |
+    Cohandler _  | Abstract | Shell _) ->
      error ~loc FunctionExpected
-
-let as_value ~loc = function
-  | Value.Val v -> v
-  | Value.Operation (op, v, _) -> error ~loc (UnhandledOperation (op, v))
-  | Value.Signal (sgl, v) -> error ~loc (UnhandledSignal (sgl, v))
 
 let as_cohandler ~loc = function
   | Value.Cohandler (w, cmdl) -> (w, cmdl)
-  | Value.Numeral _ | Value.Boolean _ | Value.Quoted _ | Value.Tuple _ | Value.Constructor _
-  | Value.Closure _  | Value.Abstract -> error ~loc CohandlerExpected
+  | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
+           Closure _  | Abstract | Shell _) ->
+     error ~loc CohandlerExpected
 
 
 (** Comparison of values *)
 let rec equal_value ~loc (v1 : Value.t) (v2 : Value.t) =
   match v1, v2 with
 
-  | Value.(Abstract | Closure _ | Cohandler _), _ ->
+  | Value.(Abstract | Closure _ | Cohandler _ | Shell _), _ ->
      error ~loc (IllegalComparison v1)
 
   | _, Value.(Abstract | Closure _ | Cohandler _) ->
@@ -273,12 +269,12 @@ let rec eval_expr env {Location.it=e'; loc} =
      let w = eval_expr env e in
      let coop px pw c =
        let loc = c.Location.loc in
-       fun (u, w) ->
+       fun (u, Value.World w) ->
        let env = extend_pattern ~loc px u env in
        let env = extend_pattern ~loc pw w env in
        eval_comp env c >>= fun u ->
        let (v, w) = as_pair ~loc u in
-       Value.Val (v, w)
+       Value.(Val (v, World w))
      in
      let cmdl =
        List.fold_left
@@ -286,24 +282,24 @@ let rec eval_expr env {Location.it=e'; loc} =
          Name.Map.empty
          lst
      in
-     Value.Cohandler (w, cmdl)
+     Value.(Cohandler (World w, cmdl))
 
   | Syntax.CohandlerTimes (e1, e2) ->
-     let wrap_fst f (v, w) =
+     let wrap_fst f (v, Value.World w) =
          let (w1, w2) = as_pair ~loc w in
-         f (v, w1) >>= fun (v', w1') ->
+         f (v, Value.World w1) >>= fun (v', Value.World w1') ->
          let w' = Value.Tuple [w1'; w2] in
-         Value.Val (v', w')
+         Value.Val (v', Value.World w')
      in
-     let wrap_snd f (v, w) =
+     let wrap_snd f (v, Value.World w) =
          let (w1, w2) = as_pair ~loc w in
-         f (v, w2) >>= fun (v', w2') ->
+         f (v, Value.World w2) >>= fun (v', Value.World w2') ->
          let w' = Value.Tuple [w1; w2'] in
-         Value.Val (v', w')
+         Value.Val (v', Value.World w')
      in
-     let (w1, cmdl1) = as_cohandler ~loc (eval_expr env e1)
-     and (w2, cmdl2) = as_cohandler ~loc (eval_expr env e2) in
-     let w = Value.Tuple [w1; w2] in
+     let (Value.World w1, cmdl1) = as_cohandler ~loc (eval_expr env e1)
+     and (Value.World w2, cmdl2) = as_cohandler ~loc (eval_expr env e2) in
+     let w = Value.(World (Tuple [w1; w2])) in
      let cmdl =
        Name.Map.merge
          (fun op f1 f2 ->
@@ -404,10 +400,10 @@ and extend_rec ~loc fs env =
   env
 
 and use ~loc env cmdl w r (fin_val, fin_signals) =
-  let rec tensor w r =
+  let rec tensor (Value.World w' as w) r =
     match r with
 
-    | Value.Val v -> fin_val (v, w)
+    | Value.Val v -> fin_val (v, w')
 
     | Value.Operation (op, u, k) ->
        begin
@@ -424,7 +420,7 @@ and use ~loc env cmdl w r (fin_val, fin_signals) =
                  begin
                    match Name.Map.find sgl fin_signals with
                    | None -> error ~loc (UnhandledSignal (sgl, v))
-                   | Some f -> f (v, w)
+                   | Some f -> f (v, w')
                  end
             in
             let r = coop (u, w) >>= fun (v, w') -> tensor w' (k v) in
@@ -435,12 +431,12 @@ and use ~loc env cmdl w r (fin_val, fin_signals) =
        begin
          match Name.Map.find sgl fin_signals with
          | None -> r
-         | Some f -> f (v, w)
+         | Some f -> f (v, w')
        end
   in
   tensor w r
 
-let top_eval_comp {env_vars; env_shell=(w, coops)} ({Location.loc; _} as c) =
+let top_eval_comp {env_vars; env_shell=(coops, w)} ({Location.loc; _} as c) =
   let rec tensor w r =
     match r with
     | Value.Val v -> v
@@ -455,10 +451,9 @@ let top_eval_comp {env_vars; env_shell=(w, coops)} ({Location.loc; _} as c) =
             tensor w r
        end
 
-    | Signal (sgl, v) -> error ~loc (UnhandledSignal (sgl, v))
+    | Value.Signal (sgl, v) -> error ~loc (UnhandledSignal (sgl, v))
   in
-  let r = eval_comp env_vars c in
-  tensor w r
+  tensor w (eval_comp env_vars c)
 
 
 let rec eval_toplevel ~quiet ({env_vars; env_shell} as env) {Location.it=d'; loc} =
@@ -468,8 +463,7 @@ let rec eval_toplevel ~quiet ({env_vars; env_shell} as env) {Location.it=d'; loc
      eval_topfile ~quiet {env_vars; env_shell} cs
 
   | Syntax.TopLet (p, xts, c) ->
-     let r = eval_comp env_vars c in
-     let v = as_value ~loc r in
+     let v = top_eval_comp env c in
      let env_vars, vs = top_extend_pattern ~loc p v env_vars in
      if not quiet then
        List.iter2
@@ -493,8 +487,7 @@ let rec eval_toplevel ~quiet ({env_vars; env_shell} as env) {Location.it=d'; loc
      { env with env_vars }
 
   | Syntax.TopComp (c, ty) ->
-     let r = eval_comp env_vars c in
-     let v = as_value ~loc r in
+     let v = top_eval_comp env c in
      if not quiet then
        Format.printf "@[<hov>- :@ %t@ =@ %t@]@."
                      (Syntax.print_expr_ty ty)
