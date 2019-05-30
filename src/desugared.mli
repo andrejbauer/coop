@@ -28,6 +28,7 @@ and ty' =
   | Arrow of ty * ty
   | Product of ty list
   | CohandlerTy of Name.Set.t * ty * signature
+  | ShellTy of Name.Set.t
   | CompTy of ty * signature
 
 (** The body of a datatype definition *)
@@ -90,6 +91,7 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * comp
   | TopLetRec of rec_clause list
+  | TopShell of comp
   | TopComp of comp
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * ty

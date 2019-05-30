@@ -17,6 +17,7 @@ and ty' =
   | Product of ty list
   | Arrow of ty * ty
   | CohandlerTy of Name.t list * ty * signature
+  | ShellTy of Name.t list
   | CompTy of ty * signature
 
 (** The body of a datatype definition *)
@@ -79,6 +80,7 @@ and toplevel' =
   | TopLoad of string
   | TopLet of let_binding
   | TopLetRec of rec_clause list
+  | TopShell of term
   | TopComp of term
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * ty

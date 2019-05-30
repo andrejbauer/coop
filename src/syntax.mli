@@ -2,9 +2,14 @@
 
 (** A signature is a set of operation names and a set of signal names. We need
    not carry the types of the operations and signals because those are declared globally. *)
+
+type operations = Name.Set.t
+
+type signals = Name.Set.t
+
 type signature = {
-    sig_ops : Name.Set.t ;
-    sig_sgs : Name.Set.t
+    sig_ops : operations ;
+    sig_sgs : signals
   }
 
 (** Primitive types *)
@@ -23,12 +28,13 @@ type expr_ty =
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
   | CohandlerTy of cohandler_ty
+  | ShellTy of operations
 
 (** Computation type *)
 and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
 
 (** Cohandler *)
-and cohandler_ty = Name.Set.t * expr_ty * signature
+and cohandler_ty = operations * expr_ty * signature
 
 (** The body of a datatype definition *)
 type datatype = (Name.t * expr_ty option) list
@@ -84,6 +90,7 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopLetRec of (pattern * comp) list * (Name.t * expr_ty) list
+  | TopShell of comp * operations
   | TopComp of comp * expr_ty
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty
@@ -115,6 +122,9 @@ val print_expr_ty : ?max_level:Level.t -> expr_ty -> Format.formatter -> unit
 
 (** Print a computation type *)
 val print_comp_ty : ?max_level:Level.t -> comp_ty -> Format.formatter -> unit
+
+(** Print a shell type *)
+val print_shell_ty : ?max_level:Level.t -> operations -> Format.formatter -> unit
 
 (** Print the body of a datatype definition *)
 val print_datatype : Name.t * datatype -> Format.formatter -> unit

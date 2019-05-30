@@ -31,7 +31,9 @@ let wrap_shell coops w =
   in
   Value.Shell (coops, Value.World w)
 
-let io =
+let pure_shell = []
+
+let stdio_shell =
 
   let print_value (v, _) =
     Format.printf "%t" (Value.print v) ;
@@ -60,11 +62,6 @@ let io =
     ("read_int", read_int);
     ("flush", fun (_, _) -> Format.printf "@." ; (coop_unit, Value.(World Abstract)))
   ]
-
-(*
-let wrap1 f =
-  Value.Closure (fun v -> Value.Val (f v))
-*)
 
 let wrap_binary f =
   Value.Closure (fun v1 -> Value.Val (Value.Closure (fun v2 -> Value.Val (f v1 v2))))
@@ -119,7 +116,8 @@ let externals =
     (">=",  wrap_int_int_bool ((>=) : int -> int -> bool)) ;
     ("^",  wrap_string_string_string (^)) ;
     ("string_of_int", wrap_int_string (string_of_int)) ;
-    ("io", wrap_shell io Value.Abstract) ;
+    ("stdio", wrap_shell stdio_shell Value.Abstract) ;
+    ("pure", wrap_shell pure_shell Value.Abstract) ;
   ]
 
 let lookup s = List.assoc_opt s externals

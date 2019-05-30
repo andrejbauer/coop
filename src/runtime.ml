@@ -1,7 +1,7 @@
 type environment = {
     env_vars : Value.t list ;
     env_shell : Value.shell
-}
+  }
 
 type error =
   | InvalidDeBruijn of int
@@ -14,6 +14,7 @@ type error =
   | CohandlerExpected
   | CohandlerDoubleOperation of Name.t
   | PairExpected
+  | ShellExpected
   | PatternMismatch
 
 exception Error of error Location.located
@@ -57,6 +58,9 @@ let print_error err ppf =
   | PairExpected ->
      Format.fprintf ppf "pair expected, please report"
 
+  | ShellExpected ->
+     Format.fprintf ppf "shell expected, please report"
+
   | PatternMismatch ->
      Format.fprintf ppf "pattern mismatch"
 
@@ -65,7 +69,10 @@ let initial = {
     env_shell = Value.pure_shell
 }
 
-(** Extend the environment with a variable *)
+let set_shell env_shell env =
+  { env with env_shell }
+
+(** Extend the variables with a variable *)
 let extend_var v vars = v :: vars
 
 let rec extend_vars vs vars =
@@ -182,6 +189,12 @@ let as_cohandler ~loc = function
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
            Closure _  | Abstract | Shell _) ->
      error ~loc CohandlerExpected
+
+let as_shell ~loc = function
+  | Value.Shell ops -> ops
+  | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
+           Closure _  | Abstract | Cohandler _) ->
+     error ~loc ShellExpected
 
 
 (** Comparison of values *)
@@ -492,6 +505,14 @@ let rec eval_toplevel ~quiet ({env_vars; env_shell} as env) {Location.it=d'; loc
        Format.printf "@[<hov>- :@ %t@ =@ %t@]@."
                      (Syntax.print_expr_ty ty)
                      (Value.print v) ;
+     env
+
+  | Syntax.TopShell (c, ops) ->
+     let v = top_eval_comp env c in
+     let shl = as_shell ~loc v in
+     let env = set_shell shl env in
+     if not quiet then
+       Format.printf "@[<hov>shell@ {%t}@]@." (Syntax.print_shell_ty ops) ;
      env
 
   | Syntax.DefineAbstract t ->

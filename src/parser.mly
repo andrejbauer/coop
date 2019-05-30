@@ -110,6 +110,9 @@ toplevel_:
   | LET REC fs=separated_nonempty_list(AND, recursive_clause)
     { Sugared.TopLetRec fs }
 
+  | USE c=infix_term
+    { Sugared.TopShell c }
+
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
     { Sugared.DeclareOperation (op, t1, t2) }
 
@@ -401,6 +404,9 @@ simple_ty_:
 
   | t=var_name
     { Sugared.NamedTy t }
+
+  | LBRACE ops=separated_list(COMMA, var_name) RBRACE
+    { Sugared.ShellTy ops }
 
   | LPAREN t=ty_ RPAREN
     { t }

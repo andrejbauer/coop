@@ -1,17 +1,15 @@
 (* Pervasives loaded at startup. *)
 
-(* The abstract type of the IO world. *)
-type io_world
-
 operation print_int : int -> unit
 operation print_string : string -> unit
 operation read_int : unit -> int
 operation read_string : unit -> string
 operation flush : unit -> unit
 
-type io =  {print_int, print_string, read_int, read_string, flush} @ io_world ⇒ {}
+type io_shell = {print_int, print_string, read_int, read_string, flush}
 
-external io : io = "io"
+external pure : {} = "pure"
+external stdio : io_shell = "stdio"
 
 (* Arithmetic *)
 external ( + ) : int -> int -> int = "+"

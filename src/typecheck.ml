@@ -5,8 +5,9 @@ type context =
   { ctx_operations : (Syntax.expr_ty * Syntax.expr_ty) Name.Map.t
   ; ctx_signals : Syntax.expr_ty Name.Map.t
   ; ctx_idents : (Name.t * Syntax.expr_ty) list
-  ; ctx_tyabbrevs : Syntax.expr_ty Name.Map.t
+  ; ctx_aliases : Syntax.expr_ty Name.Map.t
   ; ctx_datatypes : (Name.t * (Name.t * Syntax.expr_ty option) list) list
+  ; ctx_shell : Syntax.operations
   }
 
 (** Initial typing context *)
@@ -14,8 +15,9 @@ let initial =
   { ctx_operations = Name.Map.empty
   ; ctx_signals = Name.Map.empty
   ; ctx_idents = []
-  ; ctx_tyabbrevs = Name.Map.empty
+  ; ctx_aliases = Name.Map.empty
   ; ctx_datatypes = []
+  ; ctx_shell = Name.Set.empty
   }
 
 (** Type errors *)
@@ -39,6 +41,7 @@ type error =
   | TypeExpectedButConstructor of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
   | CohandlerExpected of Syntax.expr_ty
+  | ShellExpected of Syntax.expr_ty
   | CohandlerDoubleOperations of Name.Set.t
   | CannotInferArgument
   | CannotInferMatch
@@ -131,6 +134,10 @@ let print_error err ppf =
      Format.fprintf ppf "this expression should be a cohandler but has type@ %t"
        (Syntax.print_expr_ty ty)
 
+  | ShellExpected ty ->
+     Format.fprintf ppf "this expression should be a shell but has type@ %t"
+       (Syntax.print_expr_ty ty)
+
   | CohandlerDoubleOperations ops ->
      let ops = Name.Set.elements ops in
      Format.fprintf ppf "these cohandlers both handle the following operations:@ %t"
@@ -179,11 +186,14 @@ let rec extend_idents xts ctx =
   | [] -> ctx
   | (x, t) :: xts -> extend_idents xts (extend_ident x t ctx)
 
-let extend_tyabbrev ~loc x ty ctx =
-  { ctx with ctx_tyabbrevs = Name.Map.add x ty ctx.ctx_tyabbrevs }
+let extend_alias ~loc x ty ctx =
+  { ctx with ctx_aliases = Name.Map.add x ty ctx.ctx_aliases }
 
 let extend_datatype ~loc x cnstrs ctx =
   { ctx with ctx_datatypes = (x, cnstrs) :: ctx.ctx_datatypes }
+
+let set_shell ops ctx =
+  { ctx with ctx_shell = ops }
 
 let declare_operation op ty1 ty2 ctx =
   { ctx with ctx_operations = Name.Map.add op (ty1, ty2) ctx.ctx_operations }
@@ -200,26 +210,31 @@ let lookup ~loc x {ctx_idents;_} =
   in
   fold 0 ctx_idents
 
+(** Lookup the type of an operation. *)
 let lookup_operation ~loc op {ctx_operations;_} =
   match Name.Map.find op ctx_operations with
   | None -> error ~loc (InvalidOperation op)
   | Some (ty1, ty2) -> (ty1, ty2)
 
+(** Lookup the type of a signal *)
 let lookup_signal ~loc sgl {ctx_signals;_} =
   match Name.Map.find sgl ctx_signals with
   | None -> error ~loc (InvalidSignal sgl)
   | Some ty -> ty
 
-let lookup_tyabbrev ~loc ty {ctx_tyabbrevs;_} =
-  match Name.Map.find ty ctx_tyabbrevs with
+(** Lookup a type alias *)
+let lookup_alias ~loc ty {ctx_aliases;_} =
+  match Name.Map.find ty ctx_aliases with
   | None -> error ~loc (InvalidType ty)
   | Some abbrev -> abbrev
 
+(** Lookup a datatype definition *)
 let lookup_datatype ~loc ty {ctx_datatypes;_} =
   match List.assoc_opt ty ctx_datatypes with
   | None -> error ~loc (InvalidType ty)
   | Some def -> def
 
+(** Lookup a datatype constructor *)
 let lookup_constructor ~loc cnstr {ctx_datatypes;_} =
   let rec find = function
 
@@ -237,6 +252,10 @@ let lookup_constructor ~loc cnstr {ctx_datatypes;_} =
   in
   find ctx_datatypes
 
+(** Lookup the type of a shell *)
+let lookup_shell {ctx_shell;_} = ctx_shell
+
+(** Typecheck a signature *)
 let signature Desugared.{sig_ops; sig_sgs} = Syntax.{sig_ops; sig_sgs}
 
 (**** Normalization of types ****)
@@ -246,11 +265,11 @@ let rec norm_ty ~loc ctx t =
   match t with
 
   | Syntax.Alias x ->
-     let t = lookup_tyabbrev ~loc x ctx in
+     let t = lookup_alias ~loc x ctx in
      norm_ty ~loc ctx t
 
-  | (Syntax.Abstract _ | Syntax.Datatype _ |  Syntax.Primitive _ |
-     Syntax.Product _ | Syntax.Arrow _ | Syntax.CohandlerTy _) ->
+  | Syntax.(Abstract _ | Datatype _ |  Primitive _ |
+            Product _ | Arrow _ | CohandlerTy _ | ShellTy _) ->
      t
 
 let as_product ~loc ctx ty =
@@ -260,8 +279,8 @@ let as_product ~loc ctx ty =
 
   | Syntax.Product ts -> Some ts
 
-  | (Syntax.Abstract _ | Syntax.Datatype _  | Syntax.Primitive _ |
-     Syntax.Arrow _ | Syntax.CohandlerTy _) ->
+  | Syntax.(Abstract _ | Datatype _  | Primitive _ |
+            Arrow _ | CohandlerTy _ | ShellTy _) ->
      None
 
 let as_arrow ~loc ctx ty =
@@ -271,24 +290,33 @@ let as_arrow ~loc ctx ty =
 
   | Syntax.Arrow (t,u) -> Some (t, u)
 
-  | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Primitive _ |
-     Syntax.Abstract _ | Syntax.CohandlerTy _) ->
+  | Syntax.(Product _ | Datatype _ | Primitive _ |
+            Abstract _ | CohandlerTy _ | ShellTy _) ->
      None
 
 let as_cohandler ~loc ctx ty =
-
   match norm_ty ~loc ctx ty with
 
   | Syntax.Alias _ -> assert false
 
   | Syntax.CohandlerTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
 
-  | (Syntax.Product _ | Syntax.Datatype _ | Syntax.Primitive _ |
-     Syntax.Arrow _ | Syntax.Abstract _) ->
+  | Syntax.(Product _ | Datatype _ | Primitive _ |
+            Arrow _ | Abstract _ | ShellTy _) ->
+     None
+
+let as_shell ~loc ctx ty =
+  match norm_ty ~loc ctx ty with
+
+  | Syntax.Alias _ -> assert false
+
+  | Syntax.ShellTy ops -> Some ops
+
+  | Syntax.(Product _ | Datatype _ | Primitive _ |
+            Arrow _ | Abstract _ | CohandlerTy _) ->
      None
 
 let as_datatype ~loc ctx ty =
-
   match norm_ty ~loc ctx ty with
 
   | Syntax.Alias _ -> assert false
@@ -296,8 +324,8 @@ let as_datatype ~loc ctx ty =
   | Syntax.Datatype ty ->
      Some (lookup_datatype ~loc ty ctx)
 
-  | (Syntax.Product _ | Syntax.Primitive _ | Syntax.Arrow _ |
-     Syntax.CohandlerTy _ | Syntax.Abstract _) ->
+  | Syntax.(Product _ | Primitive _ | Arrow _ |
+            CohandlerTy _ | Abstract _ | ShellTy _) ->
      None
 
 
@@ -346,8 +374,11 @@ let rec expr_subty ~loc ctx t u =
   | Syntax.CohandlerTy (tsgn1, t, tsgn2), Syntax.CohandlerTy (usgn1, u, usgn2) ->
      Name.Set.subset usgn1 tsgn1 && expr_eqtype ~loc ctx t u && subsignature  tsgn2 usgn2
 
-  | (Syntax.Datatype _ | Syntax.Primitive _ | Syntax.Product _ |
-     Syntax.Arrow _ | Syntax.CohandlerTy _ | Syntax.Abstract _), _ ->
+  | Syntax.ShellTy ops1, Syntax.ShellTy ops2 ->
+     Name.Set.subset ops2 ops1
+
+  | Syntax.(Datatype _ | Primitive _ | Product _ |
+            Arrow _ | CohandlerTy _ | Abstract _ | ShellTy _), _ ->
      false
 
 and comp_subty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} (Syntax.{comp_ty=t2; comp_sig=sig2}) =
@@ -417,8 +448,12 @@ let rec join_expr_ty ~loc ctx t1 t2 =
      and sgn = join_signature sig1 sig2 in
      Syntax.CohandlerTy  (ops, t, sgn)
 
-  | (Syntax.Datatype _ | Syntax.Primitive _ | Syntax.Product _ |
-     Syntax.Arrow _ | Syntax.CohandlerTy _ | Syntax.Abstract _), _ ->
+  | Syntax.ShellTy ops1, Syntax.ShellTy ops2 ->
+     let ops = Name.Set.inter ops1 ops2 in
+     Syntax.ShellTy ops
+
+  | Syntax.(Datatype _ | Primitive _ | Product _ |
+            Arrow _ | CohandlerTy _ | Abstract _ | ShellTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
 and meet_expr_ty ~loc ctx t1 t2 =
@@ -472,8 +507,12 @@ and meet_expr_ty ~loc ctx t1 t2 =
      and sgn = meet_signature sig1 sig2 in
      Syntax.CohandlerTy  (ops, t, sgn)
 
-  | (Syntax.Datatype _ | Syntax.Primitive _ | Syntax.Product _ |
-     Syntax.Arrow _ | Syntax.CohandlerTy _ | Syntax.Abstract _), _ ->
+  | Syntax.ShellTy ops1, Syntax.ShellTy ops2 ->
+     let ops = Name.Set.union ops1 ops2 in
+     Syntax.ShellTy ops
+
+  | Syntax.(Datatype _ | Primitive _ | Product _ |
+            Arrow _ | CohandlerTy _ | Abstract _ | ShellTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
 and join_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2; comp_sig=sig2} =
@@ -485,6 +524,7 @@ and meet_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2;
   let t = meet_expr_ty ~loc ctx t1 t2
   and sgn = meet_signature sig1 sig2 in
   Syntax.{comp_ty=t; comp_sig=sgn}
+
 
 (**** Type checking ****)
 
@@ -522,6 +562,9 @@ let rec expr_ty {Location.it=t'; loc} =
      and sgn2 = signature sgn2 in
      Syntax.CohandlerTy (ops, t, sgn2)
 
+  | Desugared.ShellTy ops ->
+     Syntax.ShellTy ops
+
   | Desugared.CompTy _ ->
      error ~loc ExprTypeExpected
 
@@ -533,11 +576,33 @@ and comp_ty ({Location.it=t'; loc} as t) =
      and sgn = signature sgn in
      Syntax.{comp_ty=t; comp_sig=sgn}
 
-  | (Desugared.Primitive _ | Desugared.Alias _  |
-     Desugared.Datatype _ | Desugared.Product _ | Desugared.Arrow _ |
-     Desugared.CohandlerTy _ | Desugared.Abstract _) ->
+  | Desugared.(Primitive _ | Alias _  | Datatype _ | Product _ |
+               Arrow _ | CohandlerTy _ | ShellTy _ | Abstract _) ->
      let t = expr_ty t in
      Syntax.{comp_ty=t; comp_sig=empty_signature}
+
+(** Typecheck a datatype *)
+let datatype cnstrs =
+  List.map
+    (function
+     | (x, None) -> (x, None)
+     | (x, Some t) -> (x, Some (expr_ty t)))
+    cnstrs
+
+(** Typecheck mutually recursive datatypes *)
+let datatypes ~loc ctx ty_defs =
+  let rec fold ctx ty_defs = function
+
+    | [] ->
+       let ty_defs = List.rev ty_defs in
+       ctx, ty_defs
+
+    | (t, cnstrs) :: lst ->
+       let cnstrs = datatype cnstrs in
+       let ctx = extend_datatype ~loc t cnstrs ctx in
+       fold ctx ((t, cnstrs) :: ty_defs) lst
+  in
+  fold ctx [] ty_defs
 
 
 (** Typecheck a pattern, return processed pattern and the list of identifiers
@@ -1041,28 +1106,13 @@ and check_match_clause ctx patt_ty ty (p, c) =
   let c = check_comp ctx c ty in
   (p, c)
 
-and datatype cnstrs =
-  List.map
-    (function
-     | (x, None) -> (x, None)
-     | (x, Some t) -> (x, Some (expr_ty t)))
-    cnstrs
+let top_infer_comp ctx c =
+  let ops = lookup_shell ctx in
+  let c, c_ty = infer_comp ctx c in
+  check_dirt ~loc:c.Location.loc c_ty Syntax.{sig_ops=ops; sig_sgs=Name.Set.empty} ;
+  c, c_ty
 
-and datatypes ~loc ctx ty_defs =
-  let rec fold ctx ty_defs = function
-
-    | [] ->
-       let ty_defs = List.rev ty_defs in
-       ctx, ty_defs
-
-    | (t, cnstrs) :: lst ->
-       let cnstrs = datatype cnstrs in
-       let ctx = extend_datatype ~loc t cnstrs ctx in
-       fold ctx ((t, cnstrs) :: ty_defs) lst
-  in
-  fold ctx [] ty_defs
-
-and toplevel ~quiet ctx {Location.it=d'; loc} =
+let rec toplevel ~quiet ctx {Location.it=d'; loc} =
   let ctx, d' =
     match d' with
 
@@ -1071,7 +1121,7 @@ and toplevel ~quiet ctx {Location.it=d'; loc} =
        ctx, Syntax.TopLoad lst
 
     | Desugared.TopLet (p, c) ->
-       let c, (Syntax.{comp_ty=c_ty';_} as c_ty) = infer_comp ctx c in
+       let c, (Syntax.{comp_ty=c_ty';_} as c_ty) = top_infer_comp ctx c in
        let ctx, p, xts = top_extend_pattern ~loc ctx p c_ty' in
        ctx, Syntax.TopLet (p, xts, c)
 
@@ -1080,13 +1130,23 @@ and toplevel ~quiet ctx {Location.it=d'; loc} =
        let fts = List.map (fun (f, u, t) -> (f, Syntax.Arrow (u, t))) fts in
        ctx, Syntax.TopLetRec (pcs, fts)
 
+    | Desugared.TopShell c ->
+       begin
+         let c, Syntax.{comp_ty=c_ty';_} = top_infer_comp ctx c in
+         match as_shell ~loc ctx c_ty' with
+         | None -> error ~loc (ShellExpected c_ty')
+         | Some ops ->
+            let ctx = set_shell ops ctx in
+            ctx, Syntax.TopShell (c, ops)
+       end
+
     | Desugared.TopComp c ->
-       let c, Syntax.{comp_ty=c_ty'; _} = infer_comp ctx c in
+       let c, Syntax.{comp_ty=c_ty'; _} = top_infer_comp ctx c in
        ctx, Syntax.TopComp (c, c_ty')
 
     | Desugared.DefineAlias (t, abbrev) ->
        let abbrev = expr_ty abbrev in
-       let ctx = extend_tyabbrev ~loc t abbrev ctx in
+       let ctx = extend_alias ~loc t abbrev ctx in
        ctx, Syntax.DefineAlias (t, abbrev)
 
     | Desugared.DefineAbstract t ->

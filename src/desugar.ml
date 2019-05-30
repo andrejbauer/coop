@@ -211,6 +211,19 @@ let rec ty ctx {Location.it=t'; loc} =
        and sgn2 = signature ~loc ctx sgn2 in
        Desugared.CohandlerTy (ops, t, sgn2)
 
+    | Sugared.ShellTy lst ->
+       let rec fold ops = function
+         | [] -> ops
+         | op :: lst ->
+            if is_operation op ctx then
+              let ops = Name.Set.add op ops in
+              fold ops lst
+            else
+              error ~loc (OperationExpected op)
+       in
+       let ops = fold Name.Set.empty lst in
+       Desugared.ShellTy ops
+
     | Sugared.CompTy (t, sgn) ->
        let t = ty ctx t
        and sgn = signature ~loc ctx sgn in
@@ -685,6 +698,10 @@ let toplevel' ctx = function
     | Sugared.TopLetRec lst ->
        let ctx, lst = rec_clauses ~loc ctx lst in
        ctx, Desugared.TopLetRec lst
+
+    | Sugared.TopShell c ->
+       let c = comp ctx c in
+       ctx, Desugared.TopShell c
 
     | Sugared.TopComp c ->
        let c = comp ctx c in

@@ -1,8 +1,12 @@
 (** Type-checked syntax of Coop. *)
 
+type operations = Name.Set.t
+
+type signals = Name.Set.t
+
 type signature = {
-    sig_ops : Name.Set.t ;
-    sig_sgs : Name.Set.t
+    sig_ops : operations ;
+    sig_sgs : signals
   }
 
 (** Primitive types *)
@@ -21,6 +25,7 @@ type expr_ty =
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
   | CohandlerTy of cohandler_ty
+  | ShellTy of operations
 
 (** Computation type *)
 and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
@@ -82,6 +87,7 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * comp
   | TopLetRec of (pattern * comp) list * (Name.t * expr_ty) list
+  | TopShell of comp * operations
   | TopComp of comp * expr_ty
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty
@@ -154,6 +160,11 @@ let rec print_expr_ty ?max_level ty ppf =
 
   | CohandlerTy cmdl_ty -> print_cohandler_ty cmdl_ty ppf
 
+  | ShellTy ops ->
+     let ops = List.sort Pervasives.compare (Name.Set.elements ops) in
+     Format.fprintf ppf "{%t}"
+       (Print.sequence (Name.print ~parentheses:true) "," ops)
+
 and print_comp_ty ?max_level {comp_ty; comp_sig} ppf =
   Print.print ?max_level ~at_level:Level.comp_ty ppf "%t@ !@ %t"
     (print_expr_ty ~max_level:Level.comp_ty_left comp_ty)
@@ -166,6 +177,11 @@ and print_cohandler_ty (ops, w_ty, sgn2) ppf =
     (print_expr_ty ~max_level:Level.cohandler_ty_world w_ty)
     (Print.char_darrow ())
     (print_signature sgn2)
+
+and print_shell_ty ?max_level ops ppf =
+  let ops = List.sort Pervasives.compare (Name.Set.elements ops) in
+  Format.fprintf ppf "%t"
+    (Print.sequence (Name.print ~parentheses:true) "," ops)
 
 and print_signature {sig_ops; sig_sgs} ppf =
   let ops = List.sort Pervasives.compare (Name.Set.elements sig_ops)
