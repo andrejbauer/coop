@@ -180,6 +180,7 @@ let primitive = function
   | Sugared.Int -> Desugared.Int
   | Sugared.Bool -> Desugared.Bool
   | Sugared.String -> Desugared.String
+  | Sugared.Any -> Desugared.Any
 
 (** Desugar a type, allowing named types to be from the given list. *)
 let rec ty ctx {Location.it=t'; loc} =

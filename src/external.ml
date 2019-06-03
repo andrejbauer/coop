@@ -56,7 +56,7 @@ let stdio_shell =
       (Value.Numeral k, Value.(World Abstract))
     with Failure _ -> error "malformed integer"
   in
-  [ ("print_int", print_value);
+  [ ("print_value", print_value);
     ("print_string", print_string);
     ("read_string", read_string);
     ("read_int", read_int);

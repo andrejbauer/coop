@@ -33,12 +33,10 @@ type error =
   | WrongTupleLength of int * int
   | IllegalConstructor of Name.t
   | UnknownConstructor of Name.t
-  | WrongConstructor of Name.t * Syntax.expr_ty
   | CompTypeMismatch of Syntax.comp_ty * Syntax.comp_ty
   | TypeExpectedButFunction of Syntax.expr_ty
   | TypeExpectedButTuple of Syntax.expr_ty
   | TypeExpectedButUnit of Syntax.expr_ty
-  | TypeExpectedButConstructor of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
   | CohandlerExpected of Syntax.expr_ty
   | ShellExpected of Syntax.expr_ty
@@ -105,11 +103,6 @@ let print_error err ppf =
   | UnknownConstructor cnstr ->
      Format.fprintf ppf "unknown constructor %t" (Name.print cnstr)
 
-  | WrongConstructor (cnstr, ty) ->
-     Format.fprintf ppf "constructor %t does not have type %t"
-       (Name.print cnstr)
-       (Syntax.print_expr_ty ty)
-
   | TypeExpectedButFunction ty ->
      Format.fprintf ppf "this expression is a function but should have type@ %t"
                         (Syntax.print_expr_ty ty)
@@ -120,10 +113,6 @@ let print_error err ppf =
 
   | TypeExpectedButUnit ty ->
      Format.fprintf ppf "this expression is the unit but should have type@ %t"
-       (Syntax.print_expr_ty ty)
-
-  | TypeExpectedButConstructor ty ->
-     Format.fprintf ppf "this expression is a constructor but should have type@ %t"
        (Syntax.print_expr_ty ty)
 
   | FunctionExpected ty ->
@@ -260,6 +249,8 @@ let signature Desugared.{sig_ops; sig_sgs} = Syntax.{sig_ops; sig_sgs}
 
 (**** Normalization of types ****)
 
+type 'a normal = Normal of 'a
+
 (** Unfold the definition of a type *)
 let rec norm_ty ~loc ctx t =
   match t with
@@ -270,10 +261,10 @@ let rec norm_ty ~loc ctx t =
 
   | Syntax.(Abstract _ | Datatype _ |  Primitive _ |
             Product _ | Arrow _ | CohandlerTy _ | ShellTy _) ->
-     t
+     Normal t
 
-let as_product ~loc ctx ty =
-  match norm_ty ~loc ctx ty with
+let as_product (Normal ty) =
+  match ty with
 
   | Syntax.Alias _ -> assert false
 
@@ -283,8 +274,8 @@ let as_product ~loc ctx ty =
             Arrow _ | CohandlerTy _ | ShellTy _) ->
      None
 
-let as_arrow ~loc ctx ty =
-  match norm_ty ~loc ctx ty with
+let as_arrow (Normal ty) =
+  match ty with
 
   | Syntax.Alias _ -> assert false
 
@@ -294,8 +285,8 @@ let as_arrow ~loc ctx ty =
             Abstract _ | CohandlerTy _ | ShellTy _) ->
      None
 
-let as_cohandler ~loc ctx ty =
-  match norm_ty ~loc ctx ty with
+let as_cohandler (Normal ty) =
+  match ty with
 
   | Syntax.Alias _ -> assert false
 
@@ -305,8 +296,8 @@ let as_cohandler ~loc ctx ty =
             Arrow _ | Abstract _ | ShellTy _) ->
      None
 
-let as_shell ~loc ctx ty =
-  match norm_ty ~loc ctx ty with
+let as_shell (Normal ty) =
+  match ty with
 
   | Syntax.Alias _ -> assert false
 
@@ -315,19 +306,6 @@ let as_shell ~loc ctx ty =
   | Syntax.(Product _ | Datatype _ | Primitive _ |
             Arrow _ | Abstract _ | CohandlerTy _) ->
      None
-
-let as_datatype ~loc ctx ty =
-  match norm_ty ~loc ctx ty with
-
-  | Syntax.Alias _ -> assert false
-
-  | Syntax.Datatype ty ->
-     Some (lookup_datatype ~loc ty ctx)
-
-  | Syntax.(Product _ | Primitive _ | Arrow _ |
-            CohandlerTy _ | Abstract _ | ShellTy _) ->
-     None
-
 
 (**** Subtyping ****)
 
@@ -341,11 +319,11 @@ let rec expr_subty ~loc ctx t u =
   | Syntax.Alias x, Syntax.Alias y when Name.equal x y -> true
 
   | Syntax.Alias _, _ ->
-     let t = norm_ty ~loc ctx t in
+     let (Normal t) = norm_ty ~loc ctx t in
      expr_subty ~loc ctx t u
 
   | _, Syntax.Alias _ ->
-     let u = norm_ty ~loc ctx u in
+     let (Normal u) = norm_ty ~loc ctx u in
      expr_subty ~loc ctx t u
 
   | Syntax.Datatype x, Syntax.Datatype y ->
@@ -354,6 +332,10 @@ let rec expr_subty ~loc ctx t u =
   | Syntax.(Primitive Empty), _ -> true
 
   | _, Syntax.(Primitive Empty) -> false
+
+  | Syntax.(Primitive Any), _ -> false
+
+  | _, Syntax.(Primitive Any) -> true
 
   | Syntax.Abstract t1, Syntax.Abstract t2 -> Name.equal t1 t2
 
@@ -404,11 +386,11 @@ let rec join_expr_ty ~loc ctx t1 t2 =
      t1
 
   | Syntax.Alias _, _ ->
-     let t1 = norm_ty ~loc ctx t1 in
+     let (Normal t1) = norm_ty ~loc ctx t1 in
      join_expr_ty ~loc ctx t1 t2
 
   | _, Syntax.Alias _ ->
-     let t2 = norm_ty ~loc ctx t2 in
+     let (Normal t2) = norm_ty ~loc ctx t2 in
      join_expr_ty ~loc ctx t1 t2
 
   | Syntax.Datatype x, Syntax.Datatype y when Name.equal x y ->
@@ -463,11 +445,11 @@ and meet_expr_ty ~loc ctx t1 t2 =
      t1
 
   | Syntax.Alias _, _ ->
-     let t1 = norm_ty ~loc ctx t1 in
+     let (Normal t1) = norm_ty ~loc ctx t1 in
      meet_expr_ty ~loc ctx t1 t2
 
   | _, Syntax.Alias _ ->
-     let t2 = norm_ty ~loc ctx t2 in
+     let (Normal t2) = norm_ty ~loc ctx t2 in
      meet_expr_ty ~loc ctx t1 t2
 
   | Syntax.Datatype x, Syntax.Datatype y when Name.equal x y ->
@@ -537,8 +519,9 @@ let rec expr_ty {Location.it=t'; loc} =
        match p with
        | Desugared.Empty -> Syntax.Empty
        | Desugared.Bool -> Syntax.Bool
-       | Desugared.String -> Syntax.String
        | Desugared.Int -> Syntax.Int
+       | Desugared.String -> Syntax.String
+       | Desugared.Any -> Syntax.Any
      in
      Syntax.Primitive p
 
@@ -609,7 +592,7 @@ let datatypes ~loc ctx ty_defs =
    and types bound by the pattern *)
 let check_pattern ~loc ctx patt ty =
   let rec fold xts {Location.it=p'; loc} t =
-    let t = norm_ty ~loc ctx t in
+    let (Normal t) = norm_ty ~loc ctx t in
     match p' with
 
     | Desugared.PattAnonymous ->
@@ -620,20 +603,20 @@ let check_pattern ~loc ctx patt ty =
 
     | Desugared.PattNumeral n ->
        begin match t with
-       | Syntax.Primitive Syntax.Int -> Syntax.PattNumeral n, xts
+       | Syntax.(Primitive Int) -> Syntax.PattNumeral n, xts
        | _ -> error ~loc (PattTypeMismatch ty)
        end
 
     | Desugared.PattBoolean b ->
        begin match t with
-       | Syntax.Primitive Syntax.Bool -> Syntax.PattBoolean b, xts
+       | Syntax.(Primitive Bool) -> Syntax.PattBoolean b, xts
        | _ -> error ~loc (PattTypeMismatch ty)
        end
 
 
     | Desugared.PattQuoted s ->
        begin match t with
-       | Syntax.Primitive Syntax.String -> Syntax.PattQuoted s, xts
+       | Syntax.(Primitive String) -> Syntax.PattQuoted s, xts
        | _ -> error ~loc (PattTypeMismatch ty)
        end
 
@@ -827,7 +810,7 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
 
   | Desugared.Apply (e1, e2) ->
      let e1, t1 = infer_expr ctx e1 in
-     begin match as_arrow ~loc:(e1.Location.loc) ctx t1 with
+     begin match as_arrow (norm_ty ~loc:(e1.Location.loc) ctx t1) with
        | Some (u1, u2) ->
           let e2 = check_expr ctx e2 u1 in
           locate (Syntax.Apply (e1, e2)), u2
@@ -922,7 +905,7 @@ and infer_coops ~loc ctx w_ty lst =
 
 and infer_cohandler ctx cmdl =
   let e, e_ty = infer_expr ctx cmdl in
-  match as_cohandler ~loc:cmdl.Location.loc ctx e_ty with
+  match as_cohandler (norm_ty ~loc:cmdl.Location.loc ctx e_ty) with
 
     | Some (ops, t, sgn2) ->
        e, (ops, t, sgn2)
@@ -975,11 +958,22 @@ and extend_binder ctx (p, topt) t =
     It returns the processed expression [e]. *)
 and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
   let locate = Location.locate ~loc in
-  match e' with
+  match e', norm_ty ~loc ctx ty with
 
-  | Desugared.Lambda ((p, None), e) ->
+  (** Synthesizing terms and [any] type *)
+  | _, Normal Syntax.(Primitive Any)
+  | Desugared.(Quoted _ | Numeral _ | Boolean _ | Constructor _ | Lambda ((_, Some _), _) |
+               Var _ | AscribeExpr _ | Cohandler _ | CohandlerTimes _ | CohandlerRename _), _ ->
+     let e, ty' = infer_expr ctx e in
+     if expr_subty ~loc ctx ty' ty
+     then
+       e
+     else
+       error ~loc (ExprTypeMismatch (ty, ty'))
+
+  | Desugared.Lambda ((p, None), e), ty' ->
      begin
-       match as_arrow ~loc ctx ty with
+       match as_arrow ty' with
        | Some (t, u) ->
           let ctx, p = extend_pattern ~loc ctx p t in
           let c = check_comp ctx e u in
@@ -988,28 +982,9 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
           error ~loc (TypeExpectedButFunction ty)
      end
 
-  | Desugared.Constructor (cnstr, eopt) ->
+  | Desugared.Tuple es, ty' ->
      begin
-       match as_datatype ~loc ctx ty with
-
-       | None ->
-          error ~loc (TypeExpectedButConstructor ty)
-
-       | Some cnstrs ->
-          begin
-            match List.assoc_opt cnstr cnstrs with
-
-            | None -> error ~loc (WrongConstructor (cnstr, ty))
-
-            | Some topt ->
-               let e = check_constructor ~loc ctx cnstr eopt topt in
-               locate (Syntax.Constructor (cnstr, e))
-          end
-     end
-
-  | Desugared.Tuple es ->
-     begin
-       match as_product ~loc ctx ty with
+       match as_product ty' with
        | Some ts ->
           let k_actual = List.length es
           and k_expected = List.length ts in
@@ -1022,16 +997,6 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
           else
             error ~loc (TypeExpectedButTuple ty)
      end
-
-  | (Desugared.Quoted _ | Desugared.Numeral _ | Desugared.Boolean _ | Desugared.Lambda ((_, Some _), _) |
-     Desugared.Var _ | Desugared.AscribeExpr _ | Desugared.Cohandler _ |
-     Desugared.CohandlerTimes _ | Desugared.CohandlerRename _) ->
-     let e, ty' = infer_expr ctx e in
-     if expr_subty ~loc ctx ty' ty
-     then
-       e
-     else
-       error ~loc (ExprTypeMismatch (ty, ty'))
 
 and check_tuple ctx es ts =
   let rec fold es ts es' =
@@ -1133,7 +1098,7 @@ let rec toplevel ~quiet ctx {Location.it=d'; loc} =
     | Desugared.TopShell c ->
        begin
          let c, Syntax.{comp_ty=c_ty';_} = top_infer_comp ctx c in
-         match as_shell ~loc ctx c_ty' with
+         match as_shell (norm_ty ~loc ctx c_ty') with
          | None -> error ~loc (ShellExpected c_ty')
          | Some ops ->
             let ctx = set_shell ops ctx in

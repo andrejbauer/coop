@@ -1,6 +1,6 @@
 signal boom of unit
 val f : int → empty ! {boom} = <fun>
 val g : int → int ! {boom} = <fun>
-shell {flush, print_int, print_string, read_int, read_string}
+shell {flush, print_string, print_value, read_int, read_string}
 Boom!
 - : unit = ()

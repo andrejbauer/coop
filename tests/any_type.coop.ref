@@ -1,0 +1,4 @@
+val f : any → any ! {} = <fun>
+val a : any = 5
+val b : any = <fun>
+val c : any = (1, 2, 3)

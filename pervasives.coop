@@ -1,12 +1,12 @@
 (* Pervasives loaded at startup. *)
 
-operation print_int : int -> unit
+operation print_value : any -> unit
 operation print_string : string -> unit
 operation read_int : unit -> int
 operation read_string : unit -> string
 operation flush : unit -> unit
 
-type io_shell = {print_int, print_string, read_int, read_string, flush}
+type io_shell = {print_value, print_string, read_int, read_string, flush}
 
 external pure : {} = "pure"
 external stdio : io_shell = "stdio"

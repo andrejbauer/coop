@@ -8,6 +8,7 @@ type primitive =
   | Int
   | Bool
   | String
+  | Any
 
 (** Parsed type. *)
 type ty = ty' Location.located

@@ -7,7 +7,7 @@
 %token UNDERSCORE
 
 (* Primitive types *)
-%token EMPTY INT UNIT BOOL STRING
+%token EMPTY INT UNIT BOOL STRING ANY
 
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
@@ -388,19 +388,22 @@ prod_ty_:
 simple_ty: mark_location(simple_ty_) { $1 }
 simple_ty_:
   | EMPTY
-    { Sugared.Primitive Sugared.Empty }
+    { Sugared.(Primitive Empty) }
 
   | INT
-    { Sugared.Primitive Sugared.Int }
+    { Sugared.(Primitive Int) }
 
   | UNIT
     { Sugared.Product [] }
 
   | BOOL
-    { Sugared.Primitive Sugared.Bool }
+    { Sugared.(Primitive Bool) }
 
   | STRING
-    { Sugared.Primitive Sugared.String }
+    { Sugared.(Primitive String) }
+
+  | ANY
+    { Sugared.(Primitive Any) }
 
   | t=var_name
     { Sugared.NamedTy t }

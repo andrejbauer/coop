@@ -15,6 +15,7 @@ type primitive =
   | Int
   | Bool
   | String
+  | Any
 
 (** Expression type *)
 type expr_ty =
@@ -130,7 +131,8 @@ let print_primitive p ppf =
   | Empty -> "empty"
   | Int -> "int"
   | Bool -> "bool"
-  | String -> "string")
+  | String -> "string"
+  | Any -> "any")
 
 
 (** Pretty-print an expresion type *)

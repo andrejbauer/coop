@@ -18,6 +18,7 @@ type primitive =
   | Int
   | Bool
   | String
+  | Any
 
 (** Expression type *)
 type expr_ty =

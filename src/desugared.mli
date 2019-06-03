@@ -17,6 +17,7 @@ type primitive =
   | Int
   | Bool
   | String
+  | Any
 
 (** Types. *)
 type ty = ty' Location.located
