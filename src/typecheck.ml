@@ -736,10 +736,10 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
   | Desugared.Lambda ((p, None), _) ->
      error ~loc:p.Location.loc CannotInferArgument
 
-  | Desugared.Cohandler (e, coops) ->
-     let e, e_ty = infer_expr ctx e in
-     let coops, ops, sgn = infer_coops ~loc ctx e_ty coops in
-     locate (Syntax.Cohandler (e, coops)), Syntax.CohandlerTy (ops, e_ty, sgn)
+  | Desugared.Cohandler (t, coops) ->
+     let w_ty = expr_ty t in
+     let coops, ops, sgn = infer_coops ~loc ctx w_ty coops in
+     locate (Syntax.Cohandler coops), Syntax.CohandlerTy (ops, w_ty, sgn)
 
   | Desugared.CohandlerTimes (e1, e2) ->
      let cmdl1, (ops1, w1_ty, sgn1) = infer_cohandler ctx e1
@@ -839,15 +839,16 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let ty = Syntax.signal_ty sgl in
      locate (Syntax.Signal (sgl, e)), ty
 
-  | Desugared.Use (cmdl, c, fin) ->
+  | Desugared.Use (cmdl, e, c, fin) ->
      let cmdl, (ops, w_ty, Syntax.{sig_ops=cmdl_ops; sig_sgs=cmdl_sgs}) =
        infer_cohandler ctx cmdl in
+     let e = check_expr ctx e w_ty in
      let c, (Syntax.{comp_ty=x_ty; _} as c_ty) = infer_comp ctx c in
      let fin, fin_sgs, fin_ty = infer_finally ~loc ctx x_ty w_ty fin in
      let cmdl_sig = Syntax.{sig_ops=cmdl_ops; sig_sgs = Name.Set.diff cmdl_sgs fin_sgs} in
      let fin_ty = Syntax.pollute fin_ty cmdl_sig in
      check_dirt ~fatal:true ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
-     locate (Syntax.Use (cmdl, c, fin)), fin_ty
+     locate (Syntax.Use (cmdl, e, c, fin)), fin_ty
 
 and infer_rec ~loc ctx fs =
   let ctx, fts =

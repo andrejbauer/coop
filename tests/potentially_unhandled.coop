@@ -8,7 +8,7 @@ let b = if false then giggle () else ()
 let c = if false then (giggle () ; tickle ()) else ()
 
 let d =
-  use (cohandler () with end) in
+  use (cohandler unit with end) @ () in
     if false then giggle () else tickle ()
   finally
   | val _ @ _ -> ()

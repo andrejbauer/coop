@@ -57,7 +57,7 @@ and expr' =
   | Tuple of expr list
   | Constructor of Name.t * expr option
   | Lambda of binder * comp
-  | Cohandler of expr * cohandler_clause list
+  | Cohandler of ty * cohandler_clause list
   | CohandlerRename of expr * (Name.t * Name.t) list
   | CohandlerTimes of expr * expr
 
@@ -73,7 +73,7 @@ and comp' =
   | Apply of expr * expr
   | Operation of Name.t * expr
   | Signal of Name.t * expr
-  | Use of expr * comp * finally
+  | Use of expr * expr * comp * finally
 
 and binder = pattern * ty option
 

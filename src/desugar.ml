@@ -347,10 +347,10 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
     | Sugared.Lambda (pxs, c) ->
        ([], abstract ~loc ctx pxs c)
 
-    | Sugared.Cohandler (e, lst) ->
-       let ws, e = expr ctx e in
+    | Sugared.Cohandler (t, lst) ->
+       let t = ty ctx t in
        let lst = cohandler_clauses ~loc ctx lst in
-       (ws, locate (Desugared.Cohandler (e, lst)))
+       ([], locate (Desugared.Cohandler (t, lst)))
 
     | Sugared.CohandlerTimes (e1, e2) ->
        let ws1, e1 = expr ctx e1
@@ -543,11 +543,12 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let p = locate Desugared.PattAnonymous in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.Use (e, c, fin) ->
-       let ws, e = expr ctx e in
+    | Sugared.Use (e, w, c, fin) ->
+       let ws1, e = expr ctx e in
+       let ws2, w = expr ctx w in
        let c = comp ctx c in
        let fin = finally ~loc ctx fin in
-       let_binds ws (locate (Desugared.Use (e, c, fin)))
+       let_binds (ws1 @ ws2) (locate (Desugared.Use (e, w, c, fin)))
 
 and match_clauses ctx lst =
   List.map (match_clause ctx) lst

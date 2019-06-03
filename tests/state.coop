@@ -1,14 +1,14 @@
 operation get : unit -> int
 operation put : int -> unit
 
-let state (w0 : int) =
-  cohandler w0 with
+let state =
+  cohandler int with
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
   end
 
 let demo =
-  use state 1 in
+  use state @ 1 in
     let a = get () in
     put 2 ;
     let b = get () in

@@ -6,21 +6,21 @@ operation put' : int -> unit
 
 operation tick : unit -> int
 
-let state (w0 : int) =
-  cohandler w0 with
+let state =
+  cohandler int with
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
   end
 
 let ticker =
-  cohandler 0 with
+  cohandler int with
   | tick () @ w -> (w, w+1)
   end
 
-let c (n : int) = state n ⊗ ticker
+let c = state ⊗ ticker
 
 let demo1 =
-  use c 10 in
+  use c @ (10, 0) in
     let a = get () in
     put 2 ;
     let b = tick () in
@@ -32,7 +32,7 @@ let demo1 =
   end
 
 let demo2 =
-  use state 2 :*: (state 3 with {get as get', put as put'}) in
+  use state :*: (state with {get as get', put as put'}) @ (2, 3) in
     let a = get () in
     put' (a + 3) ;
     put 7 ;

@@ -2,15 +2,15 @@ operation get : unit -> int
 operation put : int -> unit
 operation tick : unit -> int
 
-let state (w : int) =
-  cohandler w with
+let state =
+  cohandler int with
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
   end
 
 (* A ticker which uses state to tick *)
 let ticker =
-  cohandler () with
+  cohandler unit with
   | tick () @ () ->
      let x = get () in
      put (x + 1) ;
@@ -18,8 +18,8 @@ let ticker =
   end
 
 let demo =
-  use state 5 in
-    use ticker in
+  use state @ 5 in
+    use ticker @ () in
       let a = tick () in
       let b = tick () in
       let c = tick () in

@@ -185,7 +185,7 @@ let as_closure ~loc = function
      error ~loc FunctionExpected
 
 let as_cohandler ~loc = function
-  | Value.Cohandler (w, cmdl) -> (w, cmdl)
+  | Value.Cohandler cmdl -> cmdl
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
            Closure _  | Abstract | Shell _) ->
      error ~loc CohandlerExpected
@@ -278,8 +278,7 @@ let rec eval_expr env {Location.it=e'; loc} =
      in
      Value.Closure f
 
-  | Syntax.Cohandler (e, lst) ->
-     let w = eval_expr env e in
+  | Syntax.Cohandler lst ->
      let coop px pw c =
        let loc = c.Location.loc in
        fun (u, Value.World w) ->
@@ -295,7 +294,7 @@ let rec eval_expr env {Location.it=e'; loc} =
          Name.Map.empty
          lst
      in
-     Value.(Cohandler (World w, cmdl))
+     Value.(Cohandler cmdl)
 
   | Syntax.CohandlerTimes (e1, e2) ->
      let wrap_fst f (v, Value.World w) =
@@ -310,9 +309,8 @@ let rec eval_expr env {Location.it=e'; loc} =
          let w' = Value.Tuple [w1; w2'] in
          Value.Val (v', Value.World w')
      in
-     let (Value.World w1, cmdl1) = as_cohandler ~loc (eval_expr env e1)
-     and (Value.World w2, cmdl2) = as_cohandler ~loc (eval_expr env e2) in
-     let w = Value.(World (Tuple [w1; w2])) in
+     let cmdl1 = as_cohandler ~loc (eval_expr env e1)
+     and cmdl2 = as_cohandler ~loc (eval_expr env e2) in
      let cmdl =
        Name.Map.merge
          (fun op f1 f2 ->
@@ -323,10 +321,10 @@ let rec eval_expr env {Location.it=e'; loc} =
            | Some _, Some _ -> error ~loc (CohandlerDoubleOperation op))
          cmdl1 cmdl2
      in
-     Value.Cohandler (w, cmdl)
+     Value.Cohandler cmdl
 
   | Syntax.CohandlerRename (e, rnm) ->
-     let (w, cmdl) = as_cohandler ~loc (eval_expr env e) in
+     let cmdl = as_cohandler ~loc (eval_expr env e) in
      let cmdl =
        Name.Map.fold
          (fun op f cmdl ->
@@ -335,7 +333,7 @@ let rec eval_expr env {Location.it=e'; loc} =
            | Some op' -> Name.Map.add op' f cmdl)
          cmdl Name.Map.empty
      in
-     Value.Cohandler (w, cmdl)
+     Value.Cohandler cmdl
 
 and eval_comp env {Location.it=c'; loc} =
   match c' with
@@ -377,11 +375,12 @@ and eval_comp env {Location.it=c'; loc} =
      let v = eval_expr env e in
      Value.Signal (sgl, v)
 
-  | Syntax.Use (e, c, fin) ->
-     let (w, cmdl) = as_cohandler ~loc (eval_expr env e)
+  | Syntax.Use (e1, e2, c, fin) ->
+     let cmdl = as_cohandler ~loc (eval_expr env e1)
+     and w = eval_expr env e2
      and fin = eval_finally ~loc env fin
      and r = eval_comp env c in
-     use ~loc env cmdl w r fin
+     use ~loc env cmdl (Value.World w) r fin
 
 and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_signals} =
   let fin_val (v, w) =

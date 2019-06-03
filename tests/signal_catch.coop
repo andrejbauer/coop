@@ -3,7 +3,7 @@
 signal moo of unit ;;
 
 use
-  (cohandler () with end)
+  (cohandler unit with end) @ ()
 in
   moo ()
 finally
@@ -18,9 +18,9 @@ signal sgl of unit
 
 let demo =
   use
-    (cohandler () with
+    (cohandler unit with
      | op () @ () -> sgl ()
-     end)
+     end) @ ()
   in
     op ()
   finally

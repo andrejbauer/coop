@@ -63,7 +63,7 @@ and expr' =
   | Constructor of Name.t * expr option
   | Tuple of expr list
   | Lambda of pattern * comp
-  | Cohandler of expr * (Name.t * pattern * pattern * comp) list
+  | Cohandler of (Name.t * pattern * pattern * comp) list
   | CohandlerTimes of expr * expr
   | CohandlerRename of expr * Name.t Name.Map.t
 
@@ -78,7 +78,7 @@ and comp' =
   | Apply of expr * expr
   | Operation of Name.t * expr
   | Signal of Name.t * expr
-  | Use of expr * comp * finally
+  | Use of expr * expr * comp * finally
 
 and finally = {
     fin_val : pattern * pattern * comp ;

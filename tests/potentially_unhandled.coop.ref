@@ -8,7 +8,7 @@ Type warning at file "./potentially_unhandled.coop", line 8, charaters 8-53:
 the following operations and signals are potentially unhandled: tickle,
 giggle
 
-Type error at file "./potentially_unhandled.coop", line 11, charaters 2-111:
+Type error at file "./potentially_unhandled.coop", line 11, charaters 2-118:
 the following operations and signals are potentially unhandled: tickle,
 giggle
 

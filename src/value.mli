@@ -9,7 +9,7 @@ type t =
   | Constructor of Name.t * t option
   | Tuple of t list
   | Closure of (t -> t result)
-  | Cohandler of world * cooperation Name.Map.t
+  | Cohandler of cooperation Name.Map.t
   | Shell of shell
 
 and world = World of t

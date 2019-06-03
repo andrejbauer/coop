@@ -159,11 +159,11 @@ term_:
   | IF e1=term THEN e2=term ELSE e3=term
     { Sugared.If (e1, e2, e3) }
 
-  | COHANDLER e=infix_term WITH lst=cohandler_clauses END
-    { Sugared.Cohandler (e, lst) }
+  | COHANDLER t=ty WITH lst=cohandler_clauses END
+    { Sugared.Cohandler (t, lst) }
 
-  | USE cmdl=infix_term IN c=term FINALLY fin=finally END
-    { Sugared.Use (cmdl, c, fin) }
+  | USE cmdl=infix_term AT w=infix_term IN c=term FINALLY fin=finally END
+    { Sugared.Use (cmdl, w, c, fin) }
 
   | cmdl=infix_term WITH LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
     { Sugared.CohandlerRename (cmdl, lst) }

@@ -12,25 +12,25 @@ operation put' : int -> unit
 signal negative of int
 
 (** Basic state *)
-let state (w0 : int) =
-  cohandler w0 with
+let state =
+  cohandler int with
   | get () @ w -> (w, w)
   | put w' @ _ -> ((), w')
   end
 
 (** A copy of state with renamed operations *)
-let state' (w0 : int) = state w0 with {get as get', put as put'}
+let state' = state with {get as get', put as put'}
 
 (** State that only allows non-negative integers to be stored *)
-let positive_state (w0 : int) =
-  cohandler w0 with
+let positive_state =
+  cohandler int with
   | get _ @ w -> (w, w)
   | put w @ _ -> if w < 0 then negative w else ((), w)
   end
 
 (** This is how we use ordinary state, initialized with 1 *)
 let demo1 =
-  use state 1 in
+  use state @ 1 in
     let a = get () in
     put 2 ;
     let b = get () in
@@ -40,11 +40,11 @@ let demo1 =
     val x @ _ -> x
   end
 
-let state2 (u : int) (v : int) = state u ⊗ state' v
+let state2 = state ⊗ state'
 
 (** Combine two states together, each has its own state *)
 let demo2 =
-  use state 2 ⊗ state' 3 in
+  use state ⊗ state' @ (2, 3)in
     let a = get' () in
     put 3 ;
     put' (a + 10) ;
@@ -56,7 +56,7 @@ let demo2 =
 
 (* Combine two copies of state, one of which only allows positive values. *)
 let demo3 =
-  use state' 0 ⊗ positive_state 2 in
+  use state' ⊗ positive_state @ (0, 2) in
     let a = get' () in
     put 3 ;
     put' (a + 10) ;
@@ -70,7 +70,7 @@ let demo3 =
 (* Combine two copies of state, one of which only allows positive values,
    trigger a signal. *)
 let demo3' =
-  use state' 0 ⊗ positive_state 2 in
+  use state' ⊗ positive_state @ (0, 2) in
     let a = get' () in
     put 3 ;
     put' (a + 10) ;

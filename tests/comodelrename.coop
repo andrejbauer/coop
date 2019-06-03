@@ -5,7 +5,7 @@ operation dog : bool -> bool
 operation cat : bool -> bool
 
 let c =
-  cohandler () with
+  cohandler unit with
   | cow () @ () -> (42, ())
   | dog b @ () -> (true, ())
   end

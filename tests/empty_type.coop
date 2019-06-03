@@ -3,7 +3,7 @@ signal boom of unit
 let rec f (x : int) : empty ! {boom} = boom ()
 
 let g (x : int) =
-  use (cohandler () with end) in
+  use (cohandler unit with end) @ () in
     (match f x with end) : int ! {boom}
   finally
   | val x @ _ -> x
@@ -13,7 +13,7 @@ let g (x : int) =
 
 use stdio ;;
 
-use (cohandler () with end) in
+use (cohandler unit with end) @ () in
   g 43
 finally
  | val x @ _ -> print_value x

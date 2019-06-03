@@ -54,10 +54,10 @@ and term' =
   | LetRec of rec_clause list * term
   | Sequence of term * term
   | Ascribe of term * ty
-  | Cohandler of term * cohandler_clause list
+  | Cohandler of ty * cohandler_clause list
   | CohandlerTimes of term * term
   | CohandlerRename of term * (Name.t * Name.t) list
-  | Use of term * term * finally_clause list
+  | Use of term * term * term * finally_clause list
 
 and binder = pattern * ty option
 

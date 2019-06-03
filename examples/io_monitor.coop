@@ -1,6 +1,8 @@
 (** We define two cohandlers, one for recording an IO interaction,
     and one for replaing it. *)
 
+operation print_int : int -> unit
+
 type io_action =
   | PrintInt of int
   | PrintString of string
@@ -22,8 +24,8 @@ let reverse (r : io_record) =
   rev Nil r
 
 let io_recorder =
-  cohandler Nil with
-  | print_int k @ r -> print_int k ; ((), Cons (PrintInt k, r))
+  cohandler io_record with
+  | print_int k @ r -> print_value k ; ((), Cons (PrintInt k, r))
   | print_string s @ r -> print_string s ; ((), Cons (PrintString s, r))
   | read_int () @ r -> let k = read_int () in (k, Cons (ReadInt k, r))
   | read_string () @ r -> let s = read_string () in (s, Cons (ReadString s, r))
@@ -32,14 +34,14 @@ let io_recorder =
 
 signal sync_error of unit
 
-let io_player (r : io_record) =
-  cohandler r with
+let io_player =
+  cohandler io_record with
 
   | print_int k @ r ->
       match r with
       | Cons (PrintInt m, r) ->
         if k = m then
-          print_string "DEBUG PRINT: " ; print_int k ; flush () ;
+          print_string "DEBUG PRINT: " ; print_value k ; flush () ;
           ((), r)
         else
           sync_error ()
@@ -60,7 +62,7 @@ let io_player (r : io_record) =
    | read_int () @ r ->
       match r with
       | Cons (ReadInt k, r) ->
-           print_string "DEBUG READ: " ; print_int k ; flush () ;
+           print_string "DEBUG READ: " ; print_value k ; flush () ;
            (k, r)
       | _ -> sync_error ()
       end
@@ -102,21 +104,19 @@ let conversation2 (_ : unit) =
   ()
 ;;
 
-use io in
+use stdio ;;
+
+let demo =
   let r =
-    use io_recorder in
+    use io_recorder @ Nil in
       conversation1 ()
     finally
     | val _ @ r -> reverse r
     end
   in
-    use io_player r in
+    use io_player @ r in
       conversation2 ()
     finally
     | val v @ r -> (v, r)
     | sync_error () @ _ -> sync_error ()
     end
-finally
-| val v @ _ -> v
-| sync_error () @ _ -> sync_error ()
-end

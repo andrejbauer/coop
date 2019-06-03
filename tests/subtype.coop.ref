@@ -11,7 +11,7 @@ val apply :
   (int → int ! {op; die}) → (int → int ! {op; die}) ! {}
   = <fun>
 val g : int → int ! {op; die} = <fun>
-val c : int → {op} @ int ⇒ {croak} ! {} = <fun>
+val c : {op} @ int ⇒ {croak} = <cohandler>
 val demo : int → (int × int) × int ! {die} = <fun>
 - : (int × int) × int = ((1001, 1003), 5)
 - : int = 23
