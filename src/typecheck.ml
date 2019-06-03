@@ -51,9 +51,6 @@ type error =
 
 exception Error of error Location.located
 
-(** [error ~loc err] raises the given type-checking error. *)
-let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
-
 let print_error err ppf =
   match err with
 
@@ -165,6 +162,15 @@ let print_error err ppf =
   | RenamingDomain op ->
      Format.fprintf ppf "operation %t is not there and cannot be renamed"
        (Name.print op)
+
+(** [error ~loc err] raises the given type-checking error. *)
+let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
+
+(** [warning ~loc err] warns about the given type-checking error. *)
+let warning ~loc err =
+  Print.warning "@[<hov>Type warning at %t:@ %t@]@."
+                (Location.print loc)
+                (print_error err)
 
 (** Extend the context with the type of deBruijn index 0 *)
 let extend_ident x ty ctx =
@@ -677,13 +683,16 @@ let top_extend_pattern ~loc ctx p t =
   ctx, p, xts
 
 (** Make sure that the dirt of the first type is a subsignature of [sgn], or report an error. *)
-let check_dirt ~loc
+let check_dirt ~fatal ~loc
   Syntax.{comp_sig={sig_ops=ops1; sig_sgs=sgs1}; _}
   Syntax.{sig_ops=ops2; sig_sgs=sgs2} =
   let ops = Name.Set.diff ops1 ops2 in
   let sgs = Name.Set.diff sgs1 sgs2 in
   if not (Name.Set.is_empty ops && Name.Set.is_empty sgs) then
-    error ~loc (UnhandledOperationsSignals (ops, sgs))
+    if fatal then
+      error ~loc (UnhandledOperationsSignals (ops, sgs))
+    else
+      warning ~loc (UnhandledOperationsSignals (ops, sgs))
 
 
 (** [infer_expr ctx e] infers the expression type [ty] of an expression [e]. It
@@ -837,7 +846,7 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let fin, fin_sgs, fin_ty = infer_finally ~loc ctx x_ty w_ty fin in
      let cmdl_sig = Syntax.{sig_ops=cmdl_ops; sig_sgs = Name.Set.diff cmdl_sgs fin_sgs} in
      let fin_ty = Syntax.pollute fin_ty cmdl_sig in
-     check_dirt ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
+     check_dirt ~fatal:true ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
      locate (Syntax.Use (cmdl, c, fin)), fin_ty
 
 and infer_rec ~loc ctx fs =
@@ -1044,7 +1053,7 @@ and check_comp ctx ({Location.it=c'; loc} as c) check_ty =
 
   | Desugared.Let (p, c1, c2) ->
      let c1, (Syntax.{comp_ty=c1_ty';_} as c1_ty) = infer_comp ctx c1 in
-     check_dirt ~loc c1_ty check_sgn ;
+     check_dirt ~fatal:true ~loc c1_ty check_sgn ;
      let ctx, p = extend_pattern ~loc ctx p c1_ty' in
      let c2 = check_comp ctx c2 check_ty in
      locate (Syntax.Let (p, c1, c2))
@@ -1074,7 +1083,7 @@ and check_match_clause ctx patt_ty ty (p, c) =
 let top_infer_comp ctx c =
   let ops = lookup_shell ctx in
   let c, c_ty = infer_comp ctx c in
-  check_dirt ~loc:c.Location.loc c_ty Syntax.{sig_ops=ops; sig_sgs=Name.Set.empty} ;
+  check_dirt ~fatal:false ~loc:c.Location.loc c_ty Syntax.{sig_ops=ops; sig_sgs=Name.Set.empty} ;
   c, c_ty
 
 let rec toplevel ~quiet ctx {Location.it=d'; loc} =

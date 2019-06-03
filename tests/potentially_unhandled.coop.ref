@@ -1,0 +1,14 @@
+Type warning at file "./potentially_unhandled.coop", line 4, charaters 8-39:
+the following operations are potentially unhandled: tickle
+
+Type warning at file "./potentially_unhandled.coop", line 6, charaters 8-39:
+the following signals are potentially unhandled: giggle
+
+Type warning at file "./potentially_unhandled.coop", line 8, charaters 8-53:
+the following operations and signals are potentially unhandled: tickle,
+giggle
+
+Type error at file "./potentially_unhandled.coop", line 11, charaters 2-111:
+the following operations and signals are potentially unhandled: tickle,
+giggle
+

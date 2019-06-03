@@ -11,7 +11,7 @@ let message ~verbosity =
 let error fmt = message ~verbosity:1 fmt
 
 (** Report a warning. *)
-let warning fmt = message ~verbosity:2 ("Warning: " ^^ fmt)
+let warning fmt = message ~verbosity:2 fmt
 
 (** Print an expression, possibly parenthesized. *)
 let print ?(at_level=Level.no_parens) ?(max_level=Level.highest) ppf =

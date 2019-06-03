@@ -1,3 +1,9 @@
+Type warning at file "./subtype.coop", line 28, charaters 0-6:
+the following signals are potentially unhandled: die
+
+Type warning at file "./subtype.coop", line 38, charaters 0-7:
+the following signals are potentially unhandled: die
+
 operation op : int → int
 signal die of unit
 signal croak of int

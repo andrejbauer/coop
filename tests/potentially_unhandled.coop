@@ -1,0 +1,15 @@
+operation tickle : unit -> unit
+signal giggle of unit
+
+let a = if false then tickle () else ()
+
+let b = if false then giggle () else ()
+
+let c = if false then (giggle () ; tickle ()) else ()
+
+let d =
+  use (cohandler () with end) in
+    if false then giggle () else tickle ()
+  finally
+  | val _ @ _ -> ()
+  end  
