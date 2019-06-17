@@ -17,7 +17,7 @@ and ty' =
   | NamedTy of Name.t
   | Product of ty list
   | Arrow of ty * ty
-  | CohandlerTy of Name.t list * ty * signature
+  | RunnerTy of Name.t list * ty * signature
   | ShellTy of Name.t list
   | CompTy of ty * signature
 
@@ -54,10 +54,11 @@ and term' =
   | LetRec of rec_clause list * term
   | Sequence of term * term
   | Ascribe of term * ty
-  | Cohandler of ty * cohandler_clause list
-  | CohandlerTimes of term * term
-  | CohandlerRename of term * (Name.t * Name.t) list
-  | Use of term * term * term * finally_clause list
+  | Runner of ty * cohandler_clause list
+  | RunnerTimes of term * term
+  | RunnerRename of term * (Name.t * Name.t) list
+  | Run of term * term * term * finally_clause list
+  | Try of term * try_clause list
 
 and binder = pattern * ty option
 
@@ -74,6 +75,10 @@ and let_binding =
 and finally_clause =
   | FinVal of binder * binder * term
   | FinSignal of Name.t * binder * binder * term
+
+and try_clause =
+  | TryVal of binder * term
+  | TrySignal of Name.t * binder * term
 
 (** Parsed top-level command. *)
 type toplevel = toplevel' Location.located

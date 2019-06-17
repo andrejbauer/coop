@@ -5,8 +5,8 @@ let reserved = [
   ("and", Parser.AND) ;
   ("any", Parser.ANY) ;
   ("as", Parser.AS) ;
+  ("begin", Parser.BEGIN) ;
   ("bool", Parser.BOOL) ;
-  ("cohandler", Parser.COHANDLER) ;
   ("else", Parser.ELSE) ;
   ("empty", Parser.EMPTY) ;
   ("end", Parser.END) ;
@@ -23,13 +23,15 @@ let reserved = [
   ("of", Parser.OF) ;
   ("operation", Parser.OPERATION) ;
   ("rec", Parser.REC) ;
+  ("run", Parser.RUN) ;
+  ("runner", Parser.RUNNER) ;
   ("signal", Parser.SIGNAL);
   ("string", Parser.STRING);
   ("then", Parser.THEN) ;
   ("true", Parser.TRUE) ;
   ("type", Parser.TYPE) ;
   ("unit", Parser.UNIT) ;
-  ("use", Parser.USE) ;
+  ("using", Parser.USING) ;
   ("val", Parser.VAL) ;
   ("with", Parser.WITH) ;
 ]

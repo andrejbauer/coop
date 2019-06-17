@@ -16,12 +16,13 @@
 
 (* Expressions and computations *)
 %token <int> NUMERAL
+%token BEGIN END
 %token FALSE TRUE IF THEN ELSE
 %token FUN
-%token COHANDLER OTIMES AS
+%token RUNNER OTIMES AS
 %token LET REC IN
-%token MATCH WITH BAR END
-%token USE FINALLY VAL
+%token MATCH WITH BAR
+%token USING RUN TRY FINALLY VAL
 
 (* Toplevel commands *)
 
@@ -110,7 +111,7 @@ toplevel_:
   | LET REC fs=separated_nonempty_list(AND, recursive_clause)
     { Sugared.TopLetRec fs }
 
-  | USE c=infix_term
+  | USING c=infix_term
     { Sugared.TopShell c }
 
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
@@ -153,20 +154,24 @@ term_:
   | e1=infix_term SEMI e2=term
     { Sugared.Sequence (e1, e2) }
 
-  | MATCH e=infix_term WITH lst=match_clauses END
+  | MATCH e=infix_term WITH LBRACE lst=match_clauses RBRACE
     { Sugared.Match (e, lst) }
 
   | IF e1=term THEN e2=term ELSE e3=term
     { Sugared.If (e1, e2, e3) }
 
-  | COHANDLER t=ty WITH lst=cohandler_clauses END
-    { Sugared.Cohandler (t, lst) }
+  | RUNNER LBRACE lst=cohandler_clauses RBRACE AT t=ty
+    { Sugared.Runner (t, lst) }
 
-  | USE cmdl=infix_term AT w=infix_term IN c=term FINALLY fin=finally END
-    { Sugared.Use (cmdl, w, c, fin) }
+  | USING cmdl=infix_term AT w=infix_term RUN c=term FINALLY LBRACE fin=finally RBRACE
+    { Sugared.Run (cmdl, w, c, fin) }
+
+  | TRY c=term WITH LBRACE tr=trying RBRACE
+    { Sugared.Try (c, tr) }
 
   | cmdl=infix_term WITH LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
-    { Sugared.CohandlerRename (cmdl, lst) }
+    { Sugared.RunnerRename (cmdl, lst) }
+
 
 infix_term: mark_location(infix_term_) { $1 }
 infix_term_:
@@ -184,7 +189,7 @@ infix_term_:
     }
 
   | e1=infix_term OTIMES e2=infix_term
-    { Sugared.CohandlerTimes (e1, e2) }
+    { Sugared.RunnerTimes (e1, e2) }
 
 app_term: mark_location(app_term_) { $1 }
 app_term_:
@@ -224,6 +229,9 @@ simple_term_:
 
   | s=QUOTED_STRING
     { Sugared.Quoted s }
+
+  | BEGIN c=term END
+    { c.Location.it }
 
   | LPAREN es=separated_list(COMMA, term) RPAREN
                 { match es with
@@ -283,6 +291,19 @@ finally_clause:
 
   | sgl=var_name px=binder AT pw=binder ARROW c=term
     { Sugared.FinSignal (sgl, px, pw, c) }
+
+trying:
+  | BAR lst=separated_nonempty_list(BAR, try_clause)
+    { lst }
+  | lst=separated_list(BAR, try_clause)
+    { lst }
+
+try_clause:
+  | VAL px=binder ARROW t=term
+    { Sugared.TryVal (px, t) }
+
+  | sgl=var_name px=binder ARROW c=term
+    { Sugared.TrySignal (sgl, px, c) }
 
 binder:
   | p=simple_pattern
@@ -364,7 +385,7 @@ ty_:
     { Sugared.Arrow (t1, t2) }
 
   | sgn1=signature AT tw=comp_ty DARROW sgn2=signature
-    { Sugared.CohandlerTy (sgn1, tw, sgn2) }
+    { Sugared.RunnerTy (sgn1, tw, sgn2) }
 
 
 comp_ty: mark_location(comp_ty_) { $1 }

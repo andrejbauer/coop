@@ -10,36 +10,46 @@
 ;   (setq auto-mode-alist (cons '("\\.coop$" . coop-mode) auto-mode-alist))
 
 (defvar coop-keywords
-  '("and"
-    "as"
-    "bool"
-    "comodel"
-    "else"
-    "end"
-    "external"
-    "finally"
-    "fun"
-    "if"
-    "in"
-    "int"
-    "let"
-    "load"
-    "match"
-    "of"
-    "operation"
-    "rec"
-    "signal"
-    "then"
-    "type"
-    "unit"
-    "using"
-    "val"
-    "with"))
+  '(
+  "and"
+  "as"
+  "cohandler"
+  "else"
+  "end"
+  "external"
+  "finally"
+  "fun"
+  "if"
+  "in"
+  "int"
+  "let"
+  "load"
+  "match"
+  "of"
+  "operation"
+  "rec"
+  "signal"
+  "then"
+  "type"
+  "use"
+  "val"
+  "with"
+  ))
 
 (defvar coop-constants
   '(
-    "false"
-    "true"))
+  "false"
+  "true"
+  ))
+
+(defvar coop-types
+  '(
+  "any"
+  "bool"
+  "empty"
+  "string"
+  "unit"
+  ))
 
 (defvar coop-tab-width 2 "Width of tab for Coop mode")
 
@@ -50,6 +60,7 @@
       ;; prefix and infix operators, can be improved
        ("+\\|,\\|;" . font-lock-keyword-face)
        ( ,(regexp-opt coop-keywords 'words) . font-lock-keyword-face)
+       ( ,(regexp-opt coop-types 'words) . font-lock-type-face)
        ( ,(regexp-opt coop-constants 'words) . font-lock-constant-face)
        )))
 
