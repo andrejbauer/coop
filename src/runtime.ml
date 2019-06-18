@@ -380,7 +380,7 @@ and eval_comp env {Location.it=c'; loc} =
      and w = eval_expr env e2
      and fin = eval_finally ~loc env fin
      and r = eval_comp env c in
-     use ~loc env cmdl (Value.World w) r fin
+     use ~loc cmdl (Value.World w) r fin
 
 and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_signals} =
   let fin_val (v, w) =
@@ -411,7 +411,7 @@ and extend_rec ~loc fs env =
   env' := env ;
   env
 
-and use ~loc env cmdl w r (fin_val, fin_signals) =
+and use ~loc cmdl w r (fin_val, fin_signals) =
   let rec tensor (Value.World w' as w) r =
     match r with
 

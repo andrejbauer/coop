@@ -125,7 +125,7 @@ val print_expr_ty : ?max_level:Level.t -> expr_ty -> Format.formatter -> unit
 val print_comp_ty : ?max_level:Level.t -> comp_ty -> Format.formatter -> unit
 
 (** Print a shell type *)
-val print_shell_ty : ?max_level:Level.t -> operations -> Format.formatter -> unit
+val print_shell_ty : operations -> Format.formatter -> unit
 
 (** Print the body of a datatype definition *)
 val print_datatype : Name.t * datatype -> Format.formatter -> unit

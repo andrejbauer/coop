@@ -9,8 +9,6 @@ FLAGS=""
 
 VALDIFF=$(which colordiff || which diff)
 
-cd "$BASEDIR"
-
 if [ ! -x "$DIFF" ]
 then
     echo "Cannot find the diff command. Exiting."
@@ -32,16 +30,12 @@ fi
 if [ -x "$BASEDIR/../coop" ]
 then
     COOP="$BASEDIR/../coop"
-elif [ -x "$BASEDIR/../coop.native" ]
-then
-    COOP="$BASEDIR/../coop.native"
-elif [ -x "$BASEDIR/../coop.byte" ]
-then
-    COOP="$BASEDIR/../coop.byte"
 else
     echo "Cannot find the Coop executable. Compile Coop first."
     exit 1
 fi
+
+cd "$BASEDIR"
 
 VALIDATE=0
 if [ "$1" = "-v" ]

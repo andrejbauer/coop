@@ -1,0 +1,20 @@
+opam-version: "2.0"
+name: "coop"
+version: "0.1"
+synopsis: "A programming language for comodel-oriented programming"
+description: """
+Coop is an prototype programming language that explores how we can program with comodels
+of algebraic theories. It is a close cousin of Eff and other langauges that support algebraic
+operations and handlers.
+"""
+maintainer: "Andrej Bauer <andrej.bauer@andrej.com>"
+authors: "Andrej Bauer <andrej.bauer>"
+license: "MIT License"
+homepage: "https://github.com/andrejbauer/coop"
+bug-reports: ""
+dev-repo: "https://github.com/andrejbauer/coop"
+depends: [ "ocaml" "ocamlfind" "menhir" "dune" ]
+build: [
+  [make]
+]
+install: [make "install"]
