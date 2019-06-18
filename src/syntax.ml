@@ -180,7 +180,7 @@ and print_cohandler_ty (ops, w_ty, sgn2) ppf =
     (Print.char_darrow ())
     (print_signature sgn2)
 
-and print_shell_ty ?max_level ops ppf =
+and print_shell_ty ops ppf =
   let ops = List.sort Pervasives.compare (Name.Set.elements ops) in
   Format.fprintf ppf "%t"
     (Print.sequence (Name.print ~parentheses:true) "," ops)

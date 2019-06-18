@@ -490,12 +490,12 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let app = locate (Desugared.Equal (e1, e2)) in
        let_binds (ws1 @ ws2) app
 
-    | Sugared.Apply ({Location.it=Sugared.Var op; loc}, e) when is_operation op ctx ->
+    | Sugared.Apply ({Location.it=Sugared.Var op; _}, e) when is_operation op ctx ->
        let ws, e = expr ctx e in
        let c = locate (Desugared.Operation (op, e)) in
        let_binds ws c
 
-    | Sugared.Apply ({Location.it=Sugared.Var sgl; loc}, e) when is_signal sgl ctx ->
+    | Sugared.Apply ({Location.it=Sugared.Var sgl; _}, e) when is_signal sgl ctx ->
        let ws, e = expr ctx e in
        let c = locate (Desugared.Signal (sgl, e)) in
        let_binds ws c

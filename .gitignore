@@ -2,3 +2,4 @@ _build
 /coop.native
 /coop.byte
 /coop.docdir
+/src/.merlin

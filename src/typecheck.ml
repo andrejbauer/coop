@@ -181,10 +181,10 @@ let rec extend_idents xts ctx =
   | [] -> ctx
   | (x, t) :: xts -> extend_idents xts (extend_ident x t ctx)
 
-let extend_alias ~loc x ty ctx =
+let extend_alias x ty ctx =
   { ctx with ctx_aliases = Name.Map.add x ty ctx.ctx_aliases }
 
-let extend_datatype ~loc x cnstrs ctx =
+let extend_datatype x cnstrs ctx =
   { ctx with ctx_datatypes = (x, cnstrs) :: ctx.ctx_datatypes }
 
 let set_shell ops ctx =
@@ -557,7 +557,7 @@ let rec expr_ty {Location.it=t'; loc} =
   | Desugared.CompTy _ ->
      error ~loc ExprTypeExpected
 
-and comp_ty ({Location.it=t'; loc} as t) =
+and comp_ty ({Location.it=t'; _} as t) =
   match t' with
 
   | Desugared.CompTy (t, sgn) ->
@@ -579,7 +579,7 @@ let datatype cnstrs =
     cnstrs
 
 (** Typecheck mutually recursive datatypes *)
-let datatypes ~loc ctx ty_defs =
+let datatypes ctx ty_defs =
   let rec fold ctx ty_defs = function
 
     | [] ->
@@ -588,7 +588,7 @@ let datatypes ~loc ctx ty_defs =
 
     | (t, cnstrs) :: lst ->
        let cnstrs = datatype cnstrs in
-       let ctx = extend_datatype ~loc t cnstrs ctx in
+       let ctx = extend_datatype t cnstrs ctx in
        fold ctx ((t, cnstrs) :: ty_defs) lst
   in
   fold ctx [] ty_defs
@@ -596,7 +596,7 @@ let datatypes ~loc ctx ty_defs =
 
 (** Typecheck a pattern, return processed pattern and the list of identifiers
    and types bound by the pattern *)
-let check_pattern ~loc ctx patt ty =
+let check_pattern ctx patt ty =
   let rec fold xts {Location.it=p'; loc} t =
     let (Normal t) = norm_ty ~loc ctx t in
     match p' with
@@ -670,15 +670,15 @@ let check_pattern ~loc ctx patt ty =
   p, List.rev xts
 
 (** Extend the context by typechecking the pattern against the type *)
-let extend_pattern ~loc ctx p t =
-  let p, xts = check_pattern ~loc ctx p t in
+let extend_pattern ctx p t =
+  let p, xts = check_pattern ctx p t in
   let ctx = extend_idents xts ctx in
   ctx, p
 
 (** Extend the context by typechecking the pattern against the type,
     also return the list of bound names with their types. *)
-let top_extend_pattern ~loc ctx p t =
-  let p, xts = check_pattern ~loc ctx p t in
+let top_extend_pattern ctx p t =
+  let p, xts = check_pattern ctx p t in
   let ctx = extend_idents xts ctx in
   ctx, p, xts
 
@@ -729,7 +729,7 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
 
   | Desugared.Lambda ((p, Some t), c) ->
      let t = expr_ty t in
-     let ctx, p = extend_pattern ~loc ctx p t in
+     let ctx, p = extend_pattern ctx p t in
      let c, c_ty = infer_comp ctx c in
      locate (Syntax.Lambda (p, c)), Syntax.Arrow (t, c_ty)
 
@@ -797,13 +797,13 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
 
   | Desugared.Let (p, c1, c2) ->
      let c1, Syntax.{comp_ty=c1_ty; comp_sig=c1_sgn} = infer_comp ctx c1 in
-     let ctx, p = extend_pattern ~loc ctx p c1_ty in
+     let ctx, p = extend_pattern ctx p c1_ty in
      let c2, c2_ty = infer_comp ctx c2 in
      let c2_ty = Syntax.pollute c2_ty c1_sgn in
      locate (Syntax.Let (p, c1, c2)), c2_ty
 
   | Desugared.LetRec (fs, c) ->
-     let ctx, pcs, fts = infer_rec ~loc ctx fs in
+     let ctx, pcs, _fts = infer_rec ctx fs in
      let c, c_ty = infer_comp ctx c in
      locate (Syntax.LetRec (pcs, c)), c_ty
 
@@ -850,7 +850,7 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      check_dirt ~fatal:true ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
      locate (Syntax.Use (cmdl, e, c, fin)), fin_ty
 
-and infer_rec ~loc ctx fs =
+and infer_rec ctx fs =
   let ctx, fts =
     List.fold_left
       (fun (ctx, fts) (f, t, _, u, _) ->
@@ -864,7 +864,7 @@ and infer_rec ~loc ctx fs =
   let pcs =
     List.map2
     (fun (_, _, p, _, c) (_, u, t) ->
-      let ctx, p = extend_pattern ~loc:p.Location.loc ctx p u in
+      let ctx, p = extend_pattern ctx p u in
       let c = check_comp ctx c t in
       (p, c))
     fs fts
@@ -902,7 +902,7 @@ and infer_coops ~loc ctx w_ty lst =
          let (x_ty, op_ty) = lookup_operation ~loc op ctx in
          let ctx, px = extend_binder ctx px x_ty in
          let ctx, pw = extend_binder ctx pw w_ty in
-         let c, (Syntax.{comp_sig=c_sgn;comp_ty=c_ty'} as c_ty) = infer_comp ctx c in
+         let c, Syntax.{comp_sig=c_sgn;comp_ty=c_ty'} = infer_comp ctx c in
          let c_ty'' = Syntax.Product [op_ty; w_ty] in
          if not (expr_subty ~loc ctx c_ty' c_ty'') then
            error ~loc (CoopTypeMismatch (c_ty'', c_ty')) ;
@@ -957,12 +957,12 @@ and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_signals} =
 and extend_binder ctx (p, topt) t =
   let loc = p.Location.loc in
   match topt with
-  | None -> extend_pattern ~loc ctx p t
+  | None -> extend_pattern ctx p t
   | Some t' ->
      let t' = expr_ty t' in
      if not (expr_subty ~loc ctx t t') then
        error ~loc (ExprTypeMismatch (t, t')) ;
-     extend_pattern ~loc ctx p t'
+     extend_pattern ctx p t'
 
 (** [check_expr ctx e ty] checks that expression [e] has type [ty] in context [ctx].
     It returns the processed expression [e]. *)
@@ -970,7 +970,7 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
   let locate = Location.locate ~loc in
   match e', norm_ty ~loc ctx ty with
 
-  (** Synthesizing terms and [any] type *)
+  (* Synthesizing terms and [any] type *)
   | _, Normal Syntax.(Primitive Any)
   | Desugared.(Quoted _ | Numeral _ | Boolean _ | Constructor _ | Lambda ((_, Some _), _) |
                Var _ | AscribeExpr _ | Cohandler _ | CohandlerTimes _ | CohandlerRename _), _ ->
@@ -985,7 +985,7 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
      begin
        match as_arrow ty' with
        | Some (t, u) ->
-          let ctx, p = extend_pattern ~loc ctx p t in
+          let ctx, p = extend_pattern ctx p t in
           let c = check_comp ctx e u in
           locate (Syntax.Lambda (p, c))
        | None ->
@@ -1030,10 +1030,10 @@ and check_constructor ~loc ctx cnstr eopt topt =
      let e = check_expr ctx e t in
      Some e
 
-  | None, Some t ->
+  | None, Some _ ->
      error ~loc (IllegalConstructor cnstr)
 
-  | Some e, None ->
+  | Some _, None ->
      error ~loc (IllegalConstructor cnstr)
 
 (** [check_comp ctx c ty] checks that computation [c] has computation type [ty] in context [ctx].
@@ -1055,12 +1055,12 @@ and check_comp ctx ({Location.it=c'; loc} as c) check_ty =
   | Desugared.Let (p, c1, c2) ->
      let c1, (Syntax.{comp_ty=c1_ty';_} as c1_ty) = infer_comp ctx c1 in
      check_dirt ~fatal:true ~loc c1_ty check_sgn ;
-     let ctx, p = extend_pattern ~loc ctx p c1_ty' in
+     let ctx, p = extend_pattern ctx p c1_ty' in
      let c2 = check_comp ctx c2 check_ty in
      locate (Syntax.Let (p, c1, c2))
 
   | Desugared.LetRec (fs, c) ->
-     let ctx, pcs, fts = infer_rec ~loc ctx fs in
+     let ctx, pcs, _ = infer_rec ctx fs in
      let c = check_comp ctx c check_ty in
      locate (Syntax.LetRec (pcs, c))
 
@@ -1096,12 +1096,12 @@ let rec toplevel ~quiet ctx {Location.it=d'; loc} =
        ctx, Syntax.TopLoad lst
 
     | Desugared.TopLet (p, c) ->
-       let c, (Syntax.{comp_ty=c_ty';_} as c_ty) = top_infer_comp ctx c in
-       let ctx, p, xts = top_extend_pattern ~loc ctx p c_ty' in
+       let c, Syntax.{comp_ty=c_ty';_} = top_infer_comp ctx c in
+       let ctx, p, xts = top_extend_pattern ctx p c_ty' in
        ctx, Syntax.TopLet (p, xts, c)
 
     | Desugared.TopLetRec fs ->
-       let ctx, pcs, fts = infer_rec ~loc ctx fs in
+       let ctx, pcs, fts = infer_rec ctx fs in
        let fts = List.map (fun (f, u, t) -> (f, Syntax.Arrow (u, t))) fts in
        ctx, Syntax.TopLetRec (pcs, fts)
 
@@ -1121,14 +1121,14 @@ let rec toplevel ~quiet ctx {Location.it=d'; loc} =
 
     | Desugared.DefineAlias (t, abbrev) ->
        let abbrev = expr_ty abbrev in
-       let ctx = extend_alias ~loc t abbrev ctx in
+       let ctx = extend_alias t abbrev ctx in
        ctx, Syntax.DefineAlias (t, abbrev)
 
     | Desugared.DefineAbstract t ->
        ctx, Syntax.DefineAbstract t
 
     | Desugared.DefineDatatype ty_defs ->
-       let ctx, ty_defs = datatypes ~loc ctx ty_defs in
+       let ctx, ty_defs = datatypes ctx ty_defs in
        ctx, Syntax.DefineDatatype ty_defs
 
     | Desugared.DeclareOperation (op, ty1, ty2) ->
