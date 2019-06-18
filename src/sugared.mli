@@ -54,7 +54,7 @@ and term' =
   | LetRec of rec_clause list * term
   | Sequence of term * term
   | Ascribe of term * ty
-  | Runner of ty * cohandler_clause list
+  | Runner of ty * runner_clause list
   | RunnerTimes of term * term
   | RunnerRename of term * (Name.t * Name.t) list
   | Run of term * term * term * finally_clause list
@@ -64,7 +64,7 @@ and binder = pattern * ty option
 
 and typed_binder = pattern * ty
 
-and cohandler_clause = Name.t * binder * binder * term
+and runner_clause = Name.t * binder * binder * term
 
 and rec_clause = Name.t * typed_binder * typed_binder list * ty * term
 

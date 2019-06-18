@@ -57,7 +57,7 @@ and expr' =
   | Tuple of expr list
   | Constructor of Name.t * expr option
   | Lambda of binder * comp
-  | Runner of ty * cohandler_clause list
+  | Runner of ty * runner_clause list
   | RunnerRename of expr * (Name.t * Name.t) list
   | RunnerTimes of expr * expr
 
@@ -78,7 +78,7 @@ and comp' =
 
 and binder = pattern * ty option
 
-and cohandler_clause = Name.t * binder * binder * comp
+and runner_clause = Name.t * binder * binder * comp
 
 and rec_clause = Name.t * ty * pattern * ty * comp
 

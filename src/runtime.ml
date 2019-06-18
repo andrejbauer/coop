@@ -185,7 +185,7 @@ let as_closure ~loc = function
      error ~loc FunctionExpected
 
 let as_runner ~loc = function
-  | Value.Runner cmdl -> cmdl
+  | Value.Runner rnr -> rnr
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
            Closure _  | Abstract | Shell _) ->
      error ~loc RunnerExpected
@@ -288,13 +288,13 @@ let rec eval_expr env {Location.it=e'; loc} =
        let (v, w) = as_pair ~loc u in
        Value.(Val (v, World w))
      in
-     let cmdl =
+     let rnr =
        List.fold_left
-         (fun cmdl (op, px, pw, c) -> Name.Map.add op (coop px pw c) cmdl)
+         (fun rnr (op, px, pw, c) -> Name.Map.add op (coop px pw c) rnr)
          Name.Map.empty
          lst
      in
-     Value.(Runner cmdl)
+     Value.(Runner rnr)
 
   | Syntax.RunnerTimes (e1, e2) ->
      let wrap_fst f (v, Value.World w) =
@@ -309,9 +309,9 @@ let rec eval_expr env {Location.it=e'; loc} =
          let w' = Value.Tuple [w1; w2'] in
          Value.Val (v', Value.World w')
      in
-     let cmdl1 = as_runner ~loc (eval_expr env e1)
-     and cmdl2 = as_runner ~loc (eval_expr env e2) in
-     let cmdl =
+     let rnr1 = as_runner ~loc (eval_expr env e1)
+     and rnr2 = as_runner ~loc (eval_expr env e2) in
+     let rnr =
        Name.Map.merge
          (fun op f1 f2 ->
            match f1, f2 with
@@ -319,21 +319,21 @@ let rec eval_expr env {Location.it=e'; loc} =
            | Some f1, None -> Some (wrap_fst f1)
            | None, Some f2 -> Some (wrap_snd f2)
            | Some _, Some _ -> error ~loc (RunnerDoubleOperation op))
-         cmdl1 cmdl2
+         rnr1 rnr2
      in
-     Value.Runner cmdl
+     Value.Runner rnr
 
   | Syntax.RunnerRename (e, rnm) ->
-     let cmdl = as_runner ~loc (eval_expr env e) in
-     let cmdl =
+     let rnr = as_runner ~loc (eval_expr env e) in
+     let rnr =
        Name.Map.fold
-         (fun op f cmdl ->
+         (fun op f rnr ->
            match Name.Map.find op rnm with
            | None -> error ~loc (IllegalRenaming op)
-           | Some op' -> Name.Map.add op' f cmdl)
-         cmdl Name.Map.empty
+           | Some op' -> Name.Map.add op' f rnr)
+         rnr Name.Map.empty
      in
-     Value.Runner cmdl
+     Value.Runner rnr
 
 and eval_comp env {Location.it=c'; loc} =
   match c' with
@@ -376,11 +376,11 @@ and eval_comp env {Location.it=c'; loc} =
      Value.Signal (sgl, v)
 
   | Syntax.Run (e1, e2, c, fin) ->
-     let cmdl = as_runner ~loc (eval_expr env e1)
+     let rnr = as_runner ~loc (eval_expr env e1)
      and w = eval_expr env e2
      and fin = eval_finally ~loc env fin
      and r = eval_comp env c in
-     use ~loc cmdl (Value.World w) r fin
+     run ~loc rnr (Value.World w) r fin
 
   | Syntax.Try _ ->
      failwith "evaluation of try is not implemented"
@@ -414,7 +414,8 @@ and extend_rec ~loc fs env =
   env' := env ;
   env
 
-and use ~loc cmdl w r (fin_val, fin_signals) =
+(** Run a result with the given runner and finally clause. *)
+and run ~loc rnr w r (fin_val, fin_signals) =
   let rec tensor (Value.World w' as w) r =
     match r with
 
@@ -422,7 +423,7 @@ and use ~loc cmdl w r (fin_val, fin_signals) =
 
     | Value.Operation (op, u, k) ->
        begin
-         match Name.Map.find op cmdl with
+         match Name.Map.find op rnr with
          | None -> error ~loc (UnhandledOperation (op, u))
          | Some coop ->
             let rec let_unless = function

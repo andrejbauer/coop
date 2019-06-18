@@ -166,7 +166,7 @@ let rec print_expr_ty ?max_level ty ppf =
        (Print.char_arrow ())
        (print_comp_ty ~max_level:Level.arr_right t2)
 
-  | RunnerTy cmdl_ty -> print_runner_ty cmdl_ty ppf
+  | RunnerTy rnr_ty -> print_runner_ty rnr_ty ppf
 
   | ShellTy ops ->
      let ops = List.sort Pervasives.compare (Name.Set.elements ops) in

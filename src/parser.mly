@@ -160,17 +160,17 @@ term_:
   | IF e1=term THEN e2=term ELSE e3=term
     { Sugared.If (e1, e2, e3) }
 
-  | RUNNER LBRACE lst=cohandler_clauses RBRACE AT t=ty
+  | RUNNER LBRACE lst=runner_clauses RBRACE AT t=ty
     { Sugared.Runner (t, lst) }
 
-  | USING cmdl=infix_term AT w=infix_term RUN c=term FINALLY LBRACE fin=finally RBRACE
-    { Sugared.Run (cmdl, w, c, fin) }
+  | USING rnr=infix_term AT w=infix_term RUN c=term FINALLY LBRACE fin=finally RBRACE
+    { Sugared.Run (rnr, w, c, fin) }
 
   | TRY c=term WITH LBRACE tr=trying RBRACE
     { Sugared.Try (c, tr) }
 
-  | cmdl=infix_term AS LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
-    { Sugared.RunnerRename (cmdl, lst) }
+  | rnr=infix_term AS LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
+    { Sugared.RunnerRename (rnr, lst) }
 
 
 infix_term: mark_location(infix_term_) { $1 }
@@ -268,14 +268,14 @@ match_clause:
   | p=match_binder ARROW c=term
     { (p, c) }
 
-cohandler_clauses:
-  | BAR lst=separated_nonempty_list(BAR, cohandler_clause)
+runner_clauses:
+  | BAR lst=separated_nonempty_list(BAR, runner_clause)
     { lst }
 
-  | lst=separated_list(BAR, cohandler_clause)
+  | lst=separated_list(BAR, runner_clause)
     { lst }
 
-cohandler_clause:
+runner_clause:
   | op=var_name px=binder AT pw=binder ARROW c=term
     { (op, px, pw, c) }
 

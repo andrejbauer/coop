@@ -742,15 +742,15 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
      locate (Syntax.Runner coops), Syntax.RunnerTy (ops, w_ty, sgn)
 
   | Desugared.RunnerTimes (e1, e2) ->
-     let cmdl1, (ops1, w1_ty, sgn1) = infer_runner ctx e1
-     and cmdl2, (ops2, w2_ty, sgn2) = infer_runner ctx e2 in
+     let rnr1, (ops1, w1_ty, sgn1) = infer_runner ctx e1
+     and rnr2, (ops2, w2_ty, sgn2) = infer_runner ctx e2 in
      let w_ty = Syntax.Product [w1_ty; w2_ty] in
      let ops' = Name.Set.inter ops1 ops2 in
      if not (Name.Set.is_empty ops') then
        error ~loc (RunnerDoubleOperations ops') ;
      let ops = Name.Set.union ops1 ops2 in
      let sgn = join_signature sgn1 sgn2 in
-     locate (Syntax.RunnerTimes (cmdl1, cmdl2)), Syntax.RunnerTy (ops, w_ty, sgn)
+     locate (Syntax.RunnerTimes (rnr1, rnr2)), Syntax.RunnerTy (ops, w_ty, sgn)
 
   | Desugared.RunnerRename (e, rnm) ->
      let e, (ops, w_ty, sgn) = infer_runner ctx e in
@@ -839,16 +839,16 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let ty = Syntax.signal_ty sgl in
      locate (Syntax.Signal (sgl, e)), ty
 
-  | Desugared.Run (cmdl, e, c, fin) ->
-     let cmdl, (ops, w_ty, Syntax.{sig_ops=cmdl_ops; sig_sgs=cmdl_sgs}) =
-       infer_runner ctx cmdl in
+  | Desugared.Run (rnr, e, c, fin) ->
+     let rnr, (ops, w_ty, Syntax.{sig_ops=rnr_ops; sig_sgs=rnr_sgs}) =
+       infer_runner ctx rnr in
      let e = check_expr ctx e w_ty in
      let c, (Syntax.{comp_ty=x_ty; _} as c_ty) = infer_comp ctx c in
      let fin, fin_sgs, fin_ty = infer_finally ~loc ctx x_ty w_ty fin in
-     let cmdl_sig = Syntax.{sig_ops=cmdl_ops; sig_sgs = Name.Set.diff cmdl_sgs fin_sgs} in
-     let fin_ty = Syntax.pollute fin_ty cmdl_sig in
+     let rnr_sig = Syntax.{sig_ops=rnr_ops; sig_sgs = Name.Set.diff rnr_sgs fin_sgs} in
+     let fin_ty = Syntax.pollute fin_ty rnr_sig in
      check_dirt ~fatal:true ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
-     locate (Syntax.Run (cmdl, e, c, fin)), fin_ty
+     locate (Syntax.Run (rnr, e, c, fin)), fin_ty
 
   | Desugared.Try _ ->
      failwith "typechking of try not implemented"
@@ -916,15 +916,15 @@ and infer_coops ~loc ctx w_ty lst =
   in
   fold [] Name.Set.empty Syntax.empty_signature lst
 
-and infer_runner ctx cmdl =
-  let e, e_ty = infer_expr ctx cmdl in
-  match as_runner (norm_ty ~loc:cmdl.Location.loc ctx e_ty) with
+and infer_runner ctx rnr =
+  let e, e_ty = infer_expr ctx rnr in
+  match as_runner (norm_ty ~loc:rnr.Location.loc ctx e_ty) with
 
     | Some (ops, t, sgn2) ->
        e, (ops, t, sgn2)
 
     | None ->
-       error ~loc:cmdl.Location.loc (RunnerExpected e_ty)
+       error ~loc:rnr.Location.loc (RunnerExpected e_ty)
 
 
 and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_signals} =

@@ -349,7 +349,7 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
 
     | Sugared.Runner (t, lst) ->
        let t = ty ctx t in
-       let lst = cohandler_clauses ~loc ctx lst in
+       let lst = runner_clauses ~loc ctx lst in
        ([], locate (Desugared.Runner (t, lst)))
 
     | Sugared.RunnerTimes (e1, e2) ->
@@ -417,9 +417,9 @@ and abstract ~loc ctx pxs c =
      Location.locate ~loc (Desugared.Lambda (px, c))
 
 
-and cohandler_clauses ~loc ctx lst = List.map (cohandler_clause ~loc ctx) lst
+and runner_clauses ~loc ctx lst = List.map (runner_clause ~loc ctx) lst
 
-and cohandler_clause ~loc ctx (op, px, pw, c) =
+and runner_clause ~loc ctx (op, px, pw, c) =
   match lookup_ident op ctx with
 
   | None -> error ~loc (UnknownOperation op)
