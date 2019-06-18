@@ -6,5 +6,7 @@
   (flags -w +a-4-27-29-50 -warn-error +a)
   (libraries unix sedlex menhirlib))
 
-(menhir (modules parser))
+(menhir
+  (flags "--explain")
+  (modules parser))
 

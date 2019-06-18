@@ -5,10 +5,10 @@ type file = Nil | Cons of int * file
 
 (* The size of a file *)
 let rec length (f : file) : int =
-  match f with
+  match f with {
   | Nil -> 0
   | Cons (_, f) -> 1 + length f
-  end
+  }
 
 operation write : int -> unit
 
@@ -16,13 +16,13 @@ signal disk_full of unit
 
 (** A file writer that is full after n writes. *)
 let file_writer (n : int) =
-  cohandler file with
+  runner {
   | write k @ w ->
      if length w >= n then
        disk_full ()
      else
        ((), Cons (k, w))
-  end
+  } @ file
 
 let job (_ : unit) =
     write 1 ;
@@ -33,17 +33,19 @@ let job (_ : unit) =
     write 6
 
 let demo1 =
-  use file_writer 10 @ Nil in
+  using file_writer 10 @ Nil
+  run
     job ()
-  finally
+  finally {
   | val _ @ f -> f
   | disk_full _ @ f -> f
-  end
+  }
 
 let demo2 =
-  use file_writer 3 @ Nil in
+  using file_writer 3 @ Nil
+  run
     job ()
-  finally
+  finally {
   | val _ @ f -> f
   | disk_full _ @ f -> f
-  end
+  }

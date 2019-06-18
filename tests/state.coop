@@ -2,18 +2,18 @@ operation get : unit -> int
 operation put : int -> unit
 
 let state =
-  cohandler int with
+  runner {
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
-  end
+  } @ int
 
 let demo =
-  use state @ 1 in
+  using state @ 1 run
     let a = get () in
     put 2 ;
     let b = get () in
     put 3 ;
     (a, b)
-  finally
+  finally {
     val x @ w -> (x, w)
-  end
+  }

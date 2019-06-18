@@ -2,10 +2,11 @@
 operation tick : unit -> int
 
 let ticker =
-  cohandler int with
+  runner {
   | tick () @ w -> (w, w+1)
-  end
+  } @ int
 ;;
+
 let job (_ : unit) =
   let a = tick () in
   let _ = tick () in
@@ -13,10 +14,9 @@ let job (_ : unit) =
   a + b
 
 let demo =
-  use ticker @ 0 in
+  using ticker @ 0
+  run
     let r1 = job () in
     let r2 = job () in
     (r1, r2)
-  finally
-    val v @ _ -> v
-  end
+  finally { val v @ _ -> v }

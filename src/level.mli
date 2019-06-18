@@ -55,11 +55,11 @@ val arr_left : t
 (** The level of the right argument of an arrow type *)
 val arr_right : t
 
-(** The level of a cohandler type *)
-val cohandler_ty : t
+(** The level of a runner type *)
+val runner_ty : t
 
-(** The level of the cohandler type world argument *)
-val cohandler_ty_world : t
+(** The level of the runner type world argument *)
+val runner_ty_world : t
 
 (** The level of a computation type with its dirt *)
 val comp_ty : t

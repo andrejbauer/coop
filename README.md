@@ -39,16 +39,13 @@ You can type:
 
 ### Concrete syntax
 
-The concrete syntax of Coop mostly follows OCaml syntax, with the following exceptions:
+The concrete syntax of Coop is described in the upcoming paper with Danel Ahman. Have a
+look at [examples][./examples] and [tests][./tests]. Note that:
 
-* `match` statements must be terminated with `end`
 * function arguments must be explicitly annotated with types
 * recursive function definitions must explicitly annotate the return type of the function
 
 There are also new constructs, see below.
-
-The [`examples`](./examples) folder contains example programs from which the
-syntax may be discerned.
 
 
 ### Operations, signals and signatures
@@ -90,7 +87,7 @@ The value types are:
 * user-definable abstract types
 * function types `t → u` where `t` is an value type and `u` is a computation type
 * product types `t₁ * ⋯ * t₂`
-* cohandler types `{Σ} @ t ⇒ {Σ; Θ}`, where `t` is an value type, explained below.
+* runner types `{Σ} @ t ⇒ {Σ; Θ}`, where `t` is an value type, explained below.
 
 A computation type has the form
 
@@ -102,17 +99,17 @@ and signals `Θ`.
 
 ### Language-specific constructs
 
-#### `cohandler`
+#### `runner`
 
-A **cohandler** has the form
+A **runner** has the form
 
-    cohandler e with
-    | op₁ x @ w → c₁
-    | op₂ x @ w → c₂
-      ⋮
-    end
+    runner {
+      | op₁ x @ w → c₁
+      | op₂ x @ w → c₂
+        ⋮
+    } @ t
 
-where `e` is the *initial state* and the clauses
+where `t` is the type of the state and the clauses
 
     | opᵢ x @ w → cᵢ
 
@@ -121,42 +118,39 @@ are the **co-operations**. Each co-operation `opᵢ` takes an argument `x` and t
 `w` a pair `(v, w')` where `v` is the **co-operation result** and `w'` is the **new
 state**.
 
-We think of a cohandler as defining a (simulated) external environment in which
-a piece of code can run. Therefore we refer to the cohandler state as the
-**cohandler world**.
+We think of a runner as defining a (simulated) external environment in which
+a piece of code can run. Therefore we refer to the runner state as the
+**runner world**. Runners correspond to comodels.
 
-##### Example: the state cohandler
+##### Example: the state runner
 
-Assuming we have declared operations 
+Assuming we have declared operations
 
     operation put : int → unit
     operation get : unit → int
 
-the following state cohandler can be defined:
+the following state runner can be defined:
 
-    let state (x : int) =
-      cohandler x with
+    let state =
+      runner {
       | get () @ z -> (z, z)
       | put y @ _ -> ((), y)
-      end
+      } @ int
 
-Note that `state` is a function which takes the initial state `x` and returns a
-cohandler initialized with `x`.
+#### `using ⋯ run ⋯ finally { ⋯ }`
 
-#### `use ⋯ in ⋯ finally ⋯ end`
+A runner `e` with initial state `w` can be used in a computation `c` with the construct:
 
-A cohandler `e` can be used in a computation `c` with the construct:
-
-    use `e` in
+    using e @ w in
       c
-    finally
+    finally {
     | val x @ w → c_v
     | s₁ x @ w → c₁
     | s₂ x @ w → c₂
       ⋮
-    end
+    }
 
-When `c` is evaluated, it may use only the operations that `e` cohandles, i.e.,
+When `c` is evaluated, it may use only the operations that `e` handles, i.e.,
 we prevent it from calling any outer co-operations (however, the co-operations
 of `e` may refer to the outer co-operations).
 
@@ -181,13 +175,14 @@ clause may again raise a signal and perform outer co-operations.
 
 ##### Example
 
-The above state cohandler can be used as follows:
+The above state runner can be used as follows:
 
-    use state 42 in
+    using state @ 42
+    run
       let a = get () in
       put (a + 8) ;
       let b = get () in
       a + b
-    finally
+    finally {
       val x @ _ -> x
-    end
+    }

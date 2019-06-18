@@ -3,30 +3,26 @@ operation put : int -> unit
 operation tick : unit -> int
 
 let state =
-  cohandler int with
+  runner {
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
-  end
+  } @ int
 
 (* A ticker which uses state to tick *)
 let ticker =
-  cohandler unit with
-  | tick () @ () ->
+  runner {
+   tick () @ () ->
      let x = get () in
      put (x + 1) ;
      (x, ())
-  end
+  } @ unit
 
 let demo =
-  use state @ 5 in
-    use ticker @ () in
+  using state @ 5 run
+    using ticker @ () run
       let a = tick () in
       let b = tick () in
       let c = tick () in
       (a, b, c)
-    finally
-      val v @ _ -> v
-    end
-  finally
-    val v @ w -> (v, w)
-  end
+    finally { val v @ _ -> v }
+  finally { val v @ w -> (v, w) }

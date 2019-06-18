@@ -8,8 +8,8 @@ let b = if false then giggle () else ()
 let c = if false then (giggle () ; tickle ()) else ()
 
 let d =
-  use (cohandler unit with end) @ () in
+  using (runner {} @ unit) @ () run
     if false then giggle () else tickle ()
-  finally
+  finally {
   | val _ @ _ -> ()
-  end  
+  }

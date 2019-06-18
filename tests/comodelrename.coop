@@ -5,13 +5,13 @@ operation dog : bool -> bool
 operation cat : bool -> bool
 
 let c =
-  cohandler unit with
+  runner {
   | cow () @ () -> (42, ())
   | dog b @ () -> (true, ())
-  end
+  } @ unit
 
-let d = c with {dog as cat}
+let d = c as {cat=dog}
 
-let e = c with {dog as cat, cow as bull}
+let e = c as {cat=dog, bull=cow}
 
-let f = e with {cat as dog}
+let f = e as {dog=cat}

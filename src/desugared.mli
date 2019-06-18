@@ -28,7 +28,7 @@ and ty' =
   | Datatype of Name.t
   | Arrow of ty * ty
   | Product of ty list
-  | CohandlerTy of Name.Set.t * ty * signature
+  | RunnerTy of Name.Set.t * ty * signature
   | ShellTy of Name.Set.t
   | CompTy of ty * signature
 
@@ -57,9 +57,9 @@ and expr' =
   | Tuple of expr list
   | Constructor of Name.t * expr option
   | Lambda of binder * comp
-  | Cohandler of ty * cohandler_clause list
-  | CohandlerRename of expr * (Name.t * Name.t) list
-  | CohandlerTimes of expr * expr
+  | Runner of ty * cohandler_clause list
+  | RunnerRename of expr * (Name.t * Name.t) list
+  | RunnerTimes of expr * expr
 
 (** Computations *)
 and comp = comp' Location.located
@@ -73,7 +73,8 @@ and comp' =
   | Apply of expr * expr
   | Operation of Name.t * expr
   | Signal of Name.t * expr
-  | Use of expr * expr * comp * finally
+  | Run of expr * expr * comp * finally
+  | Try of comp * trying
 
 and binder = pattern * ty option
 
@@ -84,6 +85,11 @@ and rec_clause = Name.t * ty * pattern * ty * comp
 and finally = {
     fin_val : binder * binder * comp ;
     fin_signals : (Name.t * binder * binder * comp) list
+  }
+
+and trying = {
+    try_val : binder * comp ;
+    try_signals : (Name.t * binder * comp) list
   }
 
 (** Top-level commands. *)

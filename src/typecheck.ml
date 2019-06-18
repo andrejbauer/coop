@@ -38,9 +38,9 @@ type error =
   | TypeExpectedButTuple of Syntax.expr_ty
   | TypeExpectedButUnit of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
-  | CohandlerExpected of Syntax.expr_ty
+  | RunnerExpected of Syntax.expr_ty
   | ShellExpected of Syntax.expr_ty
-  | CohandlerDoubleOperations of Name.Set.t
+  | RunnerDoubleOperations of Name.Set.t
   | CannotInferArgument
   | CannotInferMatch
   | DuplicateOperation of Name.t
@@ -116,17 +116,17 @@ let print_error err ppf =
      Format.fprintf ppf "this expression should be a function but has type@ %t"
        (Syntax.print_expr_ty ty)
 
-  | CohandlerExpected ty ->
-     Format.fprintf ppf "this expression should be a cohandler but has type@ %t"
+  | RunnerExpected ty ->
+     Format.fprintf ppf "this expression should be a runner but has type@ %t"
        (Syntax.print_expr_ty ty)
 
   | ShellExpected ty ->
      Format.fprintf ppf "this expression should be a shell but has type@ %t"
        (Syntax.print_expr_ty ty)
 
-  | CohandlerDoubleOperations ops ->
+  | RunnerDoubleOperations ops ->
      let ops = Name.Set.elements ops in
-     Format.fprintf ppf "these cohandlers both handle the following operations:@ %t"
+     Format.fprintf ppf "these runners both handle the following operations:@ %t"
        (Print.sequence (Name.print ~parentheses:true) "," ops)
 
   | CannotInferArgument ->
@@ -266,7 +266,7 @@ let rec norm_ty ~loc ctx t =
      norm_ty ~loc ctx t
 
   | Syntax.(Abstract _ | Datatype _ |  Primitive _ |
-            Product _ | Arrow _ | CohandlerTy _ | ShellTy _) ->
+            Product _ | Arrow _ | RunnerTy _ | ShellTy _) ->
      Normal t
 
 let as_product (Normal ty) =
@@ -277,7 +277,7 @@ let as_product (Normal ty) =
   | Syntax.Product ts -> Some ts
 
   | Syntax.(Abstract _ | Datatype _  | Primitive _ |
-            Arrow _ | CohandlerTy _ | ShellTy _) ->
+            Arrow _ | RunnerTy _ | ShellTy _) ->
      None
 
 let as_arrow (Normal ty) =
@@ -288,15 +288,15 @@ let as_arrow (Normal ty) =
   | Syntax.Arrow (t,u) -> Some (t, u)
 
   | Syntax.(Product _ | Datatype _ | Primitive _ |
-            Abstract _ | CohandlerTy _ | ShellTy _) ->
+            Abstract _ | RunnerTy _ | ShellTy _) ->
      None
 
-let as_cohandler (Normal ty) =
+let as_runner (Normal ty) =
   match ty with
 
   | Syntax.Alias _ -> assert false
 
-  | Syntax.CohandlerTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
+  | Syntax.RunnerTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
 
   | Syntax.(Product _ | Datatype _ | Primitive _ |
             Arrow _ | Abstract _ | ShellTy _) ->
@@ -310,7 +310,7 @@ let as_shell (Normal ty) =
   | Syntax.ShellTy ops -> Some ops
 
   | Syntax.(Product _ | Datatype _ | Primitive _ |
-            Arrow _ | Abstract _ | CohandlerTy _) ->
+            Arrow _ | Abstract _ | RunnerTy _) ->
      None
 
 (**** Subtyping ****)
@@ -359,14 +359,14 @@ let rec expr_subty ~loc ctx t u =
   | Syntax.Arrow (t1, t2), Syntax.Arrow (u1, u2) ->
      expr_subty ~loc ctx u1 t1 && comp_subty ~loc ctx t2 u2
 
-  | Syntax.CohandlerTy (tsgn1, t, tsgn2), Syntax.CohandlerTy (usgn1, u, usgn2) ->
+  | Syntax.RunnerTy (tsgn1, t, tsgn2), Syntax.RunnerTy (usgn1, u, usgn2) ->
      Name.Set.subset usgn1 tsgn1 && expr_eqtype ~loc ctx t u && subsignature  tsgn2 usgn2
 
   | Syntax.ShellTy ops1, Syntax.ShellTy ops2 ->
      Name.Set.subset ops2 ops1
 
   | Syntax.(Datatype _ | Primitive _ | Product _ |
-            Arrow _ | CohandlerTy _ | Abstract _ | ShellTy _), _ ->
+            Arrow _ | RunnerTy _ | Abstract _ | ShellTy _), _ ->
      false
 
 and comp_subty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} (Syntax.{comp_ty=t2; comp_sig=sig2}) =
@@ -430,18 +430,18 @@ let rec join_expr_ty ~loc ctx t1 t2 =
      let t = join_comp_ty ~loc ctx t1 t2 in
      Syntax.Arrow (u, t)
 
-  | Syntax.CohandlerTy (ops1, t1, sig1), Syntax.CohandlerTy (ops2, t2, sig2) ->
+  | Syntax.RunnerTy (ops1, t1, sig1), Syntax.RunnerTy (ops2, t2, sig2) ->
      let ops = Name.Set.inter ops1 ops2
      and t = meet_expr_ty ~loc ctx t1 t2
      and sgn = join_signature sig1 sig2 in
-     Syntax.CohandlerTy  (ops, t, sgn)
+     Syntax.RunnerTy  (ops, t, sgn)
 
   | Syntax.ShellTy ops1, Syntax.ShellTy ops2 ->
      let ops = Name.Set.inter ops1 ops2 in
      Syntax.ShellTy ops
 
   | Syntax.(Datatype _ | Primitive _ | Product _ |
-            Arrow _ | CohandlerTy _ | Abstract _ | ShellTy _), _ ->
+            Arrow _ | RunnerTy _ | Abstract _ | ShellTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
 and meet_expr_ty ~loc ctx t1 t2 =
@@ -489,18 +489,18 @@ and meet_expr_ty ~loc ctx t1 t2 =
      let t = meet_comp_ty ~loc ctx t1 t2 in
      Syntax.Arrow (u, t)
 
-  | Syntax.CohandlerTy (ops1, t1, sig1), Syntax.CohandlerTy (ops2, t2, sig2) ->
+  | Syntax.RunnerTy (ops1, t1, sig1), Syntax.RunnerTy (ops2, t2, sig2) ->
      let ops = Name.Set.union ops1 ops2
      and t = join_expr_ty ~loc ctx t1 t2
      and sgn = meet_signature sig1 sig2 in
-     Syntax.CohandlerTy  (ops, t, sgn)
+     Syntax.RunnerTy  (ops, t, sgn)
 
   | Syntax.ShellTy ops1, Syntax.ShellTy ops2 ->
      let ops = Name.Set.union ops1 ops2 in
      Syntax.ShellTy ops
 
   | Syntax.(Datatype _ | Primitive _ | Product _ |
-            Arrow _ | CohandlerTy _ | Abstract _ | ShellTy _), _ ->
+            Arrow _ | RunnerTy _ | Abstract _ | ShellTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
 and join_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2; comp_sig=sig2} =
@@ -546,10 +546,10 @@ let rec expr_ty {Location.it=t'; loc} =
      and t2 = comp_ty t2 in
      Syntax.Arrow (t1, t2)
 
-  | Desugared.CohandlerTy (ops, t, sgn2) ->
+  | Desugared.RunnerTy (ops, t, sgn2) ->
      let t = expr_ty t
      and sgn2 = signature sgn2 in
-     Syntax.CohandlerTy (ops, t, sgn2)
+     Syntax.RunnerTy (ops, t, sgn2)
 
   | Desugared.ShellTy ops ->
      Syntax.ShellTy ops
@@ -566,7 +566,7 @@ and comp_ty ({Location.it=t'; _} as t) =
      Syntax.{comp_ty=t; comp_sig=sgn}
 
   | Desugared.(Primitive _ | Alias _  | Datatype _ | Product _ |
-               Arrow _ | CohandlerTy _ | ShellTy _ | Abstract _) ->
+               Arrow _ | RunnerTy _ | ShellTy _ | Abstract _) ->
      let t = expr_ty t in
      Syntax.{comp_ty=t; comp_sig=empty_signature}
 
@@ -736,24 +736,24 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
   | Desugared.Lambda ((p, None), _) ->
      error ~loc:p.Location.loc CannotInferArgument
 
-  | Desugared.Cohandler (t, coops) ->
+  | Desugared.Runner (t, coops) ->
      let w_ty = expr_ty t in
      let coops, ops, sgn = infer_coops ~loc ctx w_ty coops in
-     locate (Syntax.Cohandler coops), Syntax.CohandlerTy (ops, w_ty, sgn)
+     locate (Syntax.Runner coops), Syntax.RunnerTy (ops, w_ty, sgn)
 
-  | Desugared.CohandlerTimes (e1, e2) ->
-     let cmdl1, (ops1, w1_ty, sgn1) = infer_cohandler ctx e1
-     and cmdl2, (ops2, w2_ty, sgn2) = infer_cohandler ctx e2 in
+  | Desugared.RunnerTimes (e1, e2) ->
+     let cmdl1, (ops1, w1_ty, sgn1) = infer_runner ctx e1
+     and cmdl2, (ops2, w2_ty, sgn2) = infer_runner ctx e2 in
      let w_ty = Syntax.Product [w1_ty; w2_ty] in
      let ops' = Name.Set.inter ops1 ops2 in
      if not (Name.Set.is_empty ops') then
-       error ~loc (CohandlerDoubleOperations ops') ;
+       error ~loc (RunnerDoubleOperations ops') ;
      let ops = Name.Set.union ops1 ops2 in
      let sgn = join_signature sgn1 sgn2 in
-     locate (Syntax.CohandlerTimes (cmdl1, cmdl2)), Syntax.CohandlerTy (ops, w_ty, sgn)
+     locate (Syntax.RunnerTimes (cmdl1, cmdl2)), Syntax.RunnerTy (ops, w_ty, sgn)
 
-  | Desugared.CohandlerRename (e, rnm) ->
-     let e, (ops, w_ty, sgn) = infer_cohandler ctx e in
+  | Desugared.RunnerRename (e, rnm) ->
+     let e, (ops, w_ty, sgn) = infer_runner ctx e in
      begin
        match List.find_opt (fun (op, _) -> not (Name.Set.mem op ops)) rnm with
        | None -> ()
@@ -777,7 +777,7 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
          ops
          (Name.Set.empty, Name.Map.empty)
      in
-     locate (Syntax.CohandlerRename (e, rnm')), Syntax.CohandlerTy (ops', w_ty, sgn)
+     locate (Syntax.RunnerRename (e, rnm')), Syntax.RunnerTy (ops', w_ty, sgn)
 
 
 (** [infer_comp ctx c] infers the type [ty] of a computation [c]. It returns
@@ -839,16 +839,19 @@ and infer_comp (ctx : context) {Location.it=c'; loc} =
      let ty = Syntax.signal_ty sgl in
      locate (Syntax.Signal (sgl, e)), ty
 
-  | Desugared.Use (cmdl, e, c, fin) ->
+  | Desugared.Run (cmdl, e, c, fin) ->
      let cmdl, (ops, w_ty, Syntax.{sig_ops=cmdl_ops; sig_sgs=cmdl_sgs}) =
-       infer_cohandler ctx cmdl in
+       infer_runner ctx cmdl in
      let e = check_expr ctx e w_ty in
      let c, (Syntax.{comp_ty=x_ty; _} as c_ty) = infer_comp ctx c in
      let fin, fin_sgs, fin_ty = infer_finally ~loc ctx x_ty w_ty fin in
      let cmdl_sig = Syntax.{sig_ops=cmdl_ops; sig_sgs = Name.Set.diff cmdl_sgs fin_sgs} in
      let fin_ty = Syntax.pollute fin_ty cmdl_sig in
      check_dirt ~fatal:true ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
-     locate (Syntax.Use (cmdl, e, c, fin)), fin_ty
+     locate (Syntax.Run (cmdl, e, c, fin)), fin_ty
+
+  | Desugared.Try _ ->
+     failwith "typechking of try not implemented"
 
 and infer_rec ctx fs =
   let ctx, fts =
@@ -913,15 +916,15 @@ and infer_coops ~loc ctx w_ty lst =
   in
   fold [] Name.Set.empty Syntax.empty_signature lst
 
-and infer_cohandler ctx cmdl =
+and infer_runner ctx cmdl =
   let e, e_ty = infer_expr ctx cmdl in
-  match as_cohandler (norm_ty ~loc:cmdl.Location.loc ctx e_ty) with
+  match as_runner (norm_ty ~loc:cmdl.Location.loc ctx e_ty) with
 
     | Some (ops, t, sgn2) ->
        e, (ops, t, sgn2)
 
     | None ->
-       error ~loc:cmdl.Location.loc (CohandlerExpected e_ty)
+       error ~loc:cmdl.Location.loc (RunnerExpected e_ty)
 
 
 and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_signals} =
@@ -973,7 +976,7 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
   (* Synthesizing terms and [any] type *)
   | _, Normal Syntax.(Primitive Any)
   | Desugared.(Quoted _ | Numeral _ | Boolean _ | Constructor _ | Lambda ((_, Some _), _) |
-               Var _ | AscribeExpr _ | Cohandler _ | CohandlerTimes _ | CohandlerRename _), _ ->
+               Var _ | AscribeExpr _ | Runner _ | RunnerTimes _ | RunnerRename _), _ ->
      let e, ty' = infer_expr ctx e in
      if expr_subty ~loc ctx ty' ty
      then
@@ -1065,7 +1068,7 @@ and check_comp ctx ({Location.it=c'; loc} as c) check_ty =
      locate (Syntax.LetRec (pcs, c))
 
   | (Desugared.Equal _ | Desugared.Apply _ | Desugared.AscribeComp _ |
-     Desugared.Operation _ | Desugared.Signal _ | Desugared.Use _) ->
+     Desugared.Operation _ | Desugared.Signal _ | Desugared.Run _ | Desugared.Try _) ->
      let c, c_ty = infer_comp ctx c in
      if comp_subty ~loc ctx c_ty check_ty
      then

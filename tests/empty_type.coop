@@ -3,19 +3,19 @@ signal boom of unit
 let rec f (x : int) : empty ! {boom} = boom ()
 
 let g (x : int) =
-  use (cohandler unit with end) @ () in
-    (match f x with end) : int ! {boom}
-  finally
+  using (runner {} @ unit) @ () run
+    (match f x with {}) : int ! {boom}
+  finally {
   | val x @ _ -> x
   | boom _ @ _ -> boom ()
-  end
+  }
 ;;
 
-use stdio ;;
+using stdio ;;
 
-use (cohandler unit with end) @ () in
+using (runner {} @ unit) @ () run
   g 43
-finally
+finally {
  | val x @ _ -> print_value x
  | boom _ @ _ -> print_string "Boom!\n"
-end
+}

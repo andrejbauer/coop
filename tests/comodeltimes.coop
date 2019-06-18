@@ -7,38 +7,32 @@ operation put' : int -> unit
 operation tick : unit -> int
 
 let state =
-  cohandler int with
+  runner {
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
-  end
+  } @ int
 
 let ticker =
-  cohandler int with
-  | tick () @ w -> (w, w+1)
-  end
+  runner { tick () @ w -> (w, w+1) } @ int
 
 let c = state ⊗ ticker
 
 let demo1 =
-  use c @ (10, 0) in
+  using c @ (10, 0) run
     let a = get () in
     put 2 ;
     let b = tick () in
     let c = tick () in
     put 3 ;
     (a, b, c)
-  finally
-    val x @ w -> (x, w)
-  end
+  finally { val x @ w -> (x, w) }
 
 let demo2 =
-  use state :*: (state with {get as get', put as put'}) @ (2, 3) in
+  using state :*: (state as {get'=get, put'=put}) @ (2, 3) run
     let a = get () in
     put' (a + 3) ;
     put 7 ;
     let b = get' () in
     put' (b + 10) ;
     (a, b)
-  finally
-    val x @ w -> (x, w)
-  end
+  finally { val x @ w -> (x, w) }

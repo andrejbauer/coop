@@ -8,31 +8,28 @@ let g (n : int) =
   if n > 0 then op n else die ()
 
 let c =
-  cohandler int with
-  | op k @ w ->
-      if k > 10 then croak w else (w, k + w)
-  end
+  runner { op k @ w ->  if k > 10 then croak w else (w, k + w) } @ int
 
 let demo (n : int) =
-  use c @ 1 in
+  using c @ 1 run
     let a = apply g n in
     let b = apply g n in
     (1000 + a, 1000 + b)
-  finally
+  finally {
   | val x @ w -> (x, w)
   | croak k @ w -> ((k,-1), w)
   | die () @ w -> die ()
-  end
+  }
 ;;
 
 demo 2 ;;
 
-use (cohandler unit with end) @ () in
+using (runner {} @ unit) @ () run
   demo (-3)
-finally
+finally {
   | val x @ _ -> 42
   | die () @ _ -> 23
-end
+}
 ;;
 
 demo 20 ;;

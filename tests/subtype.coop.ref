@@ -1,7 +1,7 @@
-Type warning at file "./subtype.coop", line 28, charaters 0-6:
+Type warning at file "./subtype.coop", line 25, charaters 0-6:
 the following signals are potentially unhandled: die
 
-Type warning at file "./subtype.coop", line 38, charaters 0-7:
+Type warning at file "./subtype.coop", line 35, charaters 0-7:
 the following signals are potentially unhandled: die
 
 operation op : int → int
@@ -11,7 +11,7 @@ val apply :
   (int → int ! {op; die}) → (int → int ! {op; die}) ! {}
   = <fun>
 val g : int → int ! {op; die} = <fun>
-val c : {op} @ int ⇒ {croak} = <cohandler>
+val c : {op} @ int ⇒ {croak} = <runner>
 val demo : int → (int × int) × int ! {die} = <fun>
 - : (int × int) × int = ((1001, 1003), 5)
 - : int = 23

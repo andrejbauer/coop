@@ -28,14 +28,14 @@ type expr_ty =
   | Primitive of primitive
   | Product of expr_ty list
   | Arrow of expr_ty * comp_ty
-  | CohandlerTy of cohandler_ty
+  | RunnerTy of runner_ty
   | ShellTy of operations
 
 (** Computation type *)
 and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
 
-(** Cohandler *)
-and cohandler_ty = operations * expr_ty * signature
+(** Runner *)
+and runner_ty = operations * expr_ty * signature
 
 (** The body of a datatype definition *)
 type datatype = (Name.t * expr_ty option) list
@@ -63,9 +63,9 @@ and expr' =
   | Constructor of Name.t * expr option
   | Tuple of expr list
   | Lambda of pattern * comp
-  | Cohandler of (Name.t * pattern * pattern * comp) list
-  | CohandlerTimes of expr * expr
-  | CohandlerRename of expr * Name.t Name.Map.t
+  | Runner of (Name.t * pattern * pattern * comp) list
+  | RunnerTimes of expr * expr
+  | RunnerRename of expr * Name.t Name.Map.t
 
 (** Computations *)
 and comp = comp' Location.located
@@ -78,12 +78,19 @@ and comp' =
   | Apply of expr * expr
   | Operation of Name.t * expr
   | Signal of Name.t * expr
-  | Use of expr * expr * comp * finally
+  | Run of expr * expr * comp * finally
+  | Try of comp * trying
 
 and finally = {
     fin_val : pattern * pattern * comp ;
     fin_signals : (Name.t * pattern * pattern * comp) list
 }
+
+and trying = {
+    try_val : pattern * comp ;
+    try_signals : (Name.t * pattern * comp) list
+}
+
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located

@@ -169,7 +169,7 @@ term_:
   | TRY c=term WITH LBRACE tr=trying RBRACE
     { Sugared.Try (c, tr) }
 
-  | cmdl=infix_term WITH LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
+  | cmdl=infix_term AS LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
     { Sugared.RunnerRename (cmdl, lst) }
 
 
@@ -455,8 +455,8 @@ signature:
     { lst }
 
 op_renaming:
-  | op1=var_name AS op2=var_name
-    { (op1, op2) }
+  | op1=var_name EQUAL op2=var_name
+    { (op2, op1) }
 
 mark_location(X):
   x=X

@@ -7,13 +7,13 @@ let error msg = raise (Error msg)
 let as_int = function
   | Value.Numeral n -> n
   | Value.(Constructor _ | Boolean _ | Quoted _ | Tuple _ |
-    Closure _ | Cohandler _ | Abstract | Shell _) ->
+    Closure _ | Runner _ | Abstract | Shell _) ->
      error "integer expected"
 
 let as_string = function
   | Value.Quoted s -> s
   | Value.(Constructor _ | Boolean _ | Numeral _ | Tuple _ |
-    Closure _ | Cohandler _ | Abstract | Shell _) ->
+    Closure _ | Runner _ | Abstract | Shell _) ->
      error "string expected"
 
 (** Wrappers that convert OCaml data to Coop data. *)

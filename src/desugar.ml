@@ -206,11 +206,11 @@ let rec ty ctx {Location.it=t'; loc} =
        and t2 = ty ctx t2 in
        Desugared.Arrow (t1, t2)
 
-    | Sugared.CohandlerTy (ops, t, sgn2) ->
+    | Sugared.RunnerTy (ops, t, sgn2) ->
        let ops = operations ops
        and t = ty ctx t
        and sgn2 = signature ~loc ctx sgn2 in
-       Desugared.CohandlerTy (ops, t, sgn2)
+       Desugared.RunnerTy (ops, t, sgn2)
 
     | Sugared.ShellTy lst ->
        let rec fold ops = function
@@ -347,17 +347,17 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
     | Sugared.Lambda (pxs, c) ->
        ([], abstract ~loc ctx pxs c)
 
-    | Sugared.Cohandler (t, lst) ->
+    | Sugared.Runner (t, lst) ->
        let t = ty ctx t in
        let lst = cohandler_clauses ~loc ctx lst in
-       ([], locate (Desugared.Cohandler (t, lst)))
+       ([], locate (Desugared.Runner (t, lst)))
 
-    | Sugared.CohandlerTimes (e1, e2) ->
+    | Sugared.RunnerTimes (e1, e2) ->
        let ws1, e1 = expr ctx e1
        and ws2, e2 = expr ctx e2 in
-       (ws1 @ ws2, locate (Desugared.CohandlerTimes (e1, e2)))
+       (ws1 @ ws2, locate (Desugared.RunnerTimes (e1, e2)))
 
-    | Sugared.CohandlerRename (e, rnm) ->
+    | Sugared.RunnerRename (e, rnm) ->
        let ws, e = expr ctx e in
        let rnm =
          List.map
@@ -377,10 +377,10 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
              (x, y))
            rnm
        in
-       (ws, locate (Desugared.CohandlerRename (e, rnm)))
+       (ws, locate (Desugared.RunnerRename (e, rnm)))
 
     | (Sugared.Match _ | Sugared.If _ | Sugared.Apply _ | Sugared.Let _ |
-       Sugared.LetRec _ | Sugared.Sequence _ | Sugared.Use _ | Sugared.Equal _) ->
+       Sugared.LetRec _ | Sugared.Sequence _ | Sugared.Run _ | Sugared.Try _ | Sugared.Equal _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Desugared.Var x))
@@ -447,8 +447,8 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
   match c' with
     (* keep this case in front so that constructors are handled ocrrectly *)
     | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True | Sugared.Quoted _ |
-       Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Cohandler _ |
-       Sugared.CohandlerTimes _ | Sugared.CohandlerRename _ |
+       Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Runner _ |
+       Sugared.RunnerTimes _ | Sugared.RunnerRename _ |
        Sugared.Apply ({Location.it=Sugared.Constructor _;_}, _)) ->
        let ws, e = expr ctx c in
        let return_e = locate (Desugared.Val e) in
@@ -543,12 +543,17 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let p = locate Desugared.PattAnonymous in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.Use (e, w, c, fin) ->
+    | Sugared.Run (e, w, c, fin) ->
        let ws1, e = expr ctx e in
        let ws2, w = expr ctx w in
        let c = comp ctx c in
-       let fin = finally ~loc ctx fin in
-       let_binds (ws1 @ ws2) (locate (Desugared.Use (e, w, c, fin)))
+       let fin = finally_clauses ~loc ctx fin in
+       let_binds (ws1 @ ws2) (locate (Desugared.Run (e, w, c, fin)))
+
+    | Sugared.Try (c, tr) ->
+       let c = comp ctx c in
+       let tr = try_clauses ~loc ctx tr in
+       locate (Desugared.Try (c, tr))
 
 and match_clauses ctx lst =
   List.map (match_clause ctx) lst
@@ -585,7 +590,7 @@ and rec_clauses ~loc ctx lst =
   in
   fold [] lst
 
-and finally ~loc ctx lst =
+and finally_clauses ~loc ctx lst =
   let rec fold fin_val fin_signals = function
 
     | [] ->
@@ -617,6 +622,40 @@ and finally ~loc ctx lst =
           let c = comp ctx c in
           let fin_signals = (sgl, px, pw, c) :: fin_signals in
           fold fin_val fin_signals lst
+       end
+  in
+  fold None [] lst
+
+and try_clauses ~loc ctx lst =
+  let rec fold try_val try_signals = function
+
+    | [] ->
+       begin match try_val with
+       | None -> error ~loc MissingFinallyVal
+       | Some try_val ->
+          let try_signals = List.rev try_signals in
+          Desugared.{try_val; try_signals}
+       end
+
+    | Sugared.TryVal (px, c) :: lst ->
+       begin match try_val with
+       | Some _ -> error ~loc DoubleFinallyVal
+       | None ->
+          let ctx, px = binder ctx px in
+          let c = comp ctx c in
+          let try_val = Some (px, c) in
+          fold try_val try_signals lst
+       end
+
+    | Sugared.TrySignal (sgl, px, c) :: lst ->
+       begin match List.exists (fun (sgl', _, _) -> Name.equal sgl sgl') try_signals with
+       | true -> error ~loc (DoubleFinallySignal sgl)
+       | false ->
+          if not (is_signal sgl ctx) then error ~loc (SignalExpected sgl) ;
+          let ctx, px = binder ctx px in
+          let c = comp ctx c in
+          let try_signals = (sgl, px, c) :: try_signals in
+          fold try_val try_signals lst
        end
   in
   fold None [] lst

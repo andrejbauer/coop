@@ -47,5 +47,5 @@ let arr_right = arr
 let product = 700
 let product_arg = product - 1
 
-let cohandler_ty = 750
-let cohandler_ty_world = product
+let runner_ty = 750
+let runner_ty_world = product

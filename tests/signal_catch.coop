@@ -2,14 +2,14 @@
 
 signal moo of unit ;;
 
-use
-  (cohandler unit with end) @ ()
+using
+  (runner {} @ unit) @ ()
 in
   moo ()
-finally
+finally {
 | val _ @ _ -> 1
 | moo () @ _ -> 2
-end ;;
+} ;;
 
 (* Catch a signal arising in a co-operation. *)
 
@@ -17,14 +17,12 @@ operation op : unit -> unit
 signal sgl of unit
 
 let demo =
-  use
-    (cohandler unit with
-     | op () @ () -> sgl ()
-     end) @ ()
-  in
+  using
+    runner { op () @ () -> sgl () } unit @ ()
+  run
     op ()
-  finally
+  finally {
   | val _ @ _ -> 1
   | sgl () @ _ -> 2
-  end
+  }
 

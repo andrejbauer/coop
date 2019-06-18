@@ -6,7 +6,7 @@ type t =
   | Constructor of Name.t * t option
   | Tuple of t list
   | Closure of (t -> t result)
-  | Cohandler of cooperation Name.Map.t
+  | Runner of cooperation Name.Map.t
   | Shell of shell
 
 and world = World of t
@@ -28,7 +28,7 @@ let name = function
   | Constructor _ -> "constructor"
   | Tuple _ -> "tuple"
   | Closure _ -> "function"
-  | Cohandler _ -> "cohandler"
+  | Runner _ -> "runner"
   | Shell _ -> "shell"
 
 let names = function
@@ -39,7 +39,7 @@ let names = function
   | Constructor _ -> "constructors"
   | Tuple _ -> "tuples"
   | Closure _ -> "functions"
-  | Cohandler _ -> "cohandlers"
+  | Runner _ -> "runners"
   | Shell _ -> "shell"
 
 let pure_shell = (Name.Map.empty, World Abstract)
@@ -79,7 +79,7 @@ let rec print ?max_level v ppf =
 
   | Closure _ -> Format.fprintf ppf "<fun>"
 
-  | Cohandler _ -> Format.fprintf ppf "<cohandler>"
+  | Runner _ -> Format.fprintf ppf "<runner>"
 
   | Shell _ -> Format.fprintf ppf "<shell>"
 

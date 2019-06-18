@@ -11,8 +11,8 @@ type error =
   | IllegalRenaming of Name.t
   | IllegalComparison of Value.t
   | FunctionExpected
-  | CohandlerExpected
-  | CohandlerDoubleOperation of Name.t
+  | RunnerExpected
+  | RunnerDoubleOperation of Name.t
   | PairExpected
   | ShellExpected
   | PatternMismatch
@@ -41,7 +41,7 @@ let print_error err ppf =
      Format.fprintf ppf "unknown external %s" s
 
   | IllegalRenaming op ->
-     Format.fprintf ppf "illegal cohandler renaming %t, please report" (Name.print op)
+     Format.fprintf ppf "illegal runner renaming %t, please report" (Name.print op)
 
   | IllegalComparison v ->
      Format.fprintf ppf "cannot compare %s" (Value.names v)
@@ -49,10 +49,10 @@ let print_error err ppf =
   | FunctionExpected ->
      Format.fprintf ppf "function expected, please report"
 
-  | CohandlerExpected ->
-     Format.fprintf ppf "cohandler expected, please report"
+  | RunnerExpected ->
+     Format.fprintf ppf "runner expected, please report"
 
-  | CohandlerDoubleOperation op ->
+  | RunnerDoubleOperation op ->
      Format.fprintf ppf "cannot combine models that both contain the coperation %t" (Name.print op)
 
   | PairExpected ->
@@ -175,25 +175,25 @@ let match_clauses ~loc env ps v =
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
   | Value.(Closure _ | Numeral _ | Boolean _ | Quoted _ | Constructor _
-    | Tuple ([] | [_] | _::_::_::_) | Cohandler _ | Abstract | Shell _) ->
+    | Tuple ([] | [_] | _::_::_::_) | Runner _ | Abstract | Shell _) ->
      error ~loc PairExpected
 
 let as_closure ~loc = function
   | Value.Closure f -> f
   | Value.(Numeral _ | Boolean _ | Quoted _ | Constructor _ | Tuple _ |
-    Cohandler _  | Abstract | Shell _) ->
+    Runner _  | Abstract | Shell _) ->
      error ~loc FunctionExpected
 
-let as_cohandler ~loc = function
-  | Value.Cohandler cmdl -> cmdl
+let as_runner ~loc = function
+  | Value.Runner cmdl -> cmdl
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
            Closure _  | Abstract | Shell _) ->
-     error ~loc CohandlerExpected
+     error ~loc RunnerExpected
 
 let as_shell ~loc = function
   | Value.Shell ops -> ops
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
-           Closure _  | Abstract | Cohandler _) ->
+           Closure _  | Abstract | Runner _) ->
      error ~loc ShellExpected
 
 
@@ -201,10 +201,10 @@ let as_shell ~loc = function
 let rec equal_value ~loc (v1 : Value.t) (v2 : Value.t) =
   match v1, v2 with
 
-  | Value.(Abstract | Closure _ | Cohandler _ | Shell _), _ ->
+  | Value.(Abstract | Closure _ | Runner _ | Shell _), _ ->
      error ~loc (IllegalComparison v1)
 
-  | _, Value.(Abstract | Closure _ | Cohandler _) ->
+  | _, Value.(Abstract | Closure _ | Runner _) ->
      error ~loc (IllegalComparison v1)
 
   | Value.(Numeral k1, Numeral k2) ->
@@ -278,7 +278,7 @@ let rec eval_expr env {Location.it=e'; loc} =
      in
      Value.Closure f
 
-  | Syntax.Cohandler lst ->
+  | Syntax.Runner lst ->
      let coop px pw c =
        let loc = c.Location.loc in
        fun (u, Value.World w) ->
@@ -294,9 +294,9 @@ let rec eval_expr env {Location.it=e'; loc} =
          Name.Map.empty
          lst
      in
-     Value.(Cohandler cmdl)
+     Value.(Runner cmdl)
 
-  | Syntax.CohandlerTimes (e1, e2) ->
+  | Syntax.RunnerTimes (e1, e2) ->
      let wrap_fst f (v, Value.World w) =
          let (w1, w2) = as_pair ~loc w in
          f (v, Value.World w1) >>= fun (v', Value.World w1') ->
@@ -309,8 +309,8 @@ let rec eval_expr env {Location.it=e'; loc} =
          let w' = Value.Tuple [w1; w2'] in
          Value.Val (v', Value.World w')
      in
-     let cmdl1 = as_cohandler ~loc (eval_expr env e1)
-     and cmdl2 = as_cohandler ~loc (eval_expr env e2) in
+     let cmdl1 = as_runner ~loc (eval_expr env e1)
+     and cmdl2 = as_runner ~loc (eval_expr env e2) in
      let cmdl =
        Name.Map.merge
          (fun op f1 f2 ->
@@ -318,13 +318,13 @@ let rec eval_expr env {Location.it=e'; loc} =
            | None, None -> None
            | Some f1, None -> Some (wrap_fst f1)
            | None, Some f2 -> Some (wrap_snd f2)
-           | Some _, Some _ -> error ~loc (CohandlerDoubleOperation op))
+           | Some _, Some _ -> error ~loc (RunnerDoubleOperation op))
          cmdl1 cmdl2
      in
-     Value.Cohandler cmdl
+     Value.Runner cmdl
 
-  | Syntax.CohandlerRename (e, rnm) ->
-     let cmdl = as_cohandler ~loc (eval_expr env e) in
+  | Syntax.RunnerRename (e, rnm) ->
+     let cmdl = as_runner ~loc (eval_expr env e) in
      let cmdl =
        Name.Map.fold
          (fun op f cmdl ->
@@ -333,7 +333,7 @@ let rec eval_expr env {Location.it=e'; loc} =
            | Some op' -> Name.Map.add op' f cmdl)
          cmdl Name.Map.empty
      in
-     Value.Cohandler cmdl
+     Value.Runner cmdl
 
 and eval_comp env {Location.it=c'; loc} =
   match c' with
@@ -375,12 +375,15 @@ and eval_comp env {Location.it=c'; loc} =
      let v = eval_expr env e in
      Value.Signal (sgl, v)
 
-  | Syntax.Use (e1, e2, c, fin) ->
-     let cmdl = as_cohandler ~loc (eval_expr env e1)
+  | Syntax.Run (e1, e2, c, fin) ->
+     let cmdl = as_runner ~loc (eval_expr env e1)
      and w = eval_expr env e2
      and fin = eval_finally ~loc env fin
      and r = eval_comp env c in
      use ~loc cmdl (Value.World w) r fin
+
+  | Syntax.Try _ ->
+     failwith "evaluation of try is not implemented"
 
 and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_signals} =
   let fin_val (v, w) =

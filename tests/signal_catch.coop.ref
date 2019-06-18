@@ -1,5 +1,3 @@
-signal moo of unit
-- : int = 2
-operation op : unit → unit
-signal sgl of unit
-val demo : int = 2
+Lexical error at file "./signal_catch.coop", line 7, charaters 0-2:
+Unexpected in
+
