@@ -34,5 +34,10 @@ let sequence print_u separator us ppf =
 let select ascii utf = if !Config.ascii then ascii else utf
 
 let char_arrow () = select "->" "→"
+let char_prearrow () = select "-{" "-{"
+let char_postarrow () = select "}->" "}→"
+
 let char_darrow () = select "=>" "⇒"
 let char_times () = select "*" "×"
+
+let char_lightning () = select "!!" "↯"

@@ -1,13 +1,10 @@
 (** Type-checked syntax of Coop. *)
 
-type operations = Name.Set.t
+type operations = Operations of Name.Set.t
 
-type signals = Name.Set.t
+type exceptions = Exceptions of Name.Set.t
 
-type signature = {
-    sig_ops : operations ;
-    sig_sgs : signals
-  }
+type signals = Signals of Name.Set.t
 
 (** Primitive types *)
 type primitive =
@@ -17,22 +14,34 @@ type primitive =
   | String
   | Any
 
-(** Expression type *)
+(** Types of expressions *)
 type expr_ty =
   | Abstract of Name.t
   | Alias of Name.t
   | Datatype of Name.t
   | Primitive of primitive
   | Product of expr_ty list
-  | Arrow of expr_ty * comp_ty
+  | ArrowUser of expr_ty * user_ty
+  | ArrowKernel of expr_ty * kernel_ty
   | RunnerTy of runner_ty
-  | ShellTy of operations
+  | ContainerTy of operations
 
-(** Computation type *)
-and comp_ty = { comp_ty : expr_ty ; comp_sig : signature }
+(** The typing information for a user computation *)
+and user_ty =
+  { user_ty : expr_ty
+  ; user_ops : operations
+  ; user_exc : exceptions }
+
+(** The typing information for a kernel computation *)
+and kernel_ty =
+  { kernel_ty : expr_ty
+  ; kernel_ops : operations
+  ; kernel_exc : exceptions
+  ; kernel_sgn : signals
+  ; kernel_world : expr_ty }
 
 (** Runner *)
-and runner_ty = Name.Set.t * expr_ty * signature
+and runner_ty = operations * operations * signals * expr_ty
 
 (** The body of a datatype definition *)
 type datatype = (Name.t * expr_ty option) list
@@ -59,43 +68,64 @@ and expr' =
   | Quoted of string
   | Constructor of Name.t * expr option
   | Tuple of expr list
-  | Lambda of pattern * comp
-  | Runner of (Name.t * pattern * pattern * comp) list
-  | RunnerTimes of expr * expr
-  | RunnerRename of expr * Name.t Name.Map.t
+  | FunUser of pattern * user
+  | FunKernel of pattern * kernel
+  | Runner of runner_clause list
 
-(** Computations *)
-and comp = comp' Location.located
-and comp' =
-  | Val of expr
-  | Let of pattern * comp * comp
-  | LetRec of (pattern * comp) list * comp
-  | Match of expr * (pattern * comp) list
-  | Equal of expr * expr
-  | Apply of expr * expr
-  | Operation of Name.t * expr
-  | Signal of Name.t * expr
-  | Run of expr * expr * comp * finally
-  | Try of comp * trying
+(** User computations *)
+and user = user' Location.located
+and user' =
+  | UserVal of expr
+  | UserEqual of expr * expr
+  | UserTry of user * user exception_handler
+  | UserLet of pattern * user * user
+  | UserLetRec of user rec_clause list * user
+  | UserApply of expr * expr
+  | UserMatch of expr * (pattern * user) list
+  | UserOperation of Name.t * expr
+  | UserRaise of Name.t * expr
+  | UserUsing of expr * expr * user * finally
+  | UserRun of kernel * expr * finally
 
-and finally = {
-    fin_val : pattern * pattern * comp ;
-    fin_signals : (Name.t * pattern * pattern * comp) list
-}
+(** Kernel computations *)
+and kernel = kernel' Location.located
+and kernel' =
+  | KernelVal of expr
+  | KernelEqual of expr * expr
+  | KernelTry of kernel * kernel exception_handler
+  | KernelLet of pattern * kernel * kernel
+  | KernelLetRec of kernel rec_clause list * kernel
+  | KernelApply of expr * expr
+  | KernelMatch of expr * (pattern * kernel) list
+  | KernelOperation of Name.t * expr
+  | KernelRaise of Name.t * expr
+  | KernelKill of Name.t * expr
+  | KernelGetenv
+  | KernelSetenv of expr
+  | KernelExec of user * kernel exception_handler
 
-and trying = {
-    try_val : pattern * comp ;
-    try_signals : (Name.t * pattern * comp) list
-}
+and finally =
+  { fin_val : pattern * pattern * user
+  ; fin_raise : (Name.t * pattern * pattern * user) list
+  ; fin_kill : (Name.t * pattern * user) list }
+
+(** Exception handler *)
+and 'a exception_handler =
+  { exc_val : pattern * 'a
+  ; exc_raise : (Name.t * pattern * 'a) list }
+
+and runner_clause = Name.t * pattern * kernel
+
+and 'a rec_clause = pattern * 'a
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
-  | TopLet of pattern * (Name.t * expr_ty) list * comp
-  | TopLetRec of (pattern * comp) list * (Name.t * expr_ty) list
-  | TopShell of comp * operations
-  | TopComp of comp * expr_ty
+  | TopLet of pattern * (Name.t * expr_ty) list * user
+  | TopLetRec of user rec_clause list * (Name.t * expr_ty) list
+  | TopContainer of user * operations
+  | TopUser of user * expr_ty
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty
   | DefineDatatype of (Name.t * datatype) list
@@ -106,29 +136,39 @@ and toplevel' =
 (** The unit type *)
 let unit_ty = Product []
 
-(** The empty signature *)
-let empty_signature = { sig_ops = Name.Set.empty; sig_sgs = Name.Set.empty }
+(** Empty sets of gadgets *)
 
-(** Make a pure computation type *)
-let pure t = { comp_ty = t ; comp_sig = empty_signature }
+let empty_operations = Operations Name.Set.empty
+let empty_exceptions = Exceptions Name.Set.empty
+let empty_signals = Signals Name.Set.empty
 
-let operation_ty t op =
-  { comp_ty = t ;
-    comp_sig = { sig_ops = Name.Set.add op Name.Set.empty ;
-                 sig_sgs = Name.Set.empty }
-  }
+(** Make a pure user-computation type *)
+let pure_user_ty t =
+ { user_ty = t
+ ; user_ops = empty_operations
+ ; user_exc = empty_exceptions }
 
-let signal_ty sgl =
-  { comp_ty = Primitive Empty ;
-    comp_sig = { sig_ops = Name.Set.empty ;
-                 sig_sgs = Name.Set.add sgl Name.Set.empty }
-  }
-let pollute {comp_ty; comp_sig=sgn1} sgn2 =
-  { comp_ty ;
-    comp_sig = { sig_ops = Name.Set.union sgn1.sig_ops sgn2.sig_ops ;
-                 sig_sgs = Name.Set.union sgn1.sig_sgs sgn2.sig_sgs }
-  }
+(** Make a pure kernel-computation type *)
+let pure_kernel_ty t tw =
+  { kernel_ty = t
+  ; kernel_ops = empty_operations
+  ; kernel_exc = empty_exceptions
+  ; kernel_sgn = empty_signals
+  ; kernel_world = tw }
 
+(** The user type of the given operation [op] *)
+let operation_user_ty t op =
+  { user_ty = t
+  ; user_ops = Operations (Name.Set.add op Name.Set.empty)
+  ; user_exc = empty_exceptions }
+
+(** The kernel type of the given operation [op] *)
+let operation_kernel_ty t op tw =
+  { kernel_ty = t
+  ; kernel_ops = Operations (Name.Set.add op Name.Set.empty)
+  ; kernel_exc = empty_exceptions
+  ; kernel_sgn = empty_signals
+  ; kernel_world = tw }
 
 (** Pretty-print a primitive type *)
 let print_primitive p ppf =
@@ -140,6 +180,9 @@ let print_primitive p ppf =
   | String -> "string"
   | Any -> "any")
 
+let print_names ns ppf =
+  let ns = List.sort Stdlib.compare (Name.Set.elements ns) in
+  Print.sequence (Name.print ~parentheses:true) "," ns ppf
 
 (** Pretty-print an expresion type *)
 let rec print_expr_ty ?max_level ty ppf =
@@ -160,44 +203,77 @@ let rec print_expr_ty ?max_level ty ppf =
      Print.print ?max_level ~at_level:Level.product ppf "%t"
        (Print.sequence (print_expr_ty ~max_level:Level.product_arg) st lst)
 
-  | Arrow (t1, t2) ->
-     Print.print ?max_level ~at_level:Level.arr ppf "%t@ %s@ %t"
+  | ArrowUser (t1, {user_ty=t2; user_ops=Operations ops; user_exc=Exceptions excs}) ->
+     Print.print ?max_level ~at_level:Level.arr ppf "%t@ %t@ %t%t"
        (print_expr_ty ~max_level:Level.arr_left t1)
-       (Print.char_arrow ())
-       (print_comp_ty ~max_level:Level.arr_right t2)
+       (print_arrow ops)
+       (print_expr_ty ~max_level:Level.arr_right t2)
+       (print_exceptions ~empty:false excs)
+
+  | ArrowKernel (t1, {kernel_ty=t2; kernel_ops=Operations ops; kernel_exc=Exceptions excs; kernel_sgn=Signals sgns; kernel_world=wt}) ->
+     Print.print ?max_level ~at_level:Level.arr ppf "%t@ %t@ %t%t%t@%t"
+       (print_expr_ty ~max_level:Level.arr_left t1)
+       (print_arrow ops)
+       (print_expr_ty ~max_level:Level.arr_right t2)
+       (print_exceptions ~empty:false excs)
+       (print_signals ~empty:false sgns)
+       (print_expr_ty ~max_level:Level.world_ty wt)
 
   | RunnerTy rnr_ty -> print_runner_ty rnr_ty ppf
 
-  | ShellTy ops ->
-     let ops = List.sort Pervasives.compare (Name.Set.elements ops) in
+  | ContainerTy (Operations ops) ->
      Format.fprintf ppf "{%t}"
-       (Print.sequence (Name.print ~parentheses:true) "," ops)
+       (print_names ops)
 
-and print_comp_ty ?max_level {comp_ty; comp_sig} ppf =
-  Print.print ?max_level ~at_level:Level.comp_ty ppf "%t@ !@ %t"
-    (print_expr_ty ~max_level:Level.comp_ty_left comp_ty)
-    (print_signature comp_sig)
+and print_exceptions ~empty excs ppf =
+  if Name.Set.is_empty excs then
+    (if empty then Format.fprintf ppf "[}")
+  else
+    Format.fprintf ppf "!{%t}" (print_names excs)
 
-and print_runner_ty (ops, w_ty, sgn2) ppf =
-  let ops = List.sort Pervasives.compare (Name.Set.elements ops) in
-  Format.fprintf ppf "{%t}@ @@@ %t %s@ %t"
-    (Print.sequence (Name.print ~parentheses:true) "," ops)
-    (print_expr_ty ~max_level:Level.runner_ty_world w_ty)
+and print_operations ~empty ops ppf =
+  if Name.Set.is_empty ops then
+    (if empty then Format.fprintf ppf "{}")
+  else
+    Format.fprintf ppf "{%t}" (print_names ops)
+
+and print_signals ~empty sgns ppf =
+  if Name.Set.is_empty sgns then
+    (if empty then Format.fprintf ppf "{}")
+  else
+    Format.fprintf ppf "%s{%t}" (Print.char_lightning ()) (print_names sgns)
+
+and print_arrow ops ppf =
+  if Name.Set.is_empty ops then
+    Format.fprintf ppf "%s" (Print.char_arrow ())
+  else
+    Format.fprintf ppf "%s%t%s"
+      (Print.char_prearrow ())
+      (print_names ops)
+      (Print.char_postarrow ())
+
+and print_user_ty ?max_level {user_ty=t; user_ops=Operations ops; user_exc=Exceptions excs} ppf =
+    Print.print ?max_level ~at_level:Level.user_ty ppf "%t@ %t%t"
+      (print_operations ~empty:false ops)
+      (print_expr_ty ~max_level:Level.world_ty t)
+      (print_exceptions ~empty:false excs)
+
+and print_kernel_ty ?max_level {kernel_ty=t; kernel_ops=Operations ops; kernel_exc=Exceptions excs; kernel_sgn=Signals sgns; kernel_world=wt} ppf =
+    Print.print ?max_level ~at_level:Level.kernel_ty ppf "%t@ %t%t@%t"
+      (print_operations ~empty:false ops)
+      (print_expr_ty ~max_level:Level.user_ty_left t)
+      (print_exceptions ~empty:false excs)
+      (print_expr_ty ~max_level:Level.world_ty wt)
+
+and print_runner_ty (Operations ops1, Operations ops2, Signals sgns, wt) ppf =
+  Format.fprintf ppf "%t@ %s@ %t%t%t"
+    (print_operations ~empty:true ops1)
     (Print.char_darrow ())
-    (print_signature sgn2)
+    (print_operations ~empty:true ops2)
+    (print_signals ~empty:false sgns)
+    (print_expr_ty ~max_level:Level.runner_ty_world wt)
 
-and print_shell_ty ops ppf =
-  let ops = List.sort Pervasives.compare (Name.Set.elements ops) in
-  Format.fprintf ppf "%t"
-    (Print.sequence (Name.print ~parentheses:true) "," ops)
-
-and print_signature {sig_ops; sig_sgs} ppf =
-  let ops = List.sort Pervasives.compare (Name.Set.elements sig_ops)
-  and sgs =  List.sort Pervasives.compare (Name.Set.elements sig_sgs) in
-  Format.fprintf ppf "{%t%s%t}"
-    (Print.sequence (Name.print ~parentheses:true) "," ops)
-    (match ops, sgs with [], _ | _::_, [] -> "" | _::_, _::_ -> "; ")
-    (Print.sequence (Name.print ~parentheses:true) "," sgs)
+and print_container_ty (Operations ops) ppf = print_operations ~empty:true ops ppf
 
 let print_datatype (t, cnstrs) ppf =
   let print_clause (cnstr, topt) ppf =

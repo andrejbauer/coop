@@ -36,9 +36,13 @@ let constr_arg = constr - 1
 
 (* Type levels *)
 
-let comp_ty = 800
-let comp_ty_left = comp_ty - 1
-let comp_ty_right = no_parens
+let user_ty = 800
+let user_ty_left = 700
+
+let kernel_ty = 800
+let kernel_ty_left = 700
+
+let world_ty = 1000
 
 let arr = 900
 let arr_left = arr - 1

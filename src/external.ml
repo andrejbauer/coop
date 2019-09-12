@@ -7,13 +7,13 @@ let error msg = raise (Error msg)
 let as_int = function
   | Value.Numeral n -> n
   | Value.(Constructor _ | Boolean _ | Quoted _ | Tuple _ |
-    Closure _ | Runner _ | Abstract | Shell _) ->
+    ClosureUser _ | ClosureKernel _ | Runner _ | Abstract | Container _) ->
      error "integer expected"
 
 let as_string = function
   | Value.Quoted s -> s
   | Value.(Constructor _ | Boolean _ | Numeral _ | Tuple _ |
-    Closure _ | Runner _ | Abstract | Shell _) ->
+    ClosureUser _ | ClosureKernel _ | Runner _ | Abstract | Container _) ->
      error "string expected"
 
 (** Wrappers that convert OCaml data to Coop data. *)
@@ -22,18 +22,18 @@ let coop_unit = Value.Tuple []
 
 let mk_ident s = Name.Ident (s, Name.Word)
 
-let wrap_shell coops w =
+let wrap_container coops w =
   let coops =
     List.fold_left
       (fun coops (x, f) -> Name.Map.add (mk_ident x) f coops)
       Name.Map.empty
       coops
   in
-  Value.Shell (coops, Value.World w)
+  Value.Container (coops, Value.World w)
 
-let pure_shell = []
+let pure_container = []
 
-let stdio_shell =
+let stdio_container =
 
   let print_value (v, _) =
     Format.printf "%t" (Value.print v) ;
@@ -64,9 +64,9 @@ let stdio_shell =
   ]
 
 let wrap_binary f =
-  Value.Closure (fun v1 -> Value.Val (Value.Closure (fun v2 -> Value.Val (f v1 v2))))
+  Value.ClosureUser (fun v1 -> Value.UserVal (Value.ClosureUser (fun v2 -> Value.UserVal (f v1 v2))))
 
-let wrap_unary f = Value.Closure (fun v -> Value.Val (f v))
+let wrap_unary f = Value.ClosureUser (fun v -> Value.UserVal (f v))
 
 let wrap_string_string_string f =
   wrap_binary (fun v1 v2 ->
@@ -116,8 +116,8 @@ let externals =
     (">=",  wrap_int_int_bool ((>=) : int -> int -> bool)) ;
     ("^",  wrap_string_string_string (^)) ;
     ("string_of_int", wrap_int_string (string_of_int)) ;
-    ("stdio", wrap_shell stdio_shell Value.Abstract) ;
-    ("pure", wrap_shell pure_shell Value.Abstract) ;
+    ("stdio", wrap_container stdio_container Value.Abstract) ;
+    ("pure", wrap_container pure_container Value.Abstract) ;
   ]
 
 let lookup s = List.assoc_opt s externals

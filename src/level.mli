@@ -61,11 +61,13 @@ val runner_ty : t
 (** The level of the runner type world argument *)
 val runner_ty_world : t
 
-(** The level of a computation type with its dirt *)
-val comp_ty : t
+(** The level of a user type with its dirt *)
+val user_ty : t
+val user_ty_left : t
 
-(** The level of the left argument of a computation type *)
-val comp_ty_left : t
+(** The level of a kernel type with its dirt *)
+val kernel_ty : t
+val kernel_ty_left : t
 
-(** The level of the right argument of a computation type *)
-val comp_ty_right : t
+(** The level of a world type *)
+val world_ty : t

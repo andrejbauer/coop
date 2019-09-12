@@ -18,18 +18,21 @@
 %token <int> NUMERAL
 %token BEGIN END
 %token FALSE TRUE IF THEN ELSE
-%token FUN
-%token RUNNER OTIMES AS
+%token FUN FUNK
+%token RUNNER
+%token GETENV SETENV
 %token LET REC IN
 %token MATCH WITH BAR
 %token USING RUN TRY FINALLY VAL
+%token RAISE KILL
 
 (* Toplevel commands *)
 
 %token <string> QUOTED_STRING
 %token LOAD
 %token OPERATION
-%token SIGNAL OF
+%token EXCEPTION SIGNAL OF
+%token CONTAINER
 %token EXTERNAL
 %token TYPE AND
 
@@ -42,7 +45,7 @@
 %left     INFIXOP1 EQUAL
 %right    INFIXOP2 AT
 %left     INFIXOP3
-%left     INFIXOP4 OTIMES STAR
+%left     INFIXOP4 STAR
 %right    INFIXOP5
 
 %start <Sugared.toplevel list> file
@@ -111,11 +114,14 @@ toplevel_:
   | LET REC fs=separated_nonempty_list(AND, recursive_clause)
     { Sugared.TopLetRec fs }
 
-  | USING c=infix_term
-    { Sugared.TopShell c }
+  | CONTAINER c=infix_term
+    { Sugared.TopContainer c }
 
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
     { Sugared.DeclareOperation (op, t1, t2) }
+
+  | EXCEPTION exc=var_name OF t=ty
+    { Sugared.DeclareException (exc, t) }
 
   | SIGNAL sgl=var_name OF t=ty
     { Sugared.DeclareSignal (sgl, t) }
@@ -145,6 +151,9 @@ term_:
   | FUN a=binder+ ARROW e=term
     { Sugared.Lambda (a, e) }
 
+  | FUNK a=binder+ ARROW e=term
+    { Sugared.Lambda (a, e) }
+
   | LET bnd=let_binding IN c=term
     { Sugared.Let (bnd, c) }
 
@@ -169,10 +178,6 @@ term_:
   | TRY c=term WITH LBRACE tr=trying RBRACE
     { Sugared.Try (c, tr) }
 
-  | rnr=infix_term AS LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
-    { Sugared.RunnerRename (rnr, lst) }
-
-
 infix_term: mark_location(infix_term_) { $1 }
 infix_term_:
   | e=app_term_
@@ -188,9 +193,6 @@ infix_term_:
       Sugared.Apply (e1, e3)
     }
 
-  | e1=infix_term OTIMES e2=infix_term
-    { Sugared.RunnerTimes (e1, e2) }
-
 app_term: mark_location(app_term_) { $1 }
 app_term_:
   | e=prefix_term_
@@ -198,6 +200,15 @@ app_term_:
 
   | e1=app_term e2=prefix_term
     { Sugared.Apply (e1, e2) }
+
+  | SETENV e=prefix_term
+    { Sugared.Setenv e }
+
+  | KILL e=prefix_term
+    { Sugared.Kill e }
+
+  | RAISE e=prefix_term
+    { Sugared.Raise e }
 
 prefix_term: mark_location(prefix_term_) { $1 }
 prefix_term_:
@@ -229,6 +240,9 @@ simple_term_:
 
   | s=QUOTED_STRING
     { Sugared.Quoted s }
+
+  | GETENV
+    { Sugared.Getenv }
 
   | BEGIN c=term END
     { c.Location.it }
@@ -276,8 +290,8 @@ runner_clauses:
     { lst }
 
 runner_clause:
-  | op=var_name px=binder AT pw=binder ARROW c=term
-    { (op, px, pw, c) }
+  | op=var_name px=binder ARROW c=term
+    { (op, px, c) }
 
 finally:
   | BAR lst=separated_nonempty_list(BAR, finally_clause)
@@ -289,8 +303,11 @@ finally_clause:
   | VAL px=binder AT pw=binder ARROW t=term
     { Sugared.FinVal (px, pw, t) }
 
-  | sgl=var_name px=binder AT pw=binder ARROW c=term
-    { Sugared.FinSignal (sgl, px, pw, c) }
+  | RAISE exc=var_name px=binder AT pw=binder ARROW c=term
+    { Sugared.FinRaise (exc, px, pw, c) }
+
+  | KILL sgl=var_name px=binder ARROW c=term
+    { Sugared.FinKill (sgl, px, c) }
 
 trying:
   | BAR lst=separated_nonempty_list(BAR, try_clause)
@@ -302,8 +319,11 @@ try_clause:
   | VAL px=binder ARROW t=term
     { Sugared.TryVal (px, t) }
 
-  | sgl=var_name px=binder ARROW c=term
-    { Sugared.TrySignal (sgl, px, c) }
+  | RAISE exc=var_name px=binder ARROW c=term
+    { Sugared.TryRaise (exc, px, c) }
+
+  | KILL sgl=var_name px=binder ARROW c=term
+    { Sugared.TryKill (sgl, px, c) }
 
 binder:
   | p=simple_pattern
@@ -374,8 +394,6 @@ simple_pattern_:
       | [p] -> p.Location.it
       | [] | _::_ -> Sugared.PattTuple lst }
 
-
-
 ty: mark_location(ty_) { $1 }
 ty_:
   | t=comp_ty_
@@ -385,13 +403,16 @@ ty_:
     { Sugared.Arrow (t1, t2) }
 
   | sgn1=signature AT tw=comp_ty DARROW sgn2=signature
-    { Sugared.RunnerTy (sgn1, tw, sgn2) }
+    { Sugared.RunnerTy (sgn1, sgn2, tw) }
 
 
 comp_ty: mark_location(comp_ty_) { $1 }
 comp_ty_:
   | t=prod_ty BANG lst=signature
-    { Sugared.CompTy (t, lst) }
+    { Sugared.CompTy (t, lst, None) }
+
+  | t=prod_ty BANG lst=signature AT tw=prod_ty
+    { Sugared.CompTy (t, lst, Some tw) }
 
   | prod_ty_
     { $1 }
@@ -430,7 +451,7 @@ simple_ty_:
     { Sugared.NamedTy t }
 
   | LBRACE ops=separated_list(COMMA, var_name) RBRACE
-    { Sugared.ShellTy ops }
+    { Sugared.ContainerTy ops }
 
   | LPAREN t=ty_ RPAREN
     { t }
@@ -453,10 +474,6 @@ constructor_clause:
 signature:
   | LBRACE lst=separated_list(COMMA, var_name) RBRACE
     { lst }
-
-op_renaming:
-  | op1=var_name EQUAL op2=var_name
-    { (op2, op1) }
 
 mark_location(X):
   x=X

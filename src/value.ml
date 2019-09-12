@@ -5,20 +5,27 @@ type t =
   | Quoted of string
   | Constructor of Name.t * t option
   | Tuple of t list
-  | Closure of (t -> t result)
+  | ClosureUser of (t -> t user_result)
+  | ClosureKernel of (t -> t kernel_result)
   | Runner of cooperation Name.Map.t
-  | Shell of shell
+  | Container of container
 
 and world = World of t
 
-and 'a result =
-  | Val of 'a
-  | Operation of Name.t * t * (t -> 'a result)
-  | Signal of Name.t * t
+and 'a user_result =
+  | UserVal of 'a
+  | UserOperation of Name.t * t * (t -> 'a user_result)
+  | UserException of Name.t * t
 
-and cooperation = t * world -> (t * world) result
+and 'a kernel_result =
+  | KernelVal of 'a
+  | KernelOperation of Name.t * t * (t -> 'a kernel_result)
+  | KernelException of Name.t * t
+  | KernelSignal of Name.t * t
 
-and shell = (t * world -> t * world) Name.Map.t * world
+and cooperation = t * world -> (t * world) kernel_result
+
+and container = (t * world -> t * world) Name.Map.t * world
 
 let name = function
   | Abstract -> "abstract value"
@@ -27,9 +34,10 @@ let name = function
   | Quoted _ -> "string"
   | Constructor _ -> "constructor"
   | Tuple _ -> "tuple"
-  | Closure _ -> "function"
+  | ClosureUser _ -> "user function"
+  | ClosureKernel _ -> "kernel function"
   | Runner _ -> "runner"
-  | Shell _ -> "shell"
+  | Container _ -> "container"
 
 let names = function
   | Abstract -> "abstract values"
@@ -38,11 +46,12 @@ let names = function
   | Quoted _ -> "strings"
   | Constructor _ -> "constructors"
   | Tuple _ -> "tuples"
-  | Closure _ -> "functions"
+  | ClosureUser _ -> "user functions"
+  | ClosureKernel _ -> "kernel functions"
   | Runner _ -> "runners"
-  | Shell _ -> "shell"
+  | Container _ -> "containers"
 
-let pure_shell = (Name.Map.empty, World Abstract)
+let pure_container = (Name.Map.empty, World Abstract)
 
 let rec print ?max_level v ppf =
   match v with
@@ -77,11 +86,13 @@ let rec print ?max_level v ppf =
   | Tuple lst ->
      Format.fprintf ppf "(%t)" (print_tuple lst)
 
-  | Closure _ -> Format.fprintf ppf "<fun>"
+  | ClosureUser _ -> Format.fprintf ppf "<fun>"
+
+  | ClosureKernel _ -> Format.fprintf ppf "<funk>"
 
   | Runner _ -> Format.fprintf ppf "<runner>"
 
-  | Shell _ -> Format.fprintf ppf "<shell>"
+  | Container _ -> Format.fprintf ppf "<containers>"
 
 and print_tuple lst ppf =
   Print.sequence (print ~max_level:Level.tuple_arg) "," lst ppf

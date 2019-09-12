@@ -17,9 +17,9 @@ and ty' =
   | NamedTy of Name.t
   | Product of ty list
   | Arrow of ty * ty
-  | RunnerTy of Name.t list * ty * signature
-  | ShellTy of Name.t list
-  | CompTy of ty * signature
+  | RunnerTy of Name.t list * signature * ty
+  | ContainerTy of signature
+  | CompTy of ty * signature * ty option
 
 (** The body of a datatype definition *)
 type datatype = (Name.t * ty option) list
@@ -55,16 +55,18 @@ and term' =
   | Sequence of term * term
   | Ascribe of term * ty
   | Runner of ty * runner_clause list
-  | RunnerTimes of term * term
-  | RunnerRename of term * (Name.t * Name.t) list
   | Run of term * term * term * finally_clause list
   | Try of term * try_clause list
+  | Getenv
+  | Setenv of term
+  | Raise of term
+  | Kill of term
 
 and binder = pattern * ty option
 
 and typed_binder = pattern * ty
 
-and runner_clause = Name.t * binder * binder * term
+and runner_clause = Name.t * binder * term
 
 and rec_clause = Name.t * typed_binder * typed_binder list * ty * term
 
@@ -74,11 +76,13 @@ and let_binding =
 
 and finally_clause =
   | FinVal of binder * binder * term
-  | FinSignal of Name.t * binder * binder * term
+  | FinRaise of Name.t * binder * binder * term
+  | FinKill of Name.t * binder * term
 
 and try_clause =
   | TryVal of binder * term
-  | TrySignal of Name.t * binder * term
+  | TryKill of Name.t * binder * term
+  | TryRaise of Name.t * binder * term
 
 (** Parsed top-level command. *)
 type toplevel = toplevel' Location.located
@@ -86,11 +90,12 @@ and toplevel' =
   | TopLoad of string
   | TopLet of let_binding
   | TopLetRec of rec_clause list
-  | TopShell of term
+  | TopContainer of term
   | TopComp of term
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * ty
   | DefineDatatype of (Name.t * datatype) list
   | DeclareOperation of Name.t * ty * ty
+  | DeclareException of Name.t * ty
   | DeclareSignal of Name.t * ty
   | External of Name.t * ty * string

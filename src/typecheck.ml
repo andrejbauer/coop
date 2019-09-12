@@ -2,22 +2,24 @@
 
 (** Typing context *)
 type context =
-  { ctx_operations : (Syntax.expr_ty * Syntax.expr_ty) Name.Map.t
+  { ctx_operations : (Syntax.expr_ty * Syntax.expr_ty * Name.Set.t) Name.Map.t
   ; ctx_signals : Syntax.expr_ty Name.Map.t
+  ; ctx_exceptions : Syntax.expr_ty Name.Map.t
   ; ctx_idents : (Name.t * Syntax.expr_ty) list
   ; ctx_aliases : Syntax.expr_ty Name.Map.t
   ; ctx_datatypes : (Name.t * (Name.t * Syntax.expr_ty option) list) list
-  ; ctx_shell : Syntax.operations
+  ; ctx_container : Name.Set.t
   }
 
 (** Initial typing context *)
 let initial =
   { ctx_operations = Name.Map.empty
+  ; ctx_exceptions = Name.Map.empty
   ; ctx_signals = Name.Map.empty
   ; ctx_idents = []
   ; ctx_aliases = Name.Map.empty
   ; ctx_datatypes = []
-  ; ctx_shell = Name.Set.empty
+  ; ctx_container = Name.Set.empty
   }
 
 (** Type errors *)
@@ -28,18 +30,20 @@ type error =
   | InvalidType of Name.t
   | PattTypeMismatch of Syntax.expr_ty
   | ExprTypeMismatch of Syntax.expr_ty * Syntax.expr_ty
+  | WorldTypeMismatch of Syntax.expr_ty * Syntax.expr_ty
   | CoopTypeMismatch of Syntax.expr_ty * Syntax.expr_ty
   | ExprTypeExpected
   | WrongTupleLength of int * int
   | IllegalConstructor of Name.t
   | UnknownConstructor of Name.t
-  | CompTypeMismatch of Syntax.comp_ty * Syntax.comp_ty
+  | UserTypeMismatch of Syntax.user_ty * Syntax.user_ty
+  | KernelTypeMismatch of Syntax.kernel_ty * Syntax.kernel_ty
   | TypeExpectedButFunction of Syntax.expr_ty
   | TypeExpectedButTuple of Syntax.expr_ty
   | TypeExpectedButUnit of Syntax.expr_ty
   | FunctionExpected of Syntax.expr_ty
   | RunnerExpected of Syntax.expr_ty
-  | ShellExpected of Syntax.expr_ty
+  | ContainerExpected of Syntax.expr_ty
   | RunnerDoubleOperations of Name.Set.t
   | CannotInferArgument
   | CannotInferMatch
@@ -77,15 +81,25 @@ let print_error err ppf =
        (Syntax.print_expr_ty ty_expected)
        (Syntax.print_expr_ty ty_actual)
 
+  | WorldTypeMismatch (ty_expected, ty_actual) ->
+     Format.fprintf ppf "the world of this runner should have type@ %t but has type@ %t"
+       (Syntax.print_expr_ty ty_expected)
+       (Syntax.print_expr_ty ty_actual)
+
   | CoopTypeMismatch (ty_expected, ty_actual) ->
      Format.fprintf ppf "this co-operation should return values of type@ %t but it returns values of type@ %t"
        (Syntax.print_expr_ty ty_expected)
        (Syntax.print_expr_ty ty_actual)
 
-  | CompTypeMismatch (ty_expected, ty_actual) ->
+  | UserTypeMismatch (ty_expected, ty_actual) ->
      Format.fprintf ppf "this computation should have type@ %t but has type@ %t"
-       (Syntax.print_comp_ty ty_expected)
-       (Syntax.print_comp_ty ty_actual)
+       (Syntax.print_user_ty ty_expected)
+       (Syntax.print_user_ty ty_actual)
+
+  | KernelTypeMismatch (ty_expected, ty_actual) ->
+     Format.fprintf ppf "this computation should have type@ %t but has type@ %t"
+       (Syntax.print_kernel_ty ty_expected)
+       (Syntax.print_kernel_ty ty_actual)
 
   | ExprTypeExpected ->
      Format.fprintf ppf "this type should be pure"
@@ -120,8 +134,8 @@ let print_error err ppf =
      Format.fprintf ppf "this expression should be a runner but has type@ %t"
        (Syntax.print_expr_ty ty)
 
-  | ShellExpected ty ->
-     Format.fprintf ppf "this expression should be a shell but has type@ %t"
+  | ContainerExpected ty ->
+     Format.fprintf ppf "this expression should be a container but has type@ %t"
        (Syntax.print_expr_ty ty)
 
   | RunnerDoubleOperations ops ->
@@ -187,11 +201,11 @@ let extend_alias x ty ctx =
 let extend_datatype x cnstrs ctx =
   { ctx with ctx_datatypes = (x, cnstrs) :: ctx.ctx_datatypes }
 
-let set_shell ops ctx =
-  { ctx with ctx_shell = ops }
+let set_container ops ctx =
+  { ctx with ctx_container = ops }
 
-let declare_operation op ty1 ty2 ctx =
-  { ctx with ctx_operations = Name.Map.add op (ty1, ty2) ctx.ctx_operations }
+let declare_operation op ty1 ty2 excs ctx =
+  { ctx with ctx_operations = Name.Map.add op (ty1, ty2, excs) ctx.ctx_operations }
 
 let declare_signal sgl ty ctx =
   { ctx with ctx_signals = Name.Map.add sgl ty ctx.ctx_signals }
@@ -209,7 +223,7 @@ let lookup ~loc x {ctx_idents;_} =
 let lookup_operation ~loc op {ctx_operations;_} =
   match Name.Map.find op ctx_operations with
   | None -> error ~loc (InvalidOperation op)
-  | Some (ty1, ty2) -> (ty1, ty2)
+  | Some (ty1, ty2, excs) -> (ty1, ty2, excs)
 
 (** Lookup the type of a signal *)
 let lookup_signal ~loc sgl {ctx_signals;_} =
@@ -247,11 +261,8 @@ let lookup_constructor ~loc cnstr {ctx_datatypes;_} =
   in
   find ctx_datatypes
 
-(** Lookup the type of a shell *)
-let lookup_shell {ctx_shell;_} = ctx_shell
-
-(** Typecheck a signature *)
-let signature Desugared.{sig_ops; sig_sgs} = Syntax.{sig_ops; sig_sgs}
+(** Lookup the type of a container *)
+let lookup_container {ctx_container;_} = ctx_container
 
 (**** Normalization of types ****)
 
@@ -266,7 +277,7 @@ let rec norm_ty ~loc ctx t =
      norm_ty ~loc ctx t
 
   | Syntax.(Abstract _ | Datatype _ |  Primitive _ |
-            Product _ | Arrow _ | RunnerTy _ | ShellTy _) ->
+            Product _ | ArrowUser _ | ArrowKernel _ | RunnerTy _ | ContainerTy _) ->
      Normal t
 
 let as_product (Normal ty) =
@@ -277,18 +288,29 @@ let as_product (Normal ty) =
   | Syntax.Product ts -> Some ts
 
   | Syntax.(Abstract _ | Datatype _  | Primitive _ |
-            Arrow _ | RunnerTy _ | ShellTy _) ->
+            ArrowUser _ | ArrowKernel _ | RunnerTy _ | ContainerTy _) ->
      None
 
-let as_arrow (Normal ty) =
+let as_user_arrow (Normal ty) =
   match ty with
 
   | Syntax.Alias _ -> assert false
 
-  | Syntax.Arrow (t,u) -> Some (t, u)
+  | Syntax.ArrowUser (t, u) -> Some (t, u)
 
-  | Syntax.(Product _ | Datatype _ | Primitive _ |
-            Abstract _ | RunnerTy _ | ShellTy _) ->
+  | Syntax.(Product _ | Datatype _ | Primitive _ | ArrowKernel _ |
+            Abstract _ | RunnerTy _ | ContainerTy _) ->
+     None
+
+let as_kernel_arrow (Normal ty) =
+  match ty with
+
+  | Syntax.Alias _ -> assert false
+
+  | Syntax.ArrowKernel (t, u) -> Some (t, u)
+
+  | Syntax.(Product _ | Datatype _ | Primitive _ | ArrowUser _ |
+            Abstract _ | RunnerTy _ | ContainerTy _) ->
      None
 
 let as_runner (Normal ty) =
@@ -296,28 +318,24 @@ let as_runner (Normal ty) =
 
   | Syntax.Alias _ -> assert false
 
-  | Syntax.RunnerTy (ops, w_ty, sgn) -> Some (ops, w_ty, sgn)
+  | Syntax.RunnerTy (ops1, ops2, sgs, w_ty) -> Some (ops1, ops2, sgs, w_ty)
 
   | Syntax.(Product _ | Datatype _ | Primitive _ |
-            Arrow _ | Abstract _ | ShellTy _) ->
+            ArrowUser _ | ArrowKernel _ | Abstract _ | ContainerTy _) ->
      None
 
-let as_shell (Normal ty) =
+let as_container (Normal ty) =
   match ty with
 
   | Syntax.Alias _ -> assert false
 
-  | Syntax.ShellTy ops -> Some ops
+  | Syntax.ContainerTy ops -> Some ops
 
   | Syntax.(Product _ | Datatype _ | Primitive _ |
-            Arrow _ | Abstract _ | RunnerTy _) ->
+            ArrowUser _ | ArrowKernel _ | Abstract _ | RunnerTy _) ->
      None
 
 (**** Subtyping ****)
-
-(** Is the first signature a subsignature of the second one? *)
-let subsignature Syntax.{sig_ops=ops1; sig_sgs=sgs1} Syntax.{sig_ops=ops2; sig_sgs=sgs2} =
-  Name.Set.subset ops1 ops2 && Name.Set.subset sgs1 sgs2
 
 let rec expr_subty ~loc ctx t u =
   match t, u with
@@ -356,34 +374,55 @@ let rec expr_subty ~loc ctx t u =
      in
      fold ts us
 
-  | Syntax.Arrow (t1, t2), Syntax.Arrow (u1, u2) ->
-     expr_subty ~loc ctx u1 t1 && comp_subty ~loc ctx t2 u2
+  | Syntax.ArrowUser (t1, t2), Syntax.ArrowUser (u1, u2) ->
+     expr_subty ~loc ctx u1 t1 && user_subty ~loc ctx t2 u2
 
-  | Syntax.RunnerTy (tsgn1, t, tsgn2), Syntax.RunnerTy (usgn1, u, usgn2) ->
-     Name.Set.subset usgn1 tsgn1 && expr_eqtype ~loc ctx t u && subsignature  tsgn2 usgn2
+  | Syntax.(RunnerTy (Operations ops1, Operations ops1', Signals sgn1, w_ty1)),
+    Syntax.(RunnerTy (Operations ops2, Operations ops2', Signals sgn2, w_ty2)) ->
+     Name.Set.subset ops2 ops1 &&
+     Name.Set.subset ops1' ops2' &&
+     Name.Set.subset sgn1 sgn2 &&
+    expr_eqtype ~loc ctx w_ty1 w_ty2
 
-  | Syntax.ShellTy ops1, Syntax.ShellTy ops2 ->
+  | Syntax.(ContainerTy (Operations ops1)), Syntax.(ContainerTy (Operations ops2)) ->
      Name.Set.subset ops2 ops1
 
-  | Syntax.(Datatype _ | Primitive _ | Product _ |
-            Arrow _ | RunnerTy _ | Abstract _ | ShellTy _), _ ->
+  | Syntax.(Datatype _ | Primitive _ | Product _ | ArrowUser _ |
+            ArrowKernel _ | RunnerTy _ | Abstract _ | ContainerTy _), _ ->
      false
 
-and comp_subty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} (Syntax.{comp_ty=t2; comp_sig=sig2}) =
-  subsignature sig1 sig2 && expr_subty ~loc ctx t1 t2
+and user_subty ~loc ctx
+  Syntax.{user_ty=t1; user_ops=Operations ops1; user_exc=Exceptions excs1}
+  Syntax.{user_ty=t2; user_ops=Operations ops2; user_exc=Exceptions excs2}
+ =
+  Name.Set.subset ops1 ops2 && Name.Set.subset excs1 excs2 && expr_subty ~loc ctx t1 t2
+
+and kernel_subty ~loc ctx
+  Syntax.{kernel_ty=t1; kernel_ops=Operations ops1; kernel_exc=Exceptions excs1; kernel_sgn=sgs1; kernel_world=w_ty1}
+  Syntax.{kernel_ty=t2; kernel_ops=Operations ops2; kernel_exc=Exceptions excs2; kernel_sgn=sgs2; kernel_world=w_ty2}
+ =
+  Name.Set.subset ops1 ops2 && Name.Set.subset excs1 excs2 && expr_subty ~loc ctx t1 t2
 
 and expr_eqtype ~loc ctx t u =
   expr_subty ~loc ctx t u && expr_subty ~loc ctx u t
 
-let join_signature Syntax.{sig_ops=ops1; sig_sgs=sgs1} Syntax.{sig_ops=ops2; sig_sgs=sgs2} =
-  let sig_ops = Name.Set.union ops1 ops2
-  and sig_sgs = Name.Set.union sgs1 sgs2 in
-  Syntax.{sig_ops; sig_sgs}
+let join_operations (Syntax.Operations ops1) (Syntax.Operations ops2) =
+  Syntax.Operations (Name.Set.union ops1 ops2)
 
-let meet_signature Syntax.{sig_ops=ops1; sig_sgs=sgs1} Syntax.{sig_ops=ops2; sig_sgs=sgs2} =
-  let sig_ops = Name.Set.inter ops1 ops2
-  and sig_sgs = Name.Set.inter sgs1 sgs2 in
-  Syntax.{sig_ops; sig_sgs}
+let meet_operations (Syntax.Operations ops1) (Syntax.Operations ops2) =
+  Syntax.Operations (Name.Set.inter ops1 ops2)
+
+let join_exceptions (Syntax.Exceptions exc1) (Syntax.Exceptions exc2) =
+  Syntax.Exceptions (Name.Set.union exc1 exc2)
+
+let meet_exceptions (Syntax.Exceptions exc1) (Syntax.Exceptions exc2) =
+  Syntax.Exceptions (Name.Set.inter exc1 exc2)
+
+let join_signals (Syntax.Signals sgs1) (Syntax.Signals sgs2) =
+  Syntax.Signals (Name.Set.union sgs1 sgs2)
+
+let meet_signals (Syntax.Signals sgs1) (Syntax.Signals sgs2) =
+  Syntax.Signals (Name.Set.inter sgs1 sgs2)
 
 let rec join_expr_ty ~loc ctx t1 t2 =
   match t1, t2 with
@@ -425,23 +464,32 @@ let rec join_expr_ty ~loc ctx t1 t2 =
      in
      fold [] ts1 ts2
 
-  | Syntax.Arrow (u1, t1), Syntax.Arrow (u2, t2) ->
+  | Syntax.ArrowUser (u1, t1), Syntax.ArrowUser (u2, t2) ->
+     let u = meet_expr_ty ~loc ctx u1 u2
+     and t = join_user_ty ~loc ctx t1 t2 in
+     Syntax.ArrowUser (u, t)
+
+  | Syntax.ArrowKernel (u1, t1), Syntax.ArrowKernel (u2, t2) ->
      let u = meet_expr_ty ~loc ctx u1 u2 in
-     let t = join_comp_ty ~loc ctx t1 t2 in
-     Syntax.Arrow (u, t)
+     let t = join_kernel_ty ~loc ctx t1 t2 in
+     Syntax.ArrowKernel (u, t)
 
-  | Syntax.RunnerTy (ops1, t1, sig1), Syntax.RunnerTy (ops2, t2, sig2) ->
-     let ops = Name.Set.inter ops1 ops2
-     and t = meet_expr_ty ~loc ctx t1 t2
-     and sgn = join_signature sig1 sig2 in
-     Syntax.RunnerTy  (ops, t, sgn)
+  | Syntax.RunnerTy (ops1, ops1', sgn1, w_ty1),
+    Syntax.RunnerTy (ops2, ops2', sgn2, w_ty2) ->
+     let ops = meet_operations ops1 ops2
+     and ops' = join_operations ops1' ops2'
+     and sgn = join_signals sgn1 sgn2 in
+     if expr_eqtype ~loc ctx w_ty1 w_ty2 then
+       Syntax.RunnerTy (ops, ops', sgn, w_ty1)
+     else
+       error ~loc (WorldTypeMismatch (w_ty1, w_ty2))
 
-  | Syntax.ShellTy ops1, Syntax.ShellTy ops2 ->
-     let ops = Name.Set.inter ops1 ops2 in
-     Syntax.ShellTy ops
+  | Syntax.ContainerTy ops1, Syntax.ContainerTy ops2 ->
+     let ops = meet_operations ops1 ops2 in
+     Syntax.ContainerTy ops
 
   | Syntax.(Datatype _ | Primitive _ | Product _ |
-            Arrow _ | RunnerTy _ | Abstract _ | ShellTy _), _ ->
+            ArrowUser _ | ArrowKernel _ | RunnerTy _ | Abstract _ | ContainerTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
 and meet_expr_ty ~loc ctx t1 t2 =
@@ -484,34 +532,74 @@ and meet_expr_ty ~loc ctx t1 t2 =
      in
      fold [] ts1 ts2
 
-  | Syntax.Arrow (u1, t1), Syntax.Arrow (u2, t2) ->
+  | Syntax.ArrowUser (u1, t1), Syntax.ArrowUser (u2, t2) ->
      let u = join_expr_ty ~loc ctx u1 u2 in
-     let t = meet_comp_ty ~loc ctx t1 t2 in
-     Syntax.Arrow (u, t)
+     let t = meet_user_ty ~loc ctx t1 t2 in
+     Syntax.ArrowUser (u, t)
 
-  | Syntax.RunnerTy (ops1, t1, sig1), Syntax.RunnerTy (ops2, t2, sig2) ->
-     let ops = Name.Set.union ops1 ops2
-     and t = join_expr_ty ~loc ctx t1 t2
-     and sgn = meet_signature sig1 sig2 in
-     Syntax.RunnerTy  (ops, t, sgn)
+  | Syntax.ArrowKernel (u1, t1), Syntax.ArrowKernel (u2, t2) ->
+     let u = join_expr_ty ~loc ctx u1 u2 in
+     let t = meet_kernel_ty ~loc ctx t1 t2 in
+     Syntax.ArrowKernel (u, t)
 
-  | Syntax.ShellTy ops1, Syntax.ShellTy ops2 ->
-     let ops = Name.Set.union ops1 ops2 in
-     Syntax.ShellTy ops
 
-  | Syntax.(Datatype _ | Primitive _ | Product _ |
-            Arrow _ | RunnerTy _ | Abstract _ | ShellTy _), _ ->
+  | Syntax.RunnerTy (ops1, ops1', sgn1, w_ty1),
+    Syntax.RunnerTy (ops2, ops2', sgn2, w_ty2) ->
+     let ops = join_operations ops1 ops2
+     and ops' = meet_operations ops1' ops2'
+     and sgn = meet_signals sgn1 sgn2 in
+     if expr_eqtype ~loc ctx w_ty1 w_ty2 then
+       Syntax.RunnerTy (ops, ops', sgn, w_ty1)
+     else
+       error ~loc (WorldTypeMismatch (w_ty1, w_ty2))
+
+  | Syntax.ContainerTy ops1, Syntax.ContainerTy ops2 ->
+     let ops = join_operations ops1 ops2 in
+     Syntax.ContainerTy ops
+
+  | Syntax.(Datatype _ | Primitive _ | Product _ | ArrowUser _ | ArrowKernel _ |
+            RunnerTy _ | Abstract _ | ContainerTy _), _ ->
      error ~loc (ExprTypeMismatch (t2, t2))
 
-and join_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2; comp_sig=sig2} =
+and join_user_ty ~loc ctx
+  Syntax.{user_ty=t1; user_ops=ops1; user_exc=exc1}
+  Syntax.{user_ty=t2; user_ops=ops2; user_exc=exc2}
+  =
   let t = join_expr_ty ~loc ctx t1 t2
-  and sgn = join_signature sig1 sig2 in
-  Syntax.{comp_ty=t; comp_sig=sgn}
+  and ops = join_operations ops1 ops2
+  and exc = join_exceptions exc1 exc2 in
+  Syntax.{user_ty=t; user_ops=ops; user_exc=exc}
 
-and meet_comp_ty ~loc ctx Syntax.{comp_ty=t1; comp_sig=sig1} Syntax.{comp_ty=t2; comp_sig=sig2} =
+and meet_user_ty ~loc ctx
+  Syntax.{user_ty=t1; user_ops=ops1; user_exc=exc1}
+  Syntax.{user_ty=t2; user_ops=ops2; user_exc=exc2}
+  =
   let t = meet_expr_ty ~loc ctx t1 t2
-  and sgn = meet_signature sig1 sig2 in
-  Syntax.{comp_ty=t; comp_sig=sgn}
+  and ops = meet_operations ops1 ops2
+  and exc = meet_exceptions exc1 exc2 in
+  Syntax.{user_ty=t; user_ops=ops; user_exc=exc}
+
+and join_kernel_ty ~loc ctx
+  Syntax.{kernel_ty=t1; kernel_ops=ops1; kernel_exc=exc1; kernel_sgn=sgn1; kernel_world=w_ty1}
+  Syntax.{kernel_ty=t2; kernel_ops=ops2; kernel_exc=exc2; kernel_sgn=sgn2; kernel_world=w_ty2}
+  =
+  let t = join_expr_ty ~loc ctx t1 t2
+  and ops = join_operations ops1 ops2
+  and exc = join_exceptions exc1 exc2
+  and sgn = join_signals sgn1 sgn2
+  and w_ty = join_expr_ty ~loc ctx w_ty1 w_ty2 in
+  Syntax.{kernel_ty=t; kernel_ops=ops; kernel_exc=exc; kernel_sgn=sgn; kernel_world=w_ty}
+
+and meet_kernel_ty ~loc ctx
+  Syntax.{kernel_ty=t1; kernel_ops=ops1; kernel_exc=exc1; kernel_sgn=sgn1; kernel_world=w_ty1}
+  Syntax.{kernel_ty=t2; kernel_ops=ops2; kernel_exc=exc2; kernel_sgn=sgn2; kernel_world=w_ty2}
+  =
+  let t = meet_expr_ty ~loc ctx t1 t2
+  and ops = meet_operations ops1 ops2
+  and exc = meet_exceptions exc1 exc2
+  and sgn = meet_signals sgn1 sgn2
+  and w_ty = meet_expr_ty ~loc ctx w_ty1 w_ty2 in
+  Syntax.{kernel_ty=t; kernel_ops=ops; kernel_exc=exc; kernel_sgn=sgn; kernel_world=w_ty}
 
 
 (**** Type checking ****)
@@ -541,23 +629,25 @@ let rec expr_ty {Location.it=t'; loc} =
      let lst = List.map expr_ty lst in
      Syntax.Product lst
 
-  | Desugared.Arrow (t1, t2) ->
+  | Desugared.ArrowUser (t1, ops, t2, excs) ->
      let t1 = expr_ty t1
-     and t2 = comp_ty t2 in
-     Syntax.Arrow (t1, t2)
+     and ops = operations ops
+     and t2 = user_ty t2
+     and excs = exceptions excs in
+     Syntax.(ArrowUser (t1, {user_ty=t2; user_ops=ops; user_exc=excs}))
 
   | Desugared.RunnerTy (ops, t, sgn2) ->
      let t = expr_ty t
      and sgn2 = signature sgn2 in
      Syntax.RunnerTy (ops, t, sgn2)
 
-  | Desugared.ShellTy ops ->
-     Syntax.ShellTy ops
+  | Desugared.ContainerTy ops ->
+     Syntax.ContainerTy ops
 
   | Desugared.CompTy _ ->
      error ~loc ExprTypeExpected
 
-and comp_ty ({Location.it=t'; _} as t) =
+and user_ty ({Location.it=t'; _} as t) =
   match t' with
 
   | Desugared.CompTy (t, sgn) ->
@@ -566,9 +656,15 @@ and comp_ty ({Location.it=t'; _} as t) =
      Syntax.{comp_ty=t; comp_sig=sgn}
 
   | Desugared.(Primitive _ | Alias _  | Datatype _ | Product _ |
-               Arrow _ | RunnerTy _ | ShellTy _ | Abstract _) ->
+               Arrow _ | RunnerTy _ | ContainerTy _ | Abstract _) ->
      let t = expr_ty t in
      Syntax.{comp_ty=t; comp_sig=empty_signature}
+
+and exceptions (Desugared.Exceptions excs) = Syntax.Exceptions excs
+
+and operations (Desugared.Operations excs) = Syntax.Operations excs
+
+and signals (Desugared.Signals excs) = Syntax.Signals excs
 
 (** Typecheck a datatype *)
 let datatype cnstrs =
@@ -1085,7 +1181,7 @@ and check_match_clause ctx patt_ty ty (p, c) =
   (p, c)
 
 let top_infer_comp ctx c =
-  let ops = lookup_shell ctx in
+  let ops = lookup_container ctx in
   let c, c_ty = infer_comp ctx c in
   check_dirt ~fatal:false ~loc:c.Location.loc c_ty Syntax.{sig_ops=ops; sig_sgs=Name.Set.empty} ;
   c, c_ty
@@ -1108,14 +1204,14 @@ let rec toplevel ~quiet ctx {Location.it=d'; loc} =
        let fts = List.map (fun (f, u, t) -> (f, Syntax.Arrow (u, t))) fts in
        ctx, Syntax.TopLetRec (pcs, fts)
 
-    | Desugared.TopShell c ->
+    | Desugared.TopContainer c ->
        begin
          let c, Syntax.{comp_ty=c_ty';_} = top_infer_comp ctx c in
-         match as_shell (norm_ty ~loc ctx c_ty') with
-         | None -> error ~loc (ShellExpected c_ty')
+         match as_container (norm_ty ~loc ctx c_ty') with
+         | None -> error ~loc (ContainerExpected c_ty')
          | Some ops ->
-            let ctx = set_shell ops ctx in
-            ctx, Syntax.TopShell (c, ops)
+            let ctx = set_container ops ctx in
+            ctx, Syntax.TopContainer (c, ops)
        end
 
     | Desugared.TopComp c ->

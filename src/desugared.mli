@@ -5,11 +5,11 @@
     syntax {!module:Syntax}.
 *)
 
-(** An signature of operations and signals. *)
-type signature = {
-    sig_ops : Name.Set.t ;
-    sig_sgs : Name.Set.t
-  }
+type operations = Operations of Name.Set.t
+
+type exceptions = Exceptions of Name.Set.t
+
+type signals = Signals of Name.Set.t
 
 (** Primitive types *)
 type primitive =
@@ -19,21 +19,33 @@ type primitive =
   | String
   | Any
 
-(** Types. *)
-type ty = ty' Location.located
-and ty' =
+(** Expression types *)
+type expr_ty = expr_ty' Location.located
+and expr_ty' =
   | Primitive of primitive
   | Abstract of Name.t
   | Alias of Name.t
   | Datatype of Name.t
-  | Arrow of ty * ty
-  | Product of ty list
-  | RunnerTy of Name.Set.t * ty * signature
+  | Product of expr_ty list
+  | ArrowUser of expr_ty * user_ty
+  | ArrowKernel of expr_ty * kernel_ty
+  | RunnerTy of operations * operations * signals * expr_ty
   | ShellTy of Name.Set.t
-  | CompTy of ty * signature
+
+and user_ty =
+  { user_ty : expr_ty
+  ; user_ops : operations
+  ; user_exc : exceptions }
+
+and kernel_ty =
+  { kernel_ty : expr_ty
+  ; kernel_ops : operations
+  ; kernel_exc : exceptions
+  ; kernel_sgn : signals
+  ; kernel_world : expr_ty }
 
 (** The body of a datatype definition *)
-type datatype = (Name.t * ty option) list
+type datatype = (Name.t * expr_ty option) list
 
 (** Patterns *)
 type pattern = pattern' Location.located
@@ -49,60 +61,80 @@ and pattern' =
 (** Expressions *)
 type expr = expr' Location.located
 and expr' =
-  | AscribeExpr of expr * ty
+  | ExprAscribe of expr * expr_ty
   | Var of Name.t
   | Numeral of int
   | Boolean of bool
   | Quoted of string
   | Tuple of expr list
   | Constructor of Name.t * expr option
-  | Lambda of binder * comp
-  | Runner of ty * runner_clause list
-  | RunnerRename of expr * (Name.t * Name.t) list
-  | RunnerTimes of expr * expr
+  | FunUser of binder * user
+  | FunKernel of binder * kernel
+  | Runner of runner_clause list * expr_ty
 
-(** Computations *)
-and comp = comp' Location.located
-and comp' =
-  | AscribeComp of comp * ty
-  | Val of expr
-  | Let of pattern * comp * comp
-  | LetRec of rec_clause list * comp
-  | Match of expr * (binder * comp) list
-  | Equal of expr * expr
-  | Apply of expr * expr
-  | Operation of Name.t * expr
-  | Signal of Name.t * expr
-  | Run of expr * expr * comp * finally
-  | Try of comp * trying
+(** User computations *)
+and user = user' Location.located
+and user' =
+  | UserAscribe of user * user_ty
+  | UserVal of expr
+  | UserEqual of expr * expr
+  | UserTry of user * user exception_handler
+  | UserLet of pattern * user * user
+  | UserLetRec of user rec_clause list * user
+  | UserApply of expr * expr
+  | UserMatch of expr * (binder * user) list
+  | UserOperation of Name.t * expr
+  | UserRaise of Name.t * expr
+  | UserUsing of expr * expr * user * finally
+  | UserRun of kernel * expr * finally
 
-and binder = pattern * ty option
+(** Kernel computations *)
+and kernel = kernel' Location.located
+and kernel' =
+  | KernelAscribe of kernel * kernel_ty
+  | KernelVal of expr
+  | KernelEqual of expr * expr
+  | KernelTry of kernel * kernel exception_handler
+  | KernelLet of pattern * kernel * kernel
+  | KernelLetRec of kernel rec_clause list * kernel
+  | KernelApply of expr * expr
+  | KernelMatch of expr * (binder * kernel) list
+  | KernelOperation of Name.t * expr
+  | KernelRaise of Name.t * expr
+  | KernelKill of Name.t * expr
+  | KernelGetenv
+  | KernelSetenv of expr
+  | KernelExec of user * kernel exception_handler
 
-and runner_clause = Name.t * binder * binder * comp
+(** Exception handler *)
+and 'a exception_handler = {
+   exc_val : binder * 'a ;
+   exc_raise : (Name.t * binder * 'a) list
+}
 
-and rec_clause = Name.t * ty * pattern * ty * comp
+and binder = pattern * expr_ty option
 
-and finally = {
-    fin_val : binder * binder * comp ;
-    fin_signals : (Name.t * binder * binder * comp) list
-  }
+and runner_clause = Name.t * binder * kernel
 
-and trying = {
-    try_val : binder * comp ;
-    try_signals : (Name.t * binder * comp) list
-  }
+and finally =
+  { fin_val : binder * binder * user
+  ; fin_raise : (Name.t * binder * binder * user) list
+  ; fin_kill : (Name.t * binder * user) list}
+
+and 'a rec_clause = Name.t * expr_ty * pattern * user_ty * 'a
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
-  | TopLet of pattern * comp
-  | TopLetRec of rec_clause list
-  | TopShell of comp
-  | TopComp of comp
+  | TopLet of pattern * user
+  | TopLetRec of user rec_clause list
+  | TopContainer of user
+  | TopUser of user
   | DefineAbstract of Name.t
-  | DefineAlias of Name.t * ty
+  | DefineAlias of Name.t * expr_ty
   | DefineDatatype of (Name.t * datatype) list
-  | DeclareOperation of Name.t * ty * ty
-  | DeclareSignal of Name.t * ty
-  | External of Name.t * ty * string
+  | DeclareOperation of Name.t * expr_ty * expr_ty * exceptions
+  | DeclareException of Name.t * expr_ty
+  | DeclareSignal of Name.t * expr_ty
+  | External of Name.t * expr_ty * string

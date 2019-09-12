@@ -1,6 +1,6 @@
 type environment = {
     env_vars : Value.t list ;
-    env_shell : Value.shell
+    env_container : Value.container
   }
 
 type error =
@@ -14,7 +14,7 @@ type error =
   | RunnerExpected
   | RunnerDoubleOperation of Name.t
   | PairExpected
-  | ShellExpected
+  | ContainerExpected
   | PatternMismatch
 
 exception Error of error Location.located
@@ -58,19 +58,19 @@ let print_error err ppf =
   | PairExpected ->
      Format.fprintf ppf "pair expected, please report"
 
-  | ShellExpected ->
-     Format.fprintf ppf "shell expected, please report"
+  | ContainerExpected ->
+     Format.fprintf ppf "container expected, please report"
 
   | PatternMismatch ->
      Format.fprintf ppf "pattern mismatch"
 
 let initial = {
     env_vars = [] ;
-    env_shell = Value.pure_shell
+    env_container = Value.pure_container
 }
 
-let set_shell env_shell env =
-  { env with env_shell }
+let set_container env_container env =
+  { env with env_container }
 
 (** Extend the variables with a variable *)
 let extend_var v vars = v :: vars
@@ -174,37 +174,43 @@ let match_clauses ~loc env ps v =
 
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
-  | Value.(Closure _ | Numeral _ | Boolean _ | Quoted _ | Constructor _
-    | Tuple ([] | [_] | _::_::_::_) | Runner _ | Abstract | Shell _) ->
+  | Value.(ClosureUser _ | ClosureKernel _ | Numeral _ | Boolean _ | Quoted _ | Constructor _
+    | Tuple ([] | [_] | _::_::_::_) | Runner _ | Abstract | Container _) ->
      error ~loc PairExpected
 
-let as_closure ~loc = function
-  | Value.Closure f -> f
+let as_closure_user ~loc = function
+  | Value.ClosureUser f -> f
   | Value.(Numeral _ | Boolean _ | Quoted _ | Constructor _ | Tuple _ |
-    Runner _  | Abstract | Shell _) ->
+           ClosureKernel _ | Runner _  | Abstract | Container _) ->
+     error ~loc FunctionExpected
+
+let as_closure_kernel ~loc = function
+  | Value.ClosureKernel f -> f
+  | Value.(Numeral _ | Boolean _ | Quoted _ | Constructor _ | Tuple _ |
+           ClosureUser _ | Runner _  | Abstract | Container _) ->
      error ~loc FunctionExpected
 
 let as_runner ~loc = function
   | Value.Runner rnr -> rnr
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
-           Closure _  | Abstract | Shell _) ->
+           ClosureUser _  |ClosureKernel _ |  Abstract | Container _) ->
      error ~loc RunnerExpected
 
-let as_shell ~loc = function
-  | Value.Shell ops -> ops
+let as_container ~loc = function
+  | Value.Container ops -> ops
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
-           Closure _  | Abstract | Runner _) ->
-     error ~loc ShellExpected
+           ClosureUser _  |ClosureKernel _ |  Abstract | Runner _) ->
+     error ~loc ContainerExpected
 
 
 (** Comparison of values *)
 let rec equal_value ~loc (v1 : Value.t) (v2 : Value.t) =
   match v1, v2 with
 
-  | Value.(Abstract | Closure _ | Runner _ | Shell _), _ ->
+  | Value.(Abstract | ClosureUser _ | ClosureKernel _ | Runner _ | Container _), _ ->
      error ~loc (IllegalComparison v1)
 
-  | _, Value.(Abstract | Closure _ | Runner _) ->
+  | _, Value.(Abstract | ClosureUser _ | ClosureKernel _ | Runner _) ->
      error ~loc (IllegalComparison v1)
 
   | Value.(Numeral k1, Numeral k2) ->
@@ -271,10 +277,17 @@ let rec eval_expr env {Location.it=e'; loc} =
      let lst = List.map (eval_expr env) lst in
      Value.Tuple lst
 
-  | Syntax.Lambda (p, c) ->
+  | Syntax.FunUser (p, c) ->
      let f v =
        let env = extend_pattern ~loc p v env in
-       eval_comp env c
+       eval_user env c
+     in
+     Value.Closure f
+
+  | Syntax.FunKernel (p, c) ->
+     let f v =
+       let env = extend_pattern ~loc p v env in
+       eval_kernel env c
      in
      Value.Closure f
 
@@ -452,7 +465,7 @@ and run ~loc rnr w r (fin_val, fin_signals) =
   in
   tensor w r
 
-let top_eval_comp {env_vars; env_shell=(coops, w)} ({Location.loc; _} as c) =
+let top_eval_comp {env_vars; env_container=(coops, w)} ({Location.loc; _} as c) =
   let rec tensor w r =
     match r with
     | Value.Val v -> v
@@ -472,11 +485,11 @@ let top_eval_comp {env_vars; env_shell=(coops, w)} ({Location.loc; _} as c) =
   tensor w (eval_comp env_vars c)
 
 
-let rec eval_toplevel ~quiet ({env_vars; env_shell} as env) {Location.it=d'; loc} =
+let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d'; loc} =
   match d' with
 
   | Syntax.TopLoad cs ->
-     eval_topfile ~quiet {env_vars; env_shell} cs
+     eval_topfile ~quiet {env_vars; env_container} cs
 
   | Syntax.TopLet (p, xts, c) ->
      let v = top_eval_comp env c in
@@ -510,12 +523,12 @@ let rec eval_toplevel ~quiet ({env_vars; env_shell} as env) {Location.it=d'; loc
                      (Value.print v) ;
      env
 
-  | Syntax.TopShell (c, ops) ->
+  | Syntax.TopContainer (c, ops) ->
      let v = top_eval_comp env c in
-     let shl = as_shell ~loc v in
-     let env = set_shell shl env in
+     let shl = as_container ~loc v in
+     let env = set_container shl env in
      if not quiet then
-       Format.printf "@[<hov>shell@ {%t}@]@." (Syntax.print_shell_ty ops) ;
+       Format.printf "@[<hov>container@ {%t}@]@." (Syntax.print_container_ty ops) ;
      env
 
   | Syntax.DefineAbstract t ->
