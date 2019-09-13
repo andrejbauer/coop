@@ -4,7 +4,6 @@
 let reserved = [
   ("and", Parser.AND) ;
   ("any", Parser.ANY) ;
-  ("as", Parser.AS) ;
   ("begin", Parser.BEGIN) ;
   ("bool", Parser.BOOL) ;
   ("else", Parser.ELSE) ;

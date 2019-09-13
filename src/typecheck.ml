@@ -542,7 +542,6 @@ and meet_expr_ty ~loc ctx t1 t2 =
      let t = meet_kernel_ty ~loc ctx t1 t2 in
      Syntax.ArrowKernel (u, t)
 
-
   | Syntax.RunnerTy (ops1, ops1', sgn1, w_ty1),
     Syntax.RunnerTy (ops2, ops2', sgn2, w_ty2) ->
      let ops = join_operations ops1 ops2

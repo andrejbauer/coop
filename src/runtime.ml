@@ -243,17 +243,12 @@ and equal_values ~loc vs1 vs2 =
   | v1 :: vs1, v2 :: vs2 -> equal_value ~loc v1 v2 && equal_values ~loc vs1 vs2
   | [], _::_ | _::_, [] -> false
 
-(** The result monad *)
-
-let rec bind r k =
-  match r with
-  | Value.Val v -> k v
-  | Value.Operation (op, u, l) -> Value.Operation (op, u, fun x -> let r = l x in bind r k)
-  | Value.Signal _ as v -> v
-
-let ( >>= ) = bind
-
 (*** Evaluation ***)
+let user_return = Value.User.return
+let (>>=) = Value.User.bind
+
+let kernel_return = Value.Kernel.return
+let (>>=!) = Value.Kernel.bind
 
 let rec eval_expr env {Location.it=e'; loc} =
   match e' with
@@ -282,28 +277,27 @@ let rec eval_expr env {Location.it=e'; loc} =
        let env = extend_pattern ~loc p v env in
        eval_user env c
      in
-     Value.Closure f
+     Value.(ClosureUser (generic_user f))
 
   | Syntax.FunKernel (p, c) ->
      let f v =
        let env = extend_pattern ~loc p v env in
        eval_kernel env c
      in
-     Value.Closure f
+     Value.(ClosureKernel (generic_kernel f))
 
   | Syntax.Runner lst ->
-     let coop px pw c =
+     let coop px c =
        let loc = c.Location.loc in
        fun (u, Value.World w) ->
        let env = extend_pattern ~loc px u env in
-       let env = extend_pattern ~loc pw w env in
-       eval_comp env c >>= fun u ->
+       eval_kernel env c w >>= fun (u, w) ->
        let (v, w) = as_pair ~loc u in
        Value.(Val (v, World w))
      in
      let rnr =
        List.fold_left
-         (fun rnr (op, px, pw, c) -> Name.Map.add op (coop px pw c) rnr)
+         (fun rnr (op, px, c) -> Name.Map.add op (coop px c) rnr)
          Name.Map.empty
          lst
      in
@@ -348,7 +342,7 @@ let rec eval_expr env {Location.it=e'; loc} =
      in
      Value.Runner rnr
 
-and eval_comp env {Location.it=c'; loc} =
+and eval_user env {Location.it=c'; loc} =
   match c' with
 
   | Syntax.Val e ->
@@ -358,7 +352,7 @@ and eval_comp env {Location.it=c'; loc} =
   | Syntax.Match (e, lst) ->
      let v = eval_expr env e in
      let env, c = match_clauses ~loc env lst v in
-     eval_comp env c
+     eval_user env c
 
   | Syntax.Equal (e1, e2) ->
      let v1 = eval_expr env e1
@@ -373,12 +367,12 @@ and eval_comp env {Location.it=c'; loc} =
      f v2
 
   | Syntax.Let (p, c1, c2) ->
-     eval_comp env c1 >>= fun v ->
-     eval_comp (extend_pattern ~loc p v env) c2
+     eval_user env c1 >>= fun v ->
+     eval_user (extend_pattern ~loc p v env) c2
 
   | Syntax.LetRec (fs, c) ->
      let env = extend_rec ~loc fs env in
-     eval_comp env c
+     eval_user env c
 
   | Syntax.Operation (op, u) ->
      let u = eval_expr env u in
@@ -392,24 +386,27 @@ and eval_comp env {Location.it=c'; loc} =
      let rnr = as_runner ~loc (eval_expr env e1)
      and w = eval_expr env e2
      and fin = eval_finally ~loc env fin
-     and r = eval_comp env c in
+     and r = eval_user env c in
      run ~loc rnr (Value.World w) r fin
 
   | Syntax.Try _ ->
      failwith "evaluation of try is not implemented"
 
+and eval_kernel env w c =
+  (??)
+
 and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_signals} =
   let fin_val (v, w) =
     let env = extend_pattern ~loc px v env in
     let env = extend_pattern ~loc pw w env in
-    eval_comp env c
+    eval_user env c
   and fin_signals =
     List.fold_left
       (fun fin_signals (sgl, px, pw, c) ->
         let f (v, w) =
           let env = extend_pattern ~loc px v env in
           let env = extend_pattern ~loc pw w env in
-          eval_comp env c
+          eval_user env c
         in
         Name.Map.add sgl f fin_signals)
       Name.Map.empty
@@ -420,7 +417,7 @@ and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_si
 and extend_rec ~loc fs env =
   let env' = ref env in
   let mk_closure (p, c) =
-    Value.Closure (fun v -> eval_comp (extend_pattern ~loc p v !env') c)
+    Value.Closure (fun v -> eval_user (extend_pattern ~loc p v !env') c)
   in
   let fs = List.map mk_closure fs in
   let env = extend_vars fs env in
@@ -465,7 +462,7 @@ and run ~loc rnr w r (fin_val, fin_signals) =
   in
   tensor w r
 
-let top_eval_comp {env_vars; env_container=(coops, w)} ({Location.loc; _} as c) =
+let top_eval_user {env_vars; env_container=(coops, w)} ({Location.loc; _} as c) =
   let rec tensor w r =
     match r with
     | Value.Val v -> v
@@ -482,7 +479,7 @@ let top_eval_comp {env_vars; env_container=(coops, w)} ({Location.loc; _} as c) 
 
     | Value.Signal (sgl, v) -> error ~loc (UnhandledSignal (sgl, v))
   in
-  tensor w (eval_comp env_vars c)
+  tensor w (eval_user env_vars c)
 
 
 let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d'; loc} =
@@ -492,7 +489,7 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
      eval_topfile ~quiet {env_vars; env_container} cs
 
   | Syntax.TopLet (p, xts, c) ->
-     let v = top_eval_comp env c in
+     let v = top_eval_user env c in
      let env_vars, vs = top_extend_pattern ~loc p v env_vars in
      if not quiet then
        List.iter2
@@ -516,7 +513,7 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
      { env with env_vars }
 
   | Syntax.TopComp (c, ty) ->
-     let v = top_eval_comp env c in
+     let v = top_eval_user env c in
      if not quiet then
        Format.printf "@[<hov>- :@ %t@ =@ %t@]@."
                      (Syntax.print_expr_ty ty)
@@ -524,7 +521,7 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
      env
 
   | Syntax.TopContainer (c, ops) ->
-     let v = top_eval_comp env c in
+     let v = top_eval_user env c in
      let shl = as_container ~loc v in
      let env = set_container shl env in
      if not quiet then

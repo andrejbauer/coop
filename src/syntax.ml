@@ -1,4 +1,4 @@
-(** Type-checked syntax of Coop. *)
+(** Type-checked abstract syntax of Coop. *)
 
 type operations = Operations of Name.Set.t
 

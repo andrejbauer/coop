@@ -1,6 +1,11 @@
 (** Runtime values *)
 
-(** Runtime value *)
+(** The carrier of the user monad *)
+type 'a user
+
+(** The carrier of the kernel monad *)
+type 'a kernel
+
 type t =
   | Abstract
   | Numeral of int
@@ -8,27 +13,28 @@ type t =
   | Quoted of string
   | Constructor of Name.t * t option
   | Tuple of t list
-  | ClosureUser of (t -> t user_result)
-  | ClosureKernel of (t -> t kernel_result)
+  | ClosureUser of (t -> t user)
+  | ClosureKernel of (t -> t kernel)
   | Runner of cooperation Name.Map.t
   | Container of container
 
 and world = World of t
 
-and 'a user_result =
-  | UserVal of 'a
-  | UserOperation of Name.t * t * (t -> 'a user_result)
-  | UserException of Name.t * t
+and exc = Exception of Name.t * t
 
-and 'a kernel_result =
-  | KernelVal of 'a
-  | KernelOperation of Name.t * t * (t -> 'a kernel_result)
-  | KernelException of Name.t * t
-  | KernelSignal of Name.t * t
+and sgn = Signal of Name.t * t
 
-and cooperation = t * world -> (t * world) kernel_result
+and cooperation = t -> t kernel
 
 and container = (t * world -> t * world) Name.Map.t * world
+
+(** The user monad structure *)
+val user_return : 'a -> 'a user
+val user_bind : 'a user -> ('a -> 'b user) -> 'b user
+
+(** The kernel monad structure *)
+val kernel_return : 'a -> 'a kernel
+val kernel_bind : 'a kernel -> ('a -> 'b kernel) -> 'b kernel
 
 (** Give a descriptive name of a value. *)
 val name : t -> string
