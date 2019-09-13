@@ -30,7 +30,7 @@ and expr_ty' =
   | ArrowUser of expr_ty * user_ty
   | ArrowKernel of expr_ty * kernel_ty
   | RunnerTy of operations * operations * signals * expr_ty
-  | ShellTy of Name.Set.t
+  | ContainerTy of operations
 
 and user_ty =
   { user_ty : expr_ty
