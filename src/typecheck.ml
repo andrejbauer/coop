@@ -27,6 +27,7 @@ type error =
   | InvalidName of Name.t
   | InvalidOperation of Name.t
   | InvalidSignal of Name.t
+  | InvalidException of Name.t
   | InvalidType of Name.t
   | PattTypeMismatch of Syntax.expr_ty
   | ExprTypeMismatch of Syntax.expr_ty * Syntax.expr_ty
@@ -67,6 +68,10 @@ let print_error err ppf =
   | InvalidSignal sgl ->
      Format.fprintf ppf "invalid signal %t, please report"
        (Name.print sgl)
+
+  | InvalidException exc ->
+     Format.fprintf ppf "invalid exception %t, please report"
+       (Name.print exc)
 
   | InvalidType ty ->
      Format.fprintf ppf "invalid ty %t, please report"
@@ -178,7 +183,7 @@ let print_error err ppf =
        (Name.print op)
 
 (** [error ~loc err] raises the given type-checking error. *)
-let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
+let error ~loc err = Stdlib.raise (Error (Location.locate ~loc err))
 
 (** [warning ~loc err] warns about the given type-checking error. *)
 let warning ~loc err =
@@ -229,6 +234,12 @@ let lookup_operation ~loc op {ctx_operations;_} =
 let lookup_signal ~loc sgl {ctx_signals;_} =
   match Name.Map.find sgl ctx_signals with
   | None -> error ~loc (InvalidSignal sgl)
+  | Some ty -> ty
+
+(** Lookup the type of an exception *)
+let lookup_signal ~loc exc {ctx_exceptions;_} =
+  match Name.Map.find exc ctx_exceptions with
+  | None -> error ~loc (InvalidException exc)
   | Some ty -> ty
 
 (** Lookup a type alias *)
@@ -603,6 +614,12 @@ and meet_kernel_ty ~loc ctx
 
 (**** Type checking ****)
 
+let exceptions (Desugared.Exceptions excs) = Syntax.Exceptions excs
+
+let operations (Desugared.Operations excs) = Syntax.Operations excs
+
+let signals (Desugared.Signals excs) = Syntax.Signals excs
+
 (** Check that a type is valid. Retrn the processed type. *)
 let rec expr_ty {Location.it=t'; loc} =
   match t' with
@@ -628,21 +645,15 @@ let rec expr_ty {Location.it=t'; loc} =
      let lst = List.map expr_ty lst in
      Syntax.Product lst
 
-  | Desugared.(ArrowUser (t1, {user_ty; user_ops; user_exc})) ->
+  | Desugared.(ArrowUser (t1, t2)) ->
      let t1 = expr_ty t1
-     and user_ops = operations user_ops
-     and user_ty = expr_ty user_ty
-     and user_exc = exceptions user_exc in
-     Syntax.(ArrowUser (t1, {user_ty; user_ops; user_exc}))
+     and t2 = user_ty t2 in
+     Syntax.(ArrowUser (t1, t2))
 
-  | Desugared.(ArrowKernel (t1, {kernel_ty; kernel_ops; kernel_exc; kernel_sgn; kernel_world})) ->
+  | Desugared.(ArrowKernel (t1, t2)) ->
      let t1 = expr_ty t1
-     and kernel_ty = expr_ty kernel_ty
-     and kernel_ops = operations kernel_ops
-     and kernel_exc = exceptions kernel_exc
-     and kernel_sgn = signals kernel_sgn
-     and kernel_world = expr_ty kernel_world in
-     Syntax.(ArrowKernel (t1, {kernel_ty; kernel_ops; kernel_exc; kernel_sgn; kernel_world}))
+     and t2 = kernel_ty t2 in
+     Syntax.(ArrowKernel (t1, t2))
 
   | Desugared.RunnerTy (ops1, ops2, sgns, w_ty) ->
      let ops1 = operations ops1
@@ -655,11 +666,19 @@ let rec expr_ty {Location.it=t'; loc} =
      let ops = operations ops in
      Syntax.ContainerTy ops
 
-and exceptions (Desugared.Exceptions excs) = Syntax.Exceptions excs
+and user_ty Desugared.{user_ty; user_ops; user_exc} =
+  let user_ty = expr_ty user_ty
+  and user_ops = operations user_ops
+  and user_exc = exceptions user_exc in
+  Syntax.{user_ty; user_ops; user_exc}
 
-and operations (Desugared.Operations excs) = Syntax.Operations excs
-
-and signals (Desugared.Signals excs) = Syntax.Signals excs
+and kernel_ty Desugared.{kernel_ty; kernel_ops; kernel_exc; kernel_sgn; kernel_world} =
+  let kernel_ty = expr_ty kernel_ty
+  and kernel_ops = operations kernel_ops
+  and kernel_exc = exceptions kernel_exc
+  and kernel_sgn = signals kernel_sgn
+  and kernel_world = expr_ty kernel_world in
+  Syntax.{kernel_ty; kernel_ops; kernel_exc; kernel_sgn; kernel_world}
 
 (** Typecheck a datatype *)
 let datatype cnstrs =
@@ -838,47 +857,8 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
 
   | Desugared.Runner (coops, w_ty) ->
      let w_ty = expr_ty w_ty in
-     let coops, ops, sgn = infer_coops ~loc ctx w_ty coops in
-     locate (Syntax.Runner coops), Syntax.RunnerTy (ops, w_ty, sgn)
-
-  | Desugared.RunnerTimes (e1, e2) ->
-     let rnr1, (ops1, w1_ty, sgn1) = infer_runner ctx e1
-     and rnr2, (ops2, w2_ty, sgn2) = infer_runner ctx e2 in
-     let w_ty = Syntax.Product [w1_ty; w2_ty] in
-     let ops' = Name.Set.inter ops1 ops2 in
-     if not (Name.Set.is_empty ops') then
-       error ~loc (RunnerDoubleOperations ops') ;
-     let ops = Name.Set.union ops1 ops2 in
-     let sgn = join_signature sgn1 sgn2 in
-     locate (Syntax.RunnerTimes (rnr1, rnr2)), Syntax.RunnerTy (ops, w_ty, sgn)
-
-  | Desugared.RunnerRename (e, rnm) ->
-     let e, (ops, w_ty, sgn) = infer_runner ctx e in
-     begin
-       match List.find_opt (fun (op, _) -> not (Name.Set.mem op ops)) rnm with
-       | None -> ()
-       | Some (op, _) -> error ~loc (RenamingDomain op)
-     end ;
-     let ops', rnm' =
-       Name.Set.fold
-         (fun op (ops', rnm') ->
-           let (ty1, ty2) = lookup_operation ~loc op ctx in
-           let op' =
-             match List.assoc_opt op rnm with
-             | None -> op
-             | Some op' ->
-                let (ty1', ty2') = lookup_operation ~loc op' ctx in
-                if not (expr_eqtype ~loc ctx ty1 ty1' && expr_eqtype ~loc ctx ty2 ty2') then
-                  error ~loc (RenamingMismatch (op, op')) ;
-                op'
-           in
-           if Name.Set.mem op' ops' then error ~loc (DuplicateOperation op') ;
-           Name.Set.add op' ops', Name.Map.add op op' rnm')
-         ops
-         (Name.Set.empty, Name.Map.empty)
-     in
-     locate (Syntax.RunnerRename (e, rnm')), Syntax.RunnerTy (ops', w_ty, sgn)
-
+     let coops, ops1, ops2, sgns, w_ty = infer_coops ~loc ctx w_ty coops in
+     locate (Syntax.Runner coops), Syntax.RunnerTy (ops1, ops2, sgns, w_ty)
 
 (** [infer_user ctx c] infers the type [ty] of a user computation [c]. It returns
     the processed computation [c] and its type [ty].  *)
@@ -886,38 +866,41 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
   let locate = Location.locate ~loc in
   match c' with
 
-  | Desugared.Val e ->
-     let e, e_ty = infer_expr ctx e in
-     locate (Syntax.Val e), Syntax.pure e_ty
-
-  | Desugared.AscribeComp (c, t) ->
-     let t = comp_ty t in
-     let c = check_comp ctx c t in
+  | Desugared.UserAscribe (c, t) ->
+     let t = user_ty t in
+     let c = check_user ctx c t in
      c, t
 
-  | Desugared.Let (p, c1, c2) ->
-     let c1, Syntax.{comp_ty=c1_ty; comp_sig=c1_sgn} = infer_user ctx c1 in
-     let ctx, p = extend_pattern ctx p c1_ty in
-     let c2, c2_ty = infer_user ctx c2 in
-     let c2_ty = Syntax.pollute c2_ty c1_sgn in
-     locate (Syntax.Let (p, c1, c2)), c2_ty
+  | Desugared.UserVal e ->
+     let e, e_ty = infer_expr ctx e in
+     locate (Syntax.UserVal e), Syntax.pure_user_ty e_ty
 
-  | Desugared.LetRec (fs, c) ->
+  | Desugared.UserEqual (e1, e2) ->
+     let e1, t = infer_expr ctx e1 in
+     let e2 = check_expr ctx e2 t in
+     locate (Syntax.UserEqual (e1, e2)), Syntax.(pure_user_ty (Primitive Bool))
+
+  | Desugared.UserTry (c, h) ->
+     (??)
+
+  | Desugared.UserLet (p, c1, c2) ->
+     let c1, (Syntax.{user_ty=t1'; user_ops=ops1; user_exc=exc1} as t1) = infer_user ctx c1 in
+     let ctx, p = extend_pattern ctx p t1' in
+     let c2, t2 = infer_user ctx c2 in
+     let t2 = Syntax.pollute t2 ops1 exc1 in
+     locate (Syntax.UserLet (p, c1, c2)), t2
+
+  | Desugared.UserLetRec (fs, c) ->
      let ctx, pcs, _fts = infer_rec ctx fs in
      let c, c_ty = infer_user ctx c in
      locate (Syntax.LetRec (pcs, c)), c_ty
 
-  | Desugared.Match (e, lst) ->
+  | Desugared.UserMatch (e, lst) ->
      let e, e_ty = infer_expr ctx e in
      let lst, ty = infer_match_clauses ~loc ctx e_ty lst in
      locate (Syntax.Match (e, lst)), ty
 
-  | Desugared.Equal (e1, e2) ->
-     let e1, t = infer_expr ctx e1 in
-     let e2 = check_expr ctx e2 t in
-     locate (Syntax.Equal (e1, e2)), Syntax.(pure (Primitive Bool))
-
-  | Desugared.Apply (e1, e2) ->
+  | Desugared.UserApply (e1, e2) ->
      let e1, t1 = infer_expr ctx e1 in
      begin match as_arrow (norm_ty ~loc:(e1.Location.loc) ctx t1) with
        | Some (u1, u2) ->
@@ -927,19 +910,19 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
           error ~loc:(e1.Location.loc) (FunctionExpected t1)
      end
 
-  | Desugared.Operation (op, e) ->
+  | Desugared.UserOperation (op, e) ->
      let ty1, ty2 = lookup_operation ~loc op ctx in
      let e = check_expr ctx e ty1 in
      let e_ty = Syntax.operation_ty ty2 op in
      locate (Syntax.Operation (op, e)), e_ty
 
-  | Desugared.Signal (sgl, e) ->
-     let e_ty = lookup_signal ~loc sgl ctx in
+  | Desugared.UserRaise (exc, e) ->
+     let e_ty = lookup_exception ~loc sgl ctx in
      let e = check_expr ctx e e_ty in
      let ty = Syntax.signal_ty sgl in
-     locate (Syntax.Signal (sgl, e)), ty
+     locate (Syntax.Exception (exc, e)), ty
 
-  | Desugared.Run (rnr, e, c, fin) ->
+  | Desugared.UserUsing (rnr, e, c, fin) ->
      let rnr, (ops, w_ty, Syntax.{sig_ops=rnr_ops; sig_sgs=rnr_sgs}) =
        infer_runner ctx rnr in
      let e = check_expr ctx e w_ty in
@@ -950,8 +933,14 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
      check_dirt ~fatal:true ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
      locate (Syntax.Run (rnr, e, c, fin)), fin_ty
 
-  | Desugared.Try _ ->
-     failwith "typechking of try not implemented"
+  | Desugared.UserRun (k, w, fin) ->
+     (??)
+
+and infer_kernel ctx c =
+  (??)
+
+and infer_user_exception_handler ctx Desugared.{exc_val=c_val; exc_raise=c_raise} =
+  (??)
 
 and infer_rec ctx fs =
   let ctx, fts =
@@ -992,21 +981,20 @@ and infer_match_clauses ~loc ctx patt_ty lst =
      ((p, c) :: clauses), ty
 
 and infer_coops ~loc ctx w_ty lst =
-  let rec fold coops ops sgn2 = function
+  let rec fold coops ops1 ops2 sgns = function
 
     | [] ->
        let coops = List.rev coops in
-       coops, ops, sgn2
+       coops, ops1, ops2, sgns
 
-    | (op, px, pw, c) :: lst ->
-       if Name.Set.mem op ops then
+    | (op, px, c) :: lst ->
+       if Name.Set.mem op ops1 then
          error ~loc (DuplicateOperation op)
        else
-         let (x_ty, op_ty) = lookup_operation ~loc op ctx in
+         let (x_ty, op_ty, op_exc) = lookup_operation ~loc op ctx in
          let ctx, px = extend_binder ctx px x_ty in
-         let ctx, pw = extend_binder ctx pw w_ty in
-         let c, Syntax.{comp_sig=c_sgn;comp_ty=c_ty'} = infer_user ctx c in
-         let c_ty'' = Syntax.Product [op_ty; w_ty] in
+         let c, c_ty = infer_kernel ctx w_ty c in
+
          if not (expr_subty ~loc ctx c_ty' c_ty'') then
            error ~loc (CoopTypeMismatch (c_ty'', c_ty')) ;
          let coops = (op, px, pw, c) :: coops
@@ -1014,7 +1002,7 @@ and infer_coops ~loc ctx w_ty lst =
          and sgn2 = join_signature sgn2 c_sgn in
          fold coops ops sgn2 lst
   in
-  fold [] Name.Set.empty Syntax.empty_signature lst
+  fold [] Name.Set.empty Name.Set.empty Name.Set.empty lst
 
 and infer_runner ctx rnr =
   let e, e_ty = infer_expr ctx rnr in
@@ -1139,9 +1127,9 @@ and check_constructor ~loc ctx cnstr eopt topt =
   | Some _, None ->
      error ~loc (IllegalConstructor cnstr)
 
-(** [check_comp ctx c ty] checks that computation [c] has computation type [ty] in context [ctx].
+(** [check_user ctx c ty] checks that computation [c] has user type [ty] in context [ctx].
     It returns the processed computation [c]. *)
-and check_comp ctx ({Location.it=c'; loc} as c) check_ty =
+and check_user ctx ({Location.it=c'; loc} as c) check_ty =
   let Syntax.{comp_ty=check_ty'; comp_sig=check_sgn} = check_ty in
   let locate = Location.locate ~loc in
   match c' with

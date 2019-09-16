@@ -17,7 +17,7 @@ struct
   module S = Set.Make(
                  struct
                    type nonrec t = t
-                   let compare = Pervasives.compare
+                   let compare = Stdlib.compare
                  end)
 
   type elt = t
@@ -42,7 +42,7 @@ struct
   module M = Map.Make(
                  struct
                    type nonrec t = t
-                   let compare = Pervasives.compare
+                   let compare = Stdlib.compare
                  end)
 
   type key = t

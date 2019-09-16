@@ -145,6 +145,12 @@ val pure_user_ty : expr_ty -> user_ty
 (** Make a pure kernel type *)
 val pure_kernel_ty : expr_ty -> expr_ty -> kernel_ty
 
+(** Pollute a user type with given operations and exceptions *)
+val pollute_user : user_ty -> operations -> exceptions -> user_ty
+
+(** Pollute a kernel type with given operations, exceptions, and signals *)
+val pollute_kernel : kernel_ty -> operations -> exceptions -> signals -> kernel_ty
+
 (** Make a user computation type with a single operation. *)
 val operation_user_ty : expr_ty -> Name.t -> user_ty
 

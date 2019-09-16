@@ -19,7 +19,7 @@ type error =
 
 exception Error of error Location.located
 
-let error ~loc err = Pervasives.raise (Error (Location.locate ~loc err))
+let error ~loc err = Stdlib.raise (Error (Location.locate ~loc err))
 
 let print_error err ppf =
   match err with
@@ -243,12 +243,20 @@ and equal_values ~loc vs1 vs2 =
   | v1 :: vs1, v2 :: vs2 -> equal_value ~loc v1 v2 && equal_values ~loc vs1 vs2
   | [], _::_ | _::_, [] -> false
 
-(*** Evaluation ***)
-let user_return = Value.User.return
-let (>>=) = Value.User.bind
+(*** Auxiliary ***)
 
-let kernel_return = Value.Kernel.return
-let (>>=!) = Value.Kernel.bind
+(** Exception handler part which reraises every expresions, user mode *)
+let reraise_user exc = Value.UserException exc
+
+(** Exception handler part which reraises every expresions, kernel mode *)
+let reraise_kernel exc w = Value.KernelException (exc, w)
+
+(*** Evaluation ***)
+let user_return = Value.user_return
+let (>>=) = Value.user_bind
+
+let kernel_return = Value.kernel_return
+let (>>=!) = Value.kernel_bind
 
 let rec eval_expr env {Location.it=e'; loc} =
   match e' with
@@ -277,23 +285,21 @@ let rec eval_expr env {Location.it=e'; loc} =
        let env = extend_pattern ~loc p v env in
        eval_user env c
      in
-     Value.(ClosureUser (generic_user f))
+     Value.(ClosureUser f)
 
   | Syntax.FunKernel (p, c) ->
      let f v =
        let env = extend_pattern ~loc p v env in
        eval_kernel env c
      in
-     Value.(ClosureKernel (generic_kernel f))
+     Value.(ClosureKernel f)
 
   | Syntax.Runner lst ->
      let coop px c =
        let loc = c.Location.loc in
-       fun (u, Value.World w) ->
+       fun u ->
        let env = extend_pattern ~loc px u env in
-       eval_kernel env c w >>= fun (u, w) ->
-       let (v, w) = as_pair ~loc u in
-       Value.(Val (v, World w))
+       eval_kernel env c
      in
      let rnr =
        List.fold_left
@@ -303,96 +309,60 @@ let rec eval_expr env {Location.it=e'; loc} =
      in
      Value.(Runner rnr)
 
-  | Syntax.RunnerTimes (e1, e2) ->
-     let wrap_fst f (v, Value.World w) =
-         let (w1, w2) = as_pair ~loc w in
-         f (v, Value.World w1) >>= fun (v', Value.World w1') ->
-         let w' = Value.Tuple [w1'; w2] in
-         Value.Val (v', Value.World w')
-     in
-     let wrap_snd f (v, Value.World w) =
-         let (w1, w2) = as_pair ~loc w in
-         f (v, Value.World w2) >>= fun (v', Value.World w2') ->
-         let w' = Value.Tuple [w1; w2'] in
-         Value.Val (v', Value.World w')
-     in
-     let rnr1 = as_runner ~loc (eval_expr env e1)
-     and rnr2 = as_runner ~loc (eval_expr env e2) in
-     let rnr =
-       Name.Map.merge
-         (fun op f1 f2 ->
-           match f1, f2 with
-           | None, None -> None
-           | Some f1, None -> Some (wrap_fst f1)
-           | None, Some f2 -> Some (wrap_snd f2)
-           | Some _, Some _ -> error ~loc (RunnerDoubleOperation op))
-         rnr1 rnr2
-     in
-     Value.Runner rnr
-
-  | Syntax.RunnerRename (e, rnm) ->
-     let rnr = as_runner ~loc (eval_expr env e) in
-     let rnr =
-       Name.Map.fold
-         (fun op f rnr ->
-           match Name.Map.find op rnm with
-           | None -> error ~loc (IllegalRenaming op)
-           | Some op' -> Name.Map.add op' f rnr)
-         rnr Name.Map.empty
-     in
-     Value.Runner rnr
-
 and eval_user env {Location.it=c'; loc} =
   match c' with
 
-  | Syntax.Val e ->
+  | Syntax.UserVal e ->
      let v = eval_expr env e in
-     Value.Val v
+     Value.UserVal v
 
-  | Syntax.Match (e, lst) ->
+  | Syntax.UserMatch (e, lst) ->
      let v = eval_expr env e in
      let env, c = match_clauses ~loc env lst v in
      eval_user env c
 
-  | Syntax.Equal (e1, e2) ->
+  | Syntax.UserEqual (e1, e2) ->
      let v1 = eval_expr env e1
      and v2 = eval_expr env e2 in
      let b = equal_value ~loc v1 v2 in
-     Value.Val (Value.Boolean b)
+     Value.UserVal (Value.Boolean b)
 
-  | Syntax.Apply (e1, e2) ->
+  | Syntax.UserApply (e1, e2) ->
      let v1 = eval_expr env e1 in
-     let f = as_closure ~loc v1 in
+     let f = as_closure_user ~loc v1 in
      let v2 = eval_expr env e2 in
      f v2
 
-  | Syntax.Let (p, c1, c2) ->
+  | Syntax.UserLet (p, c1, c2) ->
      eval_user env c1 >>= fun v ->
      eval_user (extend_pattern ~loc p v env) c2
 
-  | Syntax.LetRec (fs, c) ->
+  | Syntax.UserLetRec (fs, c) ->
      let env = extend_rec ~loc fs env in
      eval_user env c
 
-  | Syntax.Operation (op, u) ->
+  | Syntax.UserOperation (op, u) ->
      let u = eval_expr env u in
-     Value.Operation (op, u, (fun v -> Value.Val v))
+     Value.UserOperation (op, u, (fun v -> Value.UserVal v), reraise_user)
 
-  | Syntax.Signal (sgl, e) ->
+  | Syntax.UserRaise (exc, e) ->
      let v = eval_expr env e in
-     Value.Signal (sgl, v)
+     Value.(UserException (Exception (exc, v)))
 
-  | Syntax.Run (e1, e2, c, fin) ->
+  | Syntax.UserUsing (e1, e2, c, fin) ->
      let rnr = as_runner ~loc (eval_expr env e1)
      and w = eval_expr env e2
      and fin = eval_finally ~loc env fin
      and r = eval_user env c in
      run ~loc rnr (Value.World w) r fin
 
-  | Syntax.Try _ ->
-     failwith "evaluation of try is not implemented"
+  | Syntax.UserRun (c, w, fin) ->
+     (??)
 
-and eval_kernel env w c =
+  | Syntax.UserTry _ ->
+     (??)
+
+and eval_kernel env c w =
   (??)
 
 and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_signals} =

@@ -1,11 +1,6 @@
 (** Runtime values *)
 
-(** The carrier of the user monad *)
-type 'a user
-
-(** The carrier of the kernel monad *)
-type 'a kernel
-
+(** Runtime value *)
 type t =
   | Abstract
   | Numeral of int
@@ -17,6 +12,21 @@ type t =
   | ClosureKernel of (t -> t kernel)
   | Runner of cooperation Name.Map.t
   | Container of container
+
+(** The user monad carrier *)
+and 'a user =
+  | UserVal of 'a
+  | UserException of exc
+  | UserOperation of Name.t * t * (t -> 'a user) * (exc -> 'a user)
+
+and 'a kernel_tree =
+  | KernelVal of 'a * world
+  | KernelException of exc * world
+  | KernelSignal of sgn
+  | KernelOperation of Name.t * t * (t -> 'a kernel_tree) * (exc -> 'a kernel_tree)
+
+(** The kernel monad carrier *)
+and 'a kernel = world -> 'a kernel_tree
 
 and world = World of t
 

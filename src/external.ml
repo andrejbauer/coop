@@ -46,13 +46,13 @@ let stdio_container =
 
   and read_string (_, _) =
     Format.printf "@." ;
-    let s = Pervasives.input_line stdin in
+    let s = Stdlib.input_line stdin in
     (Value.Quoted s, Value.(World Abstract))
 
   and read_int (_, _) =
     try
       Format.printf "@." ;
-      let k = Pervasives.read_int () in
+      let k = Stdlib.read_int () in
       (Value.Numeral k, Value.(World Abstract))
     with Failure _ -> error "malformed integer"
   in
@@ -64,9 +64,9 @@ let stdio_container =
   ]
 
 let wrap_binary f =
-  Value.ClosureUser (fun v1 -> Value.UserVal (Value.ClosureUser (fun v2 -> Value.UserVal (f v1 v2))))
+  Value.ClosureUser (fun v1 -> Value.user_return (Value.ClosureUser (fun v2 -> Value.user_return (f v1 v2))))
 
-let wrap_unary f = Value.ClosureUser (fun v -> Value.UserVal (f v))
+let wrap_unary f = Value.ClosureUser (fun v -> Value.user_return (f v))
 
 let wrap_string_string_string f =
   wrap_binary (fun v1 v2 ->

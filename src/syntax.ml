@@ -156,6 +156,22 @@ let pure_kernel_ty t tw =
   ; kernel_sgn = empty_signals
   ; kernel_world = tw }
 
+(** Pollute a user type with given operations and exceptions *)
+let pollute_user {user_ty; user_ops=Operations ops; user_exc=Exceptions exc}
+                 (Operations ops') (Exceptions exc') =
+  { user_ty
+  ; user_ops = Operations (Name.Set.union ops ops')
+  ; user_exc = Exceptions (Name.Set.union exc exc') }
+
+(** Pollute a kernel type with given operations, exceptions, and signals *)
+let pollute_kernel {kernel_ty; kernel_ops=Operations ops; kernel_exc=Exceptions exc; kernel_sgn=Signals sgn; kernel_world}
+                 (Operations ops') (Exceptions exc') (Signals sgn') =
+  { kernel_ty
+  ; kernel_ops = Operations (Name.Set.union ops ops')
+  ; kernel_exc = Exceptions (Name.Set.union exc exc')
+  ; kernel_sgn = Signals (Name.Set.union sgn sgn')
+  ; kernel_world }
+
 (** The user type of the given operation [op] *)
 let operation_user_ty t op =
   { user_ty = t
