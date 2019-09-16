@@ -42,6 +42,7 @@ sig
   val find : key -> 'a t -> 'a option
   val merge : (key -> 'a option -> 'a option -> 'a option) -> 'a t -> 'a t -> 'a t
   val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
+  val map : ('a -> 'b) -> 'a t -> 'b t
 end
 
 (** Are the given identifiers equal? *)

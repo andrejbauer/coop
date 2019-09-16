@@ -22,45 +22,45 @@ let coop_unit = Value.Tuple []
 
 let mk_ident s = Name.Ident (s, Name.Word)
 
-let wrap_container coops w =
+let wrap_container coops =
   let coops =
     List.fold_left
       (fun coops (x, f) -> Name.Map.add (mk_ident x) f coops)
       Name.Map.empty
       coops
   in
-  Value.Container (coops, Value.World w)
+  Value.Container coops
 
 let pure_container = []
 
 let stdio_container =
 
-  let print_value (v, _) =
+  let print_value v =
     Format.printf "%t" (Value.print v) ;
-    (coop_unit, Value.(World Abstract))
+    coop_unit
 
-  and print_string (v, _) =
+  and print_string v =
     let s = as_string v in
     Format.printf "%s" s ;
-    (coop_unit, Value.(World Abstract))
+    coop_unit
 
-  and read_string (_, _) =
+  and read_string _ =
     Format.printf "@." ;
     let s = Stdlib.input_line stdin in
-    (Value.Quoted s, Value.(World Abstract))
+    Value.Quoted s
 
-  and read_int (_, _) =
+  and read_int _ =
     try
       Format.printf "@." ;
       let k = Stdlib.read_int () in
-      (Value.Numeral k, Value.(World Abstract))
+      Value.Numeral k
     with Failure _ -> error "malformed integer"
   in
   [ ("print_value", print_value);
     ("print_string", print_string);
     ("read_string", read_string);
     ("read_int", read_int);
-    ("flush", fun (_, _) -> Format.printf "@." ; (coop_unit, Value.(World Abstract)))
+    ("flush", fun _ -> Format.printf "@." ; coop_unit)
   ]
 
 let wrap_binary f =
@@ -116,8 +116,8 @@ let externals =
     (">=",  wrap_int_int_bool ((>=) : int -> int -> bool)) ;
     ("^",  wrap_string_string_string (^)) ;
     ("string_of_int", wrap_int_string (string_of_int)) ;
-    ("stdio", wrap_container stdio_container Value.Abstract) ;
-    ("pure", wrap_container pure_container Value.Abstract) ;
+    ("stdio", wrap_container stdio_container) ;
+    ("pure", wrap_container pure_container) ;
   ]
 
 let lookup s = List.assoc_opt s externals

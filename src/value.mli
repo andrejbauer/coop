@@ -17,13 +17,13 @@ type t =
 and 'a user =
   | UserVal of 'a
   | UserException of exc
-  | UserOperation of Name.t * t * (t -> 'a user) * (exc -> 'a user)
+  | UserOperation of Name.t * t * (t -> 'a user) * (t -> 'a user) Name.Map.t
 
 and 'a kernel_tree =
   | KernelVal of 'a * world
   | KernelException of exc * world
   | KernelSignal of sgn
-  | KernelOperation of Name.t * t * (t -> 'a kernel_tree) * (exc -> 'a kernel_tree)
+  | KernelOperation of Name.t * t * (t -> 'a kernel_tree) * (t -> 'a kernel_tree) Name.Map.t
 
 (** The kernel monad carrier *)
 and 'a kernel = world -> 'a kernel_tree
@@ -36,7 +36,7 @@ and sgn = Signal of Name.t * t
 
 and cooperation = t -> t kernel
 
-and container = (t * world -> t * world) Name.Map.t * world
+and container = (t -> t) Name.Map.t
 
 (** The user monad structure *)
 val user_return : 'a -> 'a user
@@ -45,6 +45,9 @@ val user_bind : 'a user -> ('a -> 'b user) -> 'b user
 (** The kernel monad structure *)
 val kernel_return : 'a -> 'a kernel
 val kernel_bind : 'a kernel -> ('a -> 'b kernel) -> 'b kernel
+
+(** Native exception used by container cooperations *)
+exception CoopException of exc
 
 (** Give a descriptive name of a value. *)
 val name : t -> string

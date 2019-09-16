@@ -19,19 +19,21 @@ and sgn = Signal of Name.t * t
 and 'a user =
   | UserVal of 'a
   | UserException of exc
-  | UserOperation of Name.t * t * (t -> 'a user) * (exc -> 'a user)
+  | UserOperation of Name.t * t * (t -> 'a user) * (t -> 'a user) Name.Map.t
 
 and 'a kernel_tree =
   | KernelVal of 'a * world
   | KernelException of exc * world
   | KernelSignal of sgn
-  | KernelOperation of Name.t * t * (t -> 'a kernel_tree) * (exc -> 'a kernel_tree)
+  | KernelOperation of Name.t * t * (t -> 'a kernel_tree) * (t -> 'a kernel_tree) Name.Map.t
 
 and 'a kernel = world -> 'a kernel_tree
 
 and cooperation = t -> t kernel
 
-and container = (t * world -> t * world) Name.Map.t * world
+and container = (t -> t) Name.Map.t
+
+exception CoopException of exc
 
 (** The user monad. *)
 let user_return x = UserVal x
@@ -41,32 +43,27 @@ let rec user_bind r k =
   | UserVal v -> k v
   | UserException _ as r -> r
   | UserOperation (op, u, l_val, l_exc) ->
-     let l_val = (fun x -> let r = l_val x in user_bind r k)
-     and l_exc = (fun e -> let r = l_exc e in user_bind r k) in
+     let l_val = (fun v -> let r = l_val v in user_bind r k)
+     and l_exc = Name.Map.map (fun f v -> let r = f v in user_bind r k) l_exc in
      UserOperation (op, u, l_val, l_exc)
 
 (** The kernel monad *)
 let kernel_return x w = KernelVal (x, w)
 
-let kernel_bind k f w =
+let kernel_bind k f =
+  (* the bind for kernel trees *)
   let rec fold r f =
     match r with
     | KernelVal (v, w) -> f v w
     | KernelException _ as r -> r
     | KernelSignal _ as r -> r
-    | KernelOperation (op, u, g, h) ->
-       let g = (fun v -> let r = g v in fold r f)
-       and h = (fun e -> let r = h e in fold r f) in
-       KernelOperation (op, u, g, h)
+    | KernelOperation (op, u, l_val, l_exc) ->
+       let l_val = (fun v -> let r = l_val v in fold r f)
+       and l_exc = Name.Map.map (fun h v -> let r = h v in fold r f) l_exc in
+       KernelOperation (op, u, l_val, l_exc)
   in
-  match k w with
-    | KernelVal (v, w') -> f v w'
-    | KernelException _ as r  -> r
-    | KernelSignal _ as r -> r
-    | KernelOperation (op, u, g, h) ->
-       let g = (fun v -> let r = g v in fold r f)
-       and h = (fun e -> let r = h e in fold r f) in
-       KernelOperation (op, u, g, h)
+  fun w -> fold (k w) f
+
 
 let name = function
   | Abstract -> "abstract value"
@@ -92,7 +89,7 @@ let names = function
   | Runner _ -> "runners"
   | Container _ -> "containers"
 
-let pure_container = (Name.Map.empty, World Abstract)
+let pure_container = Name.Map.empty
 
 let rec print ?max_level v ppf =
   match v with

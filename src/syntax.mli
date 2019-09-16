@@ -82,10 +82,10 @@ and user' =
   | UserLetRec of user rec_clause list * user
   | UserApply of expr * expr
   | UserMatch of expr * (pattern * user) list
-  | UserOperation of Name.t * expr
+  | UserOperation of Name.t * expr * exceptions
   | UserRaise of Name.t * expr
   | UserUsing of expr * expr * user * finally
-  | UserRun of kernel * expr * finally
+  | UserExec of kernel * expr * finally
 
 (** Kernel computations *)
 and kernel = kernel' Location.located
@@ -97,7 +97,7 @@ and kernel' =
   | KernelLetRec of kernel rec_clause list * kernel
   | KernelApply of expr * expr
   | KernelMatch of expr * (pattern * kernel) list
-  | KernelOperation of Name.t * expr
+  | KernelOperation of Name.t * expr * exceptions
   | KernelRaise of Name.t * expr
   | KernelKill of Name.t * expr
   | KernelGetenv
@@ -156,6 +156,15 @@ val operation_user_ty : expr_ty -> Name.t -> user_ty
 
 (** Make a kernel computation type with a single operation. *)
 val operation_kernel_ty : expr_ty -> Name.t -> expr_ty -> kernel_ty
+
+(** The user type of a raise *)
+val raise_user_ty : Name.t -> user_ty
+
+(** The kernel type of a raise *)
+val raise_kernel_ty : Name.t -> expr_ty -> kernel_ty
+
+(** The kernel type of a kill *)
+val kill_ty : Name.t -> expr_ty -> kernel_ty
 
 (** Print an expression type *)
 val print_expr_ty : ?max_level:Level.t -> expr_ty -> Format.formatter -> unit

@@ -7,12 +7,11 @@ type error =
   | InvalidDeBruijn of int
   | UnhandledOperation of Name.t * Value.t
   | UnhandledSignal of Name.t * Value.t
+  | UnhandledException of Name.t * Value.t
   | UnknownExternal of string
-  | IllegalRenaming of Name.t
   | IllegalComparison of Value.t
   | FunctionExpected
   | RunnerExpected
-  | RunnerDoubleOperation of Name.t
   | PairExpected
   | ContainerExpected
   | PatternMismatch
@@ -37,11 +36,13 @@ let print_error err ppf =
        (Name.print sgl)
        (Value.print ~max_level:Level.constr_arg v)
 
+  | UnhandledException (exc, v) ->
+     Format.fprintf ppf "unhandled exception %t@ %t"
+       (Name.print exc)
+       (Value.print ~max_level:Level.constr_arg v)
+
   | UnknownExternal s ->
      Format.fprintf ppf "unknown external %s" s
-
-  | IllegalRenaming op ->
-     Format.fprintf ppf "illegal runner renaming %t, please report" (Name.print op)
 
   | IllegalComparison v ->
      Format.fprintf ppf "cannot compare %s" (Value.names v)
@@ -51,9 +52,6 @@ let print_error err ppf =
 
   | RunnerExpected ->
      Format.fprintf ppf "runner expected, please report"
-
-  | RunnerDoubleOperation op ->
-     Format.fprintf ppf "cannot combine models that both contain the coperation %t" (Name.print op)
 
   | PairExpected ->
      Format.fprintf ppf "pair expected, please report"
@@ -246,7 +244,11 @@ and equal_values ~loc vs1 vs2 =
 (*** Auxiliary ***)
 
 (** Exception handler part which reraises every expresions, user mode *)
-let reraise_user exc = Value.UserException exc
+let reraise_user excs =
+  Name.Set.fold
+  (fun exc m -> Name.Map.add exc (fun v -> Value.(UserException (Exception (exc, v)))) m)
+  excs
+  Name.Map.empty
 
 (** Exception handler part which reraises every expresions, kernel mode *)
 let reraise_kernel exc w = Value.KernelException (exc, w)
@@ -341,53 +343,88 @@ and eval_user env {Location.it=c'; loc} =
      let env = extend_rec ~loc fs env in
      eval_user env c
 
-  | Syntax.UserOperation (op, u) ->
+  | Syntax.(UserOperation (op, u, Exceptions excs)) ->
      let u = eval_expr env u in
-     Value.UserOperation (op, u, (fun v -> Value.UserVal v), reraise_user)
+     Value.UserOperation (op, u, (fun v -> Value.UserVal v), reraise_user excs)
 
   | Syntax.UserRaise (exc, e) ->
      let v = eval_expr env e in
      Value.(UserException (Exception (exc, v)))
 
-  | Syntax.UserUsing (e1, e2, c, fin) ->
-     let rnr = as_runner ~loc (eval_expr env e1)
-     and w = eval_expr env e2
+  | Syntax.UserUsing (rnr, w, c, fin) ->
+     let rnr = as_runner ~loc (eval_expr env rnr)
+     and w = eval_expr env w
      and fin = eval_finally ~loc env fin
      and r = eval_user env c in
-     run ~loc rnr (Value.World w) r fin
+     user_using ~loc rnr (Value.World w) r fin
 
-  | Syntax.UserRun (c, w, fin) ->
-     (??)
+  | Syntax.UserExec (c, w, fin) ->
+     let fin = eval_finally ~loc env fin in
+     let r = eval_kernel env c in
+     user_exec ~loc w r fin
 
-  | Syntax.UserTry _ ->
-     (??)
+  | Syntax.UserTry (c, hnd) ->
+     let exc_val, exc_raise = eval_exception_handler ~loc env hnd in
+     let r = eval_user env c in
+     user_exception_handle ~loc env exc_val exc_raise r
 
-and eval_kernel env c w =
+and user_exception_handle ~loc env exc_val exc_raise r =
+  let rec fold = function
+
+  | Value.UserVal v -> exc_val v
+
+  | Value.(UserException (Exception (exc, v))) ->
+     begin match Name.Map.find exc exc_raise with
+     | None -> error ~loc (UnhandledException (exc, v))
+     | Some f -> f v
+     end
+
+  | Value.UserOperation (op, v, f_val, f_exc) ->
+     let f_val v = fold (f_val v)
+     and f_exc = Name.Map.map (fun f v -> fold (f v)) f_exc in
+     Value.UserOperation (op, v, f_val, f_exc)
+  in
+  fold r
+
+and eval_kernel env c =
   (??)
 
-and eval_finally ~loc env {Syntax.fin_val=(px, pw, c); Syntax.fin_signals=fin_signals} =
-  let fin_val (v, w) =
+and eval_exception_handler ~loc env Syntax.{exc_val; exc_raise} =
+  (??)
+
+and eval_finally ~loc env Syntax.{fin_val=(px, pw, c); fin_raise; fin_kill} =
+  let fin_val (v, Value.World w) =
     let env = extend_pattern ~loc px v env in
     let env = extend_pattern ~loc pw w env in
     eval_user env c
-  and fin_signals =
+  and fin_raise =
     List.fold_left
-      (fun fin_signals (sgl, px, pw, c) ->
-        let f (v, w) =
+      (fun fin_raise (exc, px, pw, c) ->
+        let f (v, Value.World w) =
           let env = extend_pattern ~loc px v env in
           let env = extend_pattern ~loc pw w env in
           eval_user env c
         in
-        Name.Map.add sgl f fin_signals)
+        Name.Map.add exc f fin_raise)
       Name.Map.empty
-      fin_signals
+      fin_raise
+  and fin_kill =
+    List.fold_left
+      (fun fin_kill (sgn, px, c) ->
+        let f v =
+          let env = extend_pattern ~loc px v env in
+          eval_user env c
+        in
+        Name.Map.add sgn f fin_kill)
+      Name.Map.empty
+      fin_kill
   in
-  (fin_val, fin_signals)
+  (fin_val, fin_raise, fin_kill)
 
 and extend_rec ~loc fs env =
   let env' = ref env in
   let mk_closure (p, c) =
-    Value.Closure (fun v -> eval_user (extend_pattern ~loc p v !env') c)
+    Value.ClosureUser (fun v -> eval_user (extend_pattern ~loc p v !env') c)
   in
   let fs = List.map mk_closure fs in
   let env = extend_vars fs env in
@@ -395,61 +432,82 @@ and extend_rec ~loc fs env =
   env
 
 (** Run a result with the given runner and finally clause. *)
-and run ~loc rnr w r (fin_val, fin_signals) =
-  let rec tensor (Value.World w' as w) r =
-    match r with
+and user_using ~loc rnr w r (fin_val, fin_raise, fin_kill) =
+  let rec using w = function
+    | Value.UserVal v ->
+       fin_val (v, w)
 
-    | Value.Val v -> fin_val (v, w')
-
-    | Value.Operation (op, u, k) ->
-       begin
-         match Name.Map.find op rnr with
-         | None -> error ~loc (UnhandledOperation (op, u))
-         | Some coop ->
-            let rec let_unless = function
-              | Value.Val _ as v -> v
-
-              | Value.Operation (op, u, k) ->
-                 Value.Operation (op, u, (fun v -> let_unless (k v)))
-
-              | Value.Signal (sgl, v) ->
-                 begin
-                   match Name.Map.find sgl fin_signals with
-                   | None -> error ~loc (UnhandledSignal (sgl, v))
-                   | Some f -> f (v, w')
-                 end
-            in
-            let r = coop (u, w) >>= fun (v, w') -> tensor w' (k v) in
-            let_unless r
+    | Value.(UserException (Exception (exc, v))) ->
+       begin match Name.Map.find exc fin_raise with
+       | None -> error ~loc (UnhandledException (exc, v))
+       | Some f_exc -> f_exc (v, w)
        end
 
-    | Value.Signal (sgl, v) as r ->
-       begin
-         match Name.Map.find sgl fin_signals with
-         | None -> r
-         | Some f -> f (v, w')
+    | Value.UserOperation (op, v, f_val, f_exc) ->
+       begin match Name.Map.find op rnr with
+
+       | None -> error ~loc (UnhandledOperation (op, v))
+
+       | Some coop ->
+          let f_val (v, w) = (let r = f_val v in using w r)
+          and f_exc = Name.Map.map (fun f -> (fun (v, w) -> using w (f v))) f_exc
+          in
+          user_exec ~loc w (coop v) (f_val, f_exc, fin_kill)
        end
   in
-  tensor w r
+  using w r
 
-let top_eval_user {env_vars; env_container=(coops, w)} ({Location.loc; _} as c) =
-  let rec tensor w r =
-    match r with
-    | Value.Val v -> v
+and user_exec ~loc w r (fin_val, fin_raise, fin_kill) =
+  (* Folds over a kernel tree *)
+  let rec fold = function
+  | Value.KernelVal (v, w) -> fin_val (v, w)
 
-    | Value.Operation (op, u, k) ->
-       begin
-         match Name.Map.find op coops with
-         | None -> error ~loc (UnhandledOperation (op, u))
-         | Some coop ->
-            let (v, w) = coop (u, w) in
-            let r = k v in
-            tensor w r
-       end
+  | Value.(KernelException (Exception (exc, v), w)) ->
+     begin match Name.Map.find exc fin_raise with
+     | None -> error ~loc (UnhandledException (exc, v))
+     | Some f -> f (v, w)
+     end
 
-    | Value.Signal (sgl, v) -> error ~loc (UnhandledSignal (sgl, v))
+  | Value.(KernelSignal (Signal (sgn, v))) ->
+     begin match Name.Map.find sgn fin_kill with
+     | None -> error ~loc (UnhandledSignal (sgn, v))
+     | Some f -> f v
+     end
+
+  | Value.KernelOperation (op, v_op, f_val, f_exc) ->
+     let f_val = fun v -> fold (f_val v)
+     and f_exc = Name.Map.map (fun f v -> fold (f v)) f_exc in
+     Value.UserOperation (op, v_op, f_val, f_exc)
   in
-  tensor w (eval_user env_vars c)
+  fold (r w)
+
+let top_eval_user {env_vars; env_container=coops} ({Location.loc; _} as c) =
+  let rec using = function
+    | Value.(UserVal v) -> v
+
+    | Value.(UserException (Exception (exc, v))) ->
+       error ~loc (UnhandledException (exc, v))
+
+    | Value.UserOperation (op, v, f_val, f_exc) ->
+       begin match Name.Map.find op coops with
+
+       | None -> error ~loc (UnhandledOperation (op, v))
+
+       | Some coop ->
+          begin
+            try
+              using (f_val (coop v))
+            with
+            | Value.(CoopException (Exception (exc, v))) ->
+              begin match Name.Map.find exc f_exc with
+              | None -> error ~loc (UnhandledException (exc, v))
+              | Some f -> using (f v)
+              end
+          end
+       end
+  in
+  let r = eval_user env_vars c in
+  using r
 
 
 let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d'; loc} =
@@ -482,7 +540,7 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
          fts ;
      { env with env_vars }
 
-  | Syntax.TopComp (c, ty) ->
+  | Syntax.TopUser (c, ty) ->
      let v = top_eval_user env c in
      if not quiet then
        Format.printf "@[<hov>- :@ %t@ =@ %t@]@."

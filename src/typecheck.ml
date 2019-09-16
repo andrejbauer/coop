@@ -237,7 +237,7 @@ let lookup_signal ~loc sgl {ctx_signals;_} =
   | Some ty -> ty
 
 (** Lookup the type of an exception *)
-let lookup_signal ~loc exc {ctx_exceptions;_} =
+let lookup_exception ~loc exc {ctx_exceptions;_} =
   match Name.Map.find exc ctx_exceptions with
   | None -> error ~loc (InvalidException exc)
   | Some ty -> ty
@@ -887,40 +887,40 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
      let c1, (Syntax.{user_ty=t1'; user_ops=ops1; user_exc=exc1} as t1) = infer_user ctx c1 in
      let ctx, p = extend_pattern ctx p t1' in
      let c2, t2 = infer_user ctx c2 in
-     let t2 = Syntax.pollute t2 ops1 exc1 in
+     let t2 = Syntax.pollute_user t2 ops1 exc1 in
      locate (Syntax.UserLet (p, c1, c2)), t2
 
   | Desugared.UserLetRec (fs, c) ->
      let ctx, pcs, _fts = infer_rec ctx fs in
      let c, c_ty = infer_user ctx c in
-     locate (Syntax.LetRec (pcs, c)), c_ty
+     locate (Syntax.UserLetRec (pcs, c)), c_ty
 
   | Desugared.UserMatch (e, lst) ->
      let e, e_ty = infer_expr ctx e in
      let lst, ty = infer_match_clauses ~loc ctx e_ty lst in
-     locate (Syntax.Match (e, lst)), ty
+     locate (Syntax.UserMatch (e, lst)), ty
 
   | Desugared.UserApply (e1, e2) ->
      let e1, t1 = infer_expr ctx e1 in
-     begin match as_arrow (norm_ty ~loc:(e1.Location.loc) ctx t1) with
+     begin match as_user_arrow (norm_ty ~loc:(e1.Location.loc) ctx t1) with
        | Some (u1, u2) ->
           let e2 = check_expr ctx e2 u1 in
-          locate (Syntax.Apply (e1, e2)), u2
+          locate (Syntax.UserApply (e1, e2)), u2
        | None ->
           error ~loc:(e1.Location.loc) (FunctionExpected t1)
      end
 
   | Desugared.UserOperation (op, e) ->
-     let ty1, ty2 = lookup_operation ~loc op ctx in
+     let ty1, ty2, exc_ops = lookup_operation ~loc op ctx in
      let e = check_expr ctx e ty1 in
-     let e_ty = Syntax.operation_ty ty2 op in
-     locate (Syntax.Operation (op, e)), e_ty
+     let e_ty = Syntax.operation_user_ty ty2 op in
+     locate (Syntax.UserOperation (op, e, exc_ops)), e_ty
 
   | Desugared.UserRaise (exc, e) ->
-     let e_ty = lookup_exception ~loc sgl ctx in
+     let e_ty = lookup_exception ~loc exc ctx in
      let e = check_expr ctx e e_ty in
-     let ty = Syntax.signal_ty sgl in
-     locate (Syntax.Exception (exc, e)), ty
+     let ty = Syntax.exception_user_ty exc in
+     locate (Syntax.UserRaise (exc, e)), ty
 
   | Desugared.UserUsing (rnr, e, c, fin) ->
      let rnr, (ops, w_ty, Syntax.{sig_ops=rnr_ops; sig_sgs=rnr_sgs}) =

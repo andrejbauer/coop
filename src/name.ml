@@ -53,6 +53,7 @@ struct
   let find = M.find_opt
   let merge = M.merge
   let fold = M.fold
+  let map = M.map
 end
 
 (** Create a fresh anonymous name. *)

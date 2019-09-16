@@ -82,10 +82,10 @@ and user' =
   | UserLetRec of user rec_clause list * user
   | UserApply of expr * expr
   | UserMatch of expr * (pattern * user) list
-  | UserOperation of Name.t * expr
+  | UserOperation of Name.t * expr * exceptions
   | UserRaise of Name.t * expr
   | UserUsing of expr * expr * user * finally
-  | UserRun of kernel * expr * finally
+  | UserExec of kernel * expr * finally
 
 (** Kernel computations *)
 and kernel = kernel' Location.located
@@ -97,7 +97,7 @@ and kernel' =
   | KernelLetRec of kernel rec_clause list * kernel
   | KernelApply of expr * expr
   | KernelMatch of expr * (pattern * kernel) list
-  | KernelOperation of Name.t * expr
+  | KernelOperation of Name.t * expr * exceptions
   | KernelRaise of Name.t * expr
   | KernelKill of Name.t * expr
   | KernelGetenv
@@ -185,6 +185,28 @@ let operation_kernel_ty t op tw =
   ; kernel_exc = empty_exceptions
   ; kernel_sgn = empty_signals
   ; kernel_world = tw }
+
+(** The user type of a raise *)
+let raise_user_ty exc =
+  { user_ty = Primitive Any
+  ; user_ops = empty_operations
+  ; user_exc = Exceptions (Name.Set.add exc Name.Set.empty) }
+
+(** The kernel type of a raise *)
+let raise_kernel_ty exc w_ty =
+  { kernel_ty = Primitive Any
+  ; kernel_ops = empty_operations
+  ; kernel_exc = Exceptions (Name.Set.add exc Name.Set.empty)
+  ; kernel_sgn = empty_signals
+  ; kernel_world = w_ty }
+
+(** The kernel type of a kill *)
+let kill_ty sgn w_ty =
+  { kernel_ty = Primitive Any
+  ; kernel_ops = empty_operations
+  ; kernel_exc = empty_exceptions
+  ; kernel_sgn = Signals (Name.Set.add sgn Name.Set.empty)
+  ; kernel_world = w_ty }
 
 (** Pretty-print a primitive type *)
 let print_primitive p ppf =
