@@ -38,6 +38,9 @@ and cooperation = t -> t kernel
 
 and container = (t -> t) Name.Map.t
 
+(** The unit value *)
+val unit_val : t
+
 (** The user monad structure *)
 val user_return : 'a -> 'a user
 val user_bind : 'a user -> ('a -> 'b user) -> 'b user

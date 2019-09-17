@@ -35,6 +35,8 @@ and container = (t -> t) Name.Map.t
 
 exception CoopException of exc
 
+let unit_val = Tuple []
+
 (** The user monad. *)
 let user_return x = UserVal x
 
