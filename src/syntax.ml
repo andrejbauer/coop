@@ -218,10 +218,6 @@ let print_primitive p ppf =
   | String -> "string"
   | Any -> "any")
 
-let print_names ns ppf =
-  let ns = List.sort Stdlib.compare (Name.Set.elements ns) in
-  Print.sequence (Name.print ~parentheses:true) "," ns ppf
-
 (** Pretty-print an expresion type *)
 let rec print_expr_ty ?max_level ty ppf =
   match ty with
@@ -261,25 +257,25 @@ let rec print_expr_ty ?max_level ty ppf =
 
   | ContainerTy (Operations ops) ->
      Format.fprintf ppf "{%t}"
-       (print_names ops)
+       (Print.names ops)
 
 and print_exceptions ~empty excs ppf =
   if Name.Set.is_empty excs then
     (if empty then Format.fprintf ppf "[}")
   else
-    Format.fprintf ppf "!{%t}" (print_names excs)
+    Format.fprintf ppf "!{%t}" (Print.names excs)
 
 and print_operations ~empty ops ppf =
   if Name.Set.is_empty ops then
     (if empty then Format.fprintf ppf "{}")
   else
-    Format.fprintf ppf "{%t}" (print_names ops)
+    Format.fprintf ppf "{%t}" (Print.names ops)
 
 and print_signals ~empty sgns ppf =
   if Name.Set.is_empty sgns then
     (if empty then Format.fprintf ppf "{}")
   else
-    Format.fprintf ppf "%s{%t}" (Print.char_lightning ()) (print_names sgns)
+    Format.fprintf ppf "%s{%t}" (Print.char_lightning ()) (Print.names sgns)
 
 and print_arrow ops ppf =
   if Name.Set.is_empty ops then
@@ -287,7 +283,7 @@ and print_arrow ops ppf =
   else
     Format.fprintf ppf "%s%t%s"
       (Print.char_prearrow ())
-      (print_names ops)
+      (Print.names ops)
       (Print.char_postarrow ())
 
 and print_user_ty ?max_level {user_ty=t; user_ops=Operations ops; user_exc=Exceptions excs} ppf =

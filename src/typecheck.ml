@@ -50,9 +50,10 @@ type error =
   | CannotInferMatch
   | DuplicateOperation of Name.t
   | DuplicateSignal of Name.t
-  | UnhandledOperationsSignals of Name.Set.t * Name.Set.t
-  | RenamingMismatch of Name.t * Name.t
-  | RenamingDomain of Name.t
+  | DuplicateException of Name.t
+  | UnhandledOperations of Name.Set.t
+  | UnhandledExceptions of Name.Set.t
+  | UnhandledSignals of Name.Set.t
 
 exception Error of error Location.located
 
@@ -162,25 +163,21 @@ let print_error err ppf =
      Format.fprintf ppf "signal %t is intercepted more than once"
        (Name.print sgl)
 
-  | UnhandledOperationsSignals (ops, sgs) ->
-     let ops = Name.Set.elements ops in
-     let sgs = Name.Set.elements sgs in
-     Format.fprintf ppf "the following %s are potentially unhandled:@ %t"
-       (match ops, sgs with
-        | [], [] -> assert false
-        | _::_, [] -> "operations"
-        | [], _::_ -> "signals"
-        | _::_, _::_ -> "operations and signals")
-       (Print.sequence (Name.print ~parentheses:true) "," (ops @ sgs))
+  | DuplicateException exc ->
+     Format.fprintf ppf "exception %t is intercepted more than once"
+       (Name.print exc)
 
-  | RenamingMismatch (op, op') ->
-     Format.fprintf ppf "cannot rename %t to %t, they have different types"
-       (Name.print op)
-       (Name.print op')
+  | UnhandledOperations ops ->
+     Format.fprintf ppf "the following operations are potentially unhandled:@ %t"
+       (Print.names ops)
 
-  | RenamingDomain op ->
-     Format.fprintf ppf "operation %t is not there and cannot be renamed"
-       (Name.print op)
+  | UnhandledExceptions exc ->
+     Format.fprintf ppf "the following exceptions are potentially unhandled:@ %t"
+       (Print.names exc)
+
+  | UnhandledSignals sgn ->
+     Format.fprintf ppf "the following signals are potentially unhandled:@ %t"
+       (Print.names sgn)
 
 (** [error ~loc err] raises the given type-checking error. *)
 let error ~loc err = Stdlib.raise (Error (Location.locate ~loc err))
@@ -785,24 +782,36 @@ let extend_pattern ctx p t =
   let ctx = extend_idents xts ctx in
   ctx, p
 
-(** Extend the context by typechecking the pattern against the type,
-    also return the list of bound names with their types. *)
+(** Extend the context by typechecking the pattern against the type, also return the list
+   of bound names with their types. *)
 let top_extend_pattern ctx p t =
   let p, xts = check_pattern ctx p t in
   let ctx = extend_idents xts ctx in
   ctx, p, xts
 
-(** Make sure that the dirt of the first type is a subsignature of [sgn], or report an error. *)
-(* let check_dirt ~fatal ~loc *)
-(*   Syntax.{comp_sig={sig_ops=ops1; sig_sgs=sgs1}; _} *)
-(*   Syntax.{sig_ops=ops2; sig_sgs=sgs2} = *)
-(*   let ops = Name.Set.diff ops1 ops2 in *)
-(*   let sgs = Name.Set.diff sgs1 sgs2 in *)
-(*   if not (Name.Set.is_empty ops && Name.Set.is_empty sgs) then *)
-(*     if fatal then *)
-(*       error ~loc (UnhandledOperationsSignals (ops, sgs)) *)
-(*     else *)
-(*       warning ~loc (UnhandledOperationsSignals (ops, sgs)) *)
+(** Check that the operations [ops1] are a subset of [ops2], issue and error or a warning
+   if necessary. *)
+let check_operations ~fatal ~loc ops1 ops2 =
+  if Name.Set.subset ops1 ops2 then
+    error ~loc (UnhandledOperations (Name.Set.diff ops2 ops1))
+  else
+    warning ~loc (UnhandledOperations (Name.Set.diff ops2 ops1))
+
+(** Check that the exceptions [exc1] are a subset of [exc2], issue and error or a warning
+   if necessary. *)
+let check_exceptions ~fatal ~loc exc1 exc2 =
+  if Name.Set.subset exc1 exc2 then
+    error ~loc (UnhandledExceptions (Name.Set.diff exc2 exc1))
+  else
+    warning ~loc (UnhandledExceptions (Name.Set.diff exc2 exc1))
+
+(** Check that the signals [sgn1] are a subset of [sgn2], issue and error or a warning
+   if necessary. *)
+let check_signals ~fatal ~loc sgn1 sgn2 =
+  if Name.Set.subset sgn1 sgn2 then
+    error ~loc (UnhandledSignals (Name.Set.diff sgn2 sgn1))
+  else
+    warning ~loc (UnhandledSignals (Name.Set.diff sgn2 sgn1))
 
 
 (** [infer_expr ctx e] infers the expression type [ty] of an expression [e]. It
@@ -880,8 +889,11 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
      let e2 = check_expr ctx e2 t in
      locate (Syntax.UserEqual (e1, e2)), Syntax.(pure_user_ty (Primitive Bool))
 
-  | Desugared.UserTry (c, h) ->
-     (??)
+  | Desugared.UserTry (c, hnd) ->
+     let c, Syntax.{user_ty; user_ops; user_exc} = infer_user ctx c in
+     let hnd, hnd_exc, hnd_ty = infer_user_handler ctx user_ty user_exc hnd in
+     let t = Syntax.pollute_user hnd_ty user_ops Syntax.empty_exceptions in
+     locate (Syntax.UserTry (c, hnd)), t
 
   | Desugared.UserLet (p, c1, c2) ->
      let c1, (Syntax.{user_ty=t1'; user_ops=ops1; user_exc=exc1} as t1) = infer_user ctx c1 in
@@ -914,24 +926,35 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
      let ty1, ty2, exc_ops = lookup_operation ~loc op ctx in
      let e = check_expr ctx e ty1 in
      let e_ty = Syntax.operation_user_ty ty2 op in
-     locate (Syntax.UserOperation (op, e, exc_ops)), e_ty
+     locate (Syntax.(UserOperation (op, e, Exceptions exc_ops))), e_ty
 
   | Desugared.UserRaise (exc, e) ->
      let e_ty = lookup_exception ~loc exc ctx in
      let e = check_expr ctx e e_ty in
-     let ty = Syntax.exception_user_ty exc in
+     let ty = Syntax.raise_user_ty exc in
      locate (Syntax.UserRaise (exc, e)), ty
 
-  | Desugared.UserUsing (rnr, e, c, fin) ->
-     let rnr, (ops, w_ty, Syntax.{sig_ops=rnr_ops; sig_sgs=rnr_sgs}) =
-       infer_runner ctx rnr in
-     let e = check_expr ctx e w_ty in
-     let c, (Syntax.{comp_ty=x_ty; _} as c_ty) = infer_user ctx c in
-     let fin, fin_sgs, fin_ty = infer_finally ~loc ctx x_ty w_ty fin in
-     let rnr_sig = Syntax.{sig_ops=rnr_ops; sig_sgs = Name.Set.diff rnr_sgs fin_sgs} in
-     let fin_ty = Syntax.pollute fin_ty rnr_sig in
-     check_dirt ~fatal:true ~loc c_ty Syntax.{sig_ops=ops; sig_sgs=fin_sgs} ;
-     locate (Syntax.Run (rnr, e, c, fin)), fin_ty
+  | Desugared.UserUsing (rnr, w, c, fin) ->
+     (* The runner [rnr] handles operations [ops1], triggers operations [ops2] and
+        signals [sgn]. It operates on a world of type [w_ty]. It also triggers
+        exceptions that the [ops1] allow. *)
+     let rnr, (ops1, ops2, sgn, w_ty) = infer_runner ctx rnr in
+     (* Check that the world [w] has at most the type [w_ty], which is ok because
+        we use [w] covariantly (to insert it into the state). *)
+     let w = check_expr ctx w w_ty in
+     (* infer the type of the body [c] *)
+     let c, (Syntax.{user_ty; user_ops; user_exc} as c_ty) = infer_user ctx c in
+     (* the finally clause [fin] raises exceptions [fin_excs], signals [fin_sgs], and
+        evaluates to user computations of type [fin_ty] (thus the information about
+        [fin_exc] and [fin_sgn] is already contained in [fin_ty] *)
+     let fin, fin_exc, fin_sgn, fin_ty = infer_finally ~loc ctx user_ty w_ty fin in
+     (* check that finally intercepts the exceptions of [c] *)
+     check_exceptions ~fatal:true ~loc user_exc fin_exc ;
+     (* check that the runner intercepts the operations of [c] *)
+     check_operations ~fatal:true ~loc user_exc fin_exc ;
+     (* check that the finally intercepts the signals of the runner [rnr] *)
+     check_signals ~fatal:true ~loc sgn fin_sgns ;
+     locate (Syntax.UserUsing (rnr, w, c, fin)), fin_ty
 
   | Desugared.UserRun (k, w, fin) ->
      (??)
@@ -939,7 +962,7 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
 and infer_kernel ctx c =
   (??)
 
-and infer_user_exception_handler ctx Desugared.{exc_val=c_val; exc_raise=c_raise} =
+and infer_user_handler ctx ty_val exc Desugared.{exc_val=(px,c_val); exc_raise} =
   (??)
 
 and infer_rec ctx fs =
@@ -1008,41 +1031,62 @@ and infer_runner ctx rnr =
   let e, e_ty = infer_expr ctx rnr in
   match as_runner (norm_ty ~loc:rnr.Location.loc ctx e_ty) with
 
-    | Some (ops, t, sgn2) ->
-       e, (ops, t, sgn2)
+    | Some (ops1, ops2, sgn, w_ty) ->
+       e, (ops1, ops2, sgn, w_ty)
 
     | None ->
        error ~loc:rnr.Location.loc (RunnerExpected e_ty)
 
-
-and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_signals} =
-  let fin_val, c_ty =
-    let (px, pw, c) = fin_val in
+(** Infer the types of a finally clause, for given type of [val] case [x_ty] and world type [w_ty]. *)
+and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_raise; fin_kill} =
+  let fin_val, ty_val =
+    let (px, pw, c_val) = fin_val in
     let ctx, px = extend_binder ctx px x_ty in
     let ctx, pw = extend_binder ctx pw w_ty in
-    let c, c_ty = infer_user ctx c in
-    (px, pw, c), c_ty
+    let c_val, ty_val = infer_user ctx c_val in
+    (px, pw, c_val), ty_val
   in
-  let fin_signals, fin_sgs, fin_ty =
+  let fin_raise, fin_excs, fin_ty =
+    let rec fold fs excs ty = function
+      | [] ->
+         let fs = List.rev fs in
+         fs, excs, ty
+      | (exc, px, pw, c_exc) :: lst ->
+         begin
+           if List.exists (fun (exc', _, _, _) -> Name.equal exc exc') fs then error ~loc (DuplicateException exc) ;
+           let u_ty = lookup_exception ~loc exc ctx in
+           let ctx, px = extend_binder ctx px u_ty in
+           let ctx, pw = extend_binder ctx pw w_ty in
+           let c_exc, exc_ty = infer_user ctx c_exc in
+           let ty = join_user_ty ~loc:c_exc.Location.loc ctx ty exc_ty in
+           let excs = Name.Set.add exc excs in
+           fold ((exc, px, pw, c_exc) :: fs) excs ty lst
+         end
+    in
+    fold [] Name.Set.empty ty_val fin_raise
+  in
+  let fin_kill, fin_sgns, fin_ty =
     let rec fold fs sgs ty = function
       | [] ->
          let fs = List.rev fs in
          fs, sgs, ty
-      | (sg, px, pw, c_sg) :: lst ->
+      | (sg, px, c_sg) :: lst ->
          begin
-           if List.exists (fun (sg', _, _, _) -> Name.equal sg sg') fs then error ~loc (DuplicateSignal sg) ;
-           let x_ty = lookup_signal ~loc sg ctx in
-           let ctx, px = extend_binder ctx px x_ty in
-           let ctx, pw = extend_binder ctx pw w_ty in
+           if List.exists (fun (sg', _, _) -> Name.equal sg sg') fs then error ~loc (DuplicateSignal sg) ;
+           let u_ty = lookup_signal ~loc sg ctx in
+           let ctx, px = extend_binder ctx px u_ty in
            let c_sg, sg_ty = infer_user ctx c_sg in
-           let ty = join_comp_ty ~loc:c_sg.Location.loc ctx ty sg_ty in
+           let ty = join_user_ty ~loc:c_sg.Location.loc ctx ty sg_ty in
            let sgs = Name.Set.add sg sgs in
-           fold ((sg, px, pw, c_sg) :: fs) sgs ty lst
+           fold ((sg, px, c_sg) :: fs) sgs ty lst
          end
     in
-    fold [] Name.Set.empty c_ty fin_signals
+    fold [] Name.Set.empty fin_ty fin_kill
   in
-  Syntax.{fin_val; fin_signals}, fin_sgs, fin_ty
+  Syntax.{fin_val; fin_kill; fin_raise},
+  Syntax.Exceptions fin_excs,
+  Syntax.Signals fin_sgns,
+  fin_ty
 
 
 and extend_binder ctx (p, topt) t =
@@ -1063,8 +1107,8 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
 
   (* Synthesizing terms and [any] type *)
   | _, Normal Syntax.(Primitive Any)
-  | Desugared.(Quoted _ | Numeral _ | Boolean _ | Constructor _ | Lambda ((_, Some _), _) |
-               Var _ | AscribeExpr _ | Runner _ | RunnerTimes _ | RunnerRename _), _ ->
+  | Desugared.(Quoted _ | Numeral _ | Boolean _ | Constructor _ | FunUser ((_, Some _), _) |
+               FunKernel ((_, Some _), _) | Var _ | ExprAscribe _ | Runner _ ), _ ->
      let e, ty' = infer_expr ctx e in
      if expr_subty ~loc ctx ty' ty
      then
@@ -1072,13 +1116,24 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
      else
        error ~loc (ExprTypeMismatch (ty, ty'))
 
-  | Desugared.Lambda ((p, None), e), ty' ->
+  | Desugared.FunUser ((p, None), e), ty' ->
      begin
-       match as_arrow ty' with
+       match as_user_arrow ty' with
        | Some (t, u) ->
           let ctx, p = extend_pattern ctx p t in
-          let c = check_comp ctx e u in
-          locate (Syntax.Lambda (p, c))
+          let c = check_user ctx e u in
+          locate (Syntax.FunUser (p, c))
+       | None ->
+          error ~loc (TypeExpectedButFunction ty)
+     end
+
+  | Desugared.FunKernel ((p, None), e), ty' ->
+     begin
+       match as_kernel_arrow ty' with
+       | Some (t, u) ->
+          let ctx, p = extend_pattern ctx p t in
+          let c = check_kernel ctx e u in
+          locate (Syntax.FunKernel (p, c))
        | None ->
           error ~loc (TypeExpectedButFunction ty)
      end
@@ -1163,6 +1218,10 @@ and check_user ctx ({Location.it=c'; loc} as c) check_ty =
        c
      else
        error ~loc (CompTypeMismatch (check_ty, c_ty))
+
+
+and check_kernel ctx c t =
+  (??)
 
 and check_match_clauses ctx patt_ty ty lst =
   List.map (check_match_clause ctx patt_ty ty) lst

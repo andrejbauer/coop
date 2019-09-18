@@ -138,6 +138,8 @@ val unit_ty : expr_ty
 
 (** The empty entities *)
 val empty_operations : operations
+val empty_exceptions : exceptions
+val empty_signals : signals
 
 (** Make a pure user type *)
 val pure_user_ty : expr_ty -> user_ty

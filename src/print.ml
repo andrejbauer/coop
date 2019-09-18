@@ -29,6 +29,11 @@ let sequence print_u separator us ppf =
       print_u u ppf ;
       List.iter (fun u -> print ppf "%s@ " separator ; print_u u ppf) us
 
+(** Print a set of names as a sequence *)
+let names ns ppf =
+  let ns = List.sort Stdlib.compare (Name.Set.elements ns) in
+  sequence (Name.print ~parentheses:true) "," ns ppf
+
 (** Unicode and ascii versions of symbols. *)
 
 let select ascii utf = if !Config.ascii then ascii else utf

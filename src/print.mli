@@ -32,3 +32,6 @@ val char_times : unit -> string
 (** Print a sequence. *)
 val sequence :
   ('a -> Format.formatter -> unit) -> string -> 'a list -> Format.formatter -> unit
+
+(** Print a set of names, sorted alphabetically *)
+val names : Name.Set.t -> Format.formatter -> unit
