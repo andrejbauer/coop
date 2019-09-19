@@ -12,7 +12,6 @@ type error =
   | IllegalComparison of Value.t
   | FunctionExpected
   | RunnerExpected
-  | PairExpected
   | ContainerExpected
   | PatternMismatch
 
@@ -49,9 +48,6 @@ let print_error err ppf =
 
   | RunnerExpected ->
      Format.fprintf ppf "runner expected, please report"
-
-  | PairExpected ->
-     Format.fprintf ppf "pair expected, please report"
 
   | ContainerExpected ->
      Format.fprintf ppf "container expected, please report"
@@ -166,12 +162,6 @@ let match_clauses ~loc env ps v =
        end
   in
   fold ps
-
-let as_pair ~loc = function
-  | Value.Tuple [v1; v2] -> (v1, v2)
-  | Value.(ClosureUser _ | ClosureKernel _ | Numeral _ | Boolean _ | Quoted _ | Constructor _
-    | Tuple ([] | [_] | _::_::_::_) | Runner _ | Abstract | Container _) ->
-     error ~loc PairExpected
 
 let as_closure_user ~loc = function
   | Value.ClosureUser f -> f
@@ -333,7 +323,7 @@ and eval_user env Location.{it=c'; loc} =
 
   | Syntax.UserVal e ->
      let v = eval_expr env e in
-     Value.UserVal v
+     user_return v
 
   | Syntax.UserMatch (e, lst) ->
      let v = eval_expr env e in
@@ -344,7 +334,7 @@ and eval_user env Location.{it=c'; loc} =
      let v1 = eval_expr env e1
      and v2 = eval_expr env e2 in
      let b = equal_value ~loc v1 v2 in
-     Value.UserVal (Value.Boolean b)
+     user_return (Value.Boolean b)
 
   | Syntax.UserApply (e1, e2) ->
      let v1 = eval_expr env e1 in
@@ -362,7 +352,7 @@ and eval_user env Location.{it=c'; loc} =
 
   | Syntax.(UserOperation (op, u, Exceptions excs)) ->
      let u = eval_expr env u in
-     Value.UserOperation (op, u, (fun v -> Value.UserVal v), reraise_user excs)
+     Value.UserOperation (op, u, user_return, reraise_user excs)
 
   | Syntax.UserRaise (exc, e) ->
      let v = eval_expr env e in
@@ -404,7 +394,7 @@ and eval_kernel env Location.{it=c';loc} w =
 
   | Syntax.KernelVal e ->
      let v = eval_expr env e in
-     Value.KernelVal (v, w)
+     kernel_return v w
 
   | Syntax.KernelMatch (e, lst) ->
      let v = eval_expr env e in
@@ -415,7 +405,7 @@ and eval_kernel env Location.{it=c';loc} w =
      let v1 = eval_expr env e1
      and v2 = eval_expr env e2 in
      let b = equal_value ~loc v1 v2 in
-     Value.KernelVal (Value.Boolean b, w)
+     kernel_return (Value.Boolean b) w
 
   | Syntax.KernelApply (e1, e2) ->
      let v1 = eval_expr env e1 in
@@ -433,7 +423,7 @@ and eval_kernel env Location.{it=c';loc} w =
 
   | Syntax.(KernelOperation (op, u, Exceptions excs)) ->
      let u = eval_expr env u in
-     Value.KernelOperation (op, u, (fun v -> Value.KernelVal (v, w)), reraise_kernel w excs)
+     Value.KernelOperation (op, u, (fun v -> kernel_return v w), reraise_kernel w excs)
 
   | Syntax.KernelRaise (exc, e) ->
      let v = eval_expr env e in

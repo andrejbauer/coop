@@ -86,7 +86,7 @@ and user' =
   | UserOperation of Name.t * expr
   | UserRaise of Name.t * expr
   | UserUsing of expr * expr * user * finally
-  | UserRun of kernel * expr * finally
+  | UserExec of kernel * expr * finally
 
 (** Kernel computations *)
 and kernel = kernel' Location.located
