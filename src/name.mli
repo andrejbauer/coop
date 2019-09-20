@@ -20,6 +20,7 @@ sig
 
   val empty : t
   val is_empty : t -> bool
+  val remove : elt -> t -> t
   val add : elt -> t -> t
   val mem : elt -> t -> bool
   val elements : t -> elt list
@@ -38,6 +39,7 @@ sig
   type key = t
   type 'a t
   val empty : 'a t
+  val mem : key -> 'a t -> bool
   val add : key -> 'a -> 'a t -> 'a t
   val find : key -> 'a t -> 'a option
   val merge : (key -> 'a option -> 'a option -> 'a option) -> 'a t -> 'a t -> 'a t

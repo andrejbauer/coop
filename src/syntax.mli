@@ -130,6 +130,7 @@ and toplevel' =
   | DefineAlias of Name.t * expr_ty
   | DefineDatatype of (Name.t * datatype) list
   | DeclareOperation of Name.t * expr_ty * expr_ty
+  | DeclareException of Name.t * expr_ty
   | DeclareSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string
 

@@ -70,7 +70,7 @@ and expr' =
   | Constructor of Name.t * expr option
   | FunUser of binder * user
   | FunKernel of binder * kernel
-  | Runner of runner_clause list * expr_ty
+  | Runner of (Name.t * binder * kernel) list * expr_ty
 
 (** User computations *)
 and user = user' Location.located
@@ -113,8 +113,6 @@ and 'a exception_handler = {
 }
 
 and binder = pattern * expr_ty option
-
-and runner_clause = Name.t * binder * kernel
 
 and finally =
   { fin_val : binder * binder * user

@@ -677,6 +677,13 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
                      (Syntax.print_expr_ty ty2) ;
      env
 
+  | Syntax.DeclareException (exc, t) ->
+     if not quiet then
+       Format.printf "@[<hov>exception %t@ of@ %t@]@."
+                     (Name.print exc)
+                     (Syntax.print_expr_ty t) ;
+     env
+
   | Syntax.DeclareSignal (sgl, t) ->
      if not quiet then
        Format.printf "@[<hov>signal %t@ of@ %t@]@."

@@ -25,6 +25,7 @@ struct
 
   let empty = S.empty
   let is_empty = S.is_empty
+  let remove = S.remove
   let add = S.add
   let mem = S.mem
   let elements = S.elements
@@ -49,6 +50,7 @@ struct
   type 'a t = 'a M.t
 
   let empty = M.empty
+  let mem = M.mem
   let add = M.add
   let find = M.find_opt
   let merge = M.merge
