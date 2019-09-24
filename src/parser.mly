@@ -26,7 +26,6 @@
 %token LET REC IN
 %token MATCH WITH BAR
 %token USING RUN TRY FINALLY VAL
-%token RAISE KILL
 
 (* Toplevel commands *)
 
@@ -102,7 +101,7 @@ commandline:
 topcomp: mark_location(topcomp_) { $1 }
 topcomp_:
   | c=term
-    { Sugared.TopComp c }
+    { Sugared.TopUser c }
 
 (* Things that can be done at the toplevel, except for a computation. *)
 toplevel: mark_location(toplevel_) { $1 }
@@ -119,8 +118,8 @@ toplevel_:
   | CONTAINER c=infix_term
     { Sugared.TopContainer c }
 
-  | OPERATION op=var_name COLON t1=prod_ty ARROW t2=ty
-    { Sugared.DeclareOperation (op, t1, t2) }
+  | OPERATION op=var_name COLON t1=prod_ty ARROW t2=prod_ty ops=signature
+    { Sugared.DeclareOperation (op, t1, t2, ops) }
 
   | EXCEPTION exc=var_name OF t=ty
     { Sugared.DeclareException (exc, t) }
@@ -151,10 +150,10 @@ term_:
     { Sugared.Ascribe (e, t) }
 
   | FUN a=binder+ ARROW e=term
-    { Sugared.Lambda (a, e) }
+    { Sugared.FunUser (a, e) }
 
   | FUNK a=binder+ ARROW e=term
-    { Sugared.Lambda (a, e) }
+    { Sugared.FunKernel (a, e) }
 
   | LET bnd=let_binding IN c=term
     { Sugared.Let (bnd, c) }
@@ -175,7 +174,7 @@ term_:
     { Sugared.Runner (lst, t) }
 
   | USING rnr=infix_term AT w=infix_term RUN c=term FINALLY LBRACE fin=finally RBRACE
-    { Sugared.Run (rnr, w, c, fin) }
+    { Sugared.Using (rnr, w, c, fin) }
 
   | TRY c=term WITH LBRACE tr=trying RBRACE
     { Sugared.Try (c, tr) }
@@ -206,11 +205,11 @@ app_term_:
   | SETENV e=prefix_term
     { Sugared.Setenv e }
 
-  | KILL e=prefix_term
-    { Sugared.Kill e }
+  | sgn=SIGNALNAME e=prefix_term
+    { Sugared.Kill (sgn, e) }
 
-  | RAISE e=prefix_term
-    { Sugared.Raise e }
+  | exc=EXCEPTIONNAME e=prefix_term
+    { Sugared.Raise (exc, e) }
 
 prefix_term: mark_location(prefix_term_) { $1 }
 prefix_term_:
@@ -305,10 +304,10 @@ finally_clause:
   | VAL px=binder AT pw=binder ARROW t=term
     { Sugared.FinVal (px, pw, t) }
 
-  | RAISE exc=var_name px=binder AT pw=binder ARROW c=term
+  | exc=EXCEPTIONNAME px=binder AT pw=binder ARROW c=term
     { Sugared.FinRaise (exc, px, pw, c) }
 
-  | KILL sgl=var_name px=binder ARROW c=term
+  | sgl=SIGNALNAME px=binder ARROW c=term
     { Sugared.FinKill (sgl, px, c) }
 
 trying:
@@ -321,11 +320,8 @@ try_clause:
   | VAL px=binder ARROW t=term
     { Sugared.TryVal (px, t) }
 
-  | RAISE exc=var_name px=binder ARROW c=term
+  | exc=EXCEPTIONNAME px=binder ARROW c=term
     { Sugared.TryRaise (exc, px, c) }
-
-  | KILL sgl=var_name px=binder ARROW c=term
-    { Sugared.TryKill (sgl, px, c) }
 
 binder:
   | p=simple_pattern
@@ -347,11 +343,19 @@ annot:
     { t }
 
 let_binding:
-  | p=pattern t=annot? EQUAL e=term
-    { Sugared.BindVal (p, t, e) }
+  | p=pattern t=annot EQUAL e=term
+    { let e = Location.locate ~loc:e.Location.loc (Sugared.Ascribe (e, t)) in
+      Sugared.(BindVal (p, e)) }
 
-  | f=var_name a=binder+ t=annot? EQUAL e=term
-    { Sugared.BindFun (f, a, t, e) }
+  | p=pattern EQUAL e=term
+    { Sugared.(BindVal (p, e)) }
+
+  | f=var_name a=binder+ t=annot EQUAL e=term
+    { let e = Location.locate ~loc:e.Location.loc (Sugared.Ascribe (e, t)) in
+      Sugared.BindFun (f, a, e) }
+
+  | f=var_name a=binder+ EQUAL e=term
+    { Sugared.BindFun (f, a, e) }
 
 match_binder:
   | p=pattern

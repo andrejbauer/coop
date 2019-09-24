@@ -63,72 +63,60 @@ and pattern' =
 (** Expressions *)
 type expr = expr' Location.located
 and expr' =
-  | ExprAscribe of expr * expr_ty
+  | AscribeExpr of expr * expr_ty
   | Var of Name.t
   | Numeral of int
   | Boolean of bool
   | Quoted of string
   | Tuple of expr list
   | Constructor of Name.t * expr option
-  | FunUser of binder * user
-  | FunKernel of binder * kernel
-  | Runner of (Name.t * binder * kernel) list * expr_ty
+  | FunUser of binder * comp
+  | FunKernel of binder * comp
+  | Runner of (Name.t * binder * comp) list * expr_ty
 
-(** User computations *)
-and user = user' Location.located
-and user' =
-  | UserAscribe of user * user_ty
-  | UserVal of expr
-  | UserEqual of expr * expr
-  | UserTry of user * user exception_handler
-  | UserLet of pattern * user * user
-  | UserLetRec of (Name.t * user_ty * pattern * expr_ty * user) list * user
-  | UserApply of expr * expr
-  | UserMatch of expr * (binder * user) list
-  | UserOperation of Name.t * expr
-  | UserRaise of Name.t * expr
-  | UserUsing of expr * expr * user * finally
-  | UserExec of kernel * expr * finally
-
-(** Kernel computations *)
-and kernel = kernel' Location.located
-and kernel' =
-  | KernelAscribe of kernel * kernel_ty
-  | KernelVal of expr
-  | KernelEqual of expr * expr
-  | KernelTry of kernel * kernel exception_handler
-  | KernelLet of pattern * kernel * kernel
-  | KernelLetRec of (Name.t * kernel_ty * pattern * expr_ty * kernel) list * kernel
-  | KernelApply of expr * expr
-  | KernelMatch of expr * (binder * kernel) list
-  | KernelOperation of Name.t * expr
-  | KernelRaise of Name.t * expr
-  | KernelKill of Name.t * expr
-  | KernelGetenv
-  | KernelSetenv of expr
-  | KernelExec of user * kernel exception_handler
+(** Computations *)
+and comp = comp' Location.located
+and comp' =
+  | AscribeUser of comp * user_ty
+  | AscribeKernel of comp * kernel_ty
+  | Val of expr
+  | Equal of expr * expr
+  | Try of comp * exception_handler
+  | Let of pattern * comp * comp
+  | LetRec of (Name.t * user_ty * pattern * expr_ty * comp) list * comp
+  | LetReck of (Name.t * kernel_ty * pattern * expr_ty * comp) list * comp
+  | Apply of expr * expr
+  | Match of expr * (binder * comp) list
+  | Operation of Name.t * expr
+  | Raise of Name.t * expr
+  | Kill of Name.t * expr
+  | Getenv
+  | Setenv of expr
+  | Using of expr * expr * comp * finally
+  | ExecKernel of comp * expr * finally
+  | ExecUser of comp * exception_handler
 
 (** Exception handler *)
-and 'a exception_handler = {
-   exc_val : binder * 'a ;
-   exc_raise : (Name.t * binder * 'a) list
+and exception_handler = {
+   try_val : binder * comp ;
+   try_raise : (Name.t * binder * comp) list
 }
 
 and binder = pattern * expr_ty option
 
 and finally =
-  { fin_val : binder * binder * user
-  ; fin_raise : (Name.t * binder * binder * user) list
-  ; fin_kill : (Name.t * binder * user) list}
+  { fin_val : binder * binder * comp
+  ; fin_raise : (Name.t * binder * binder * comp) list
+  ; fin_kill : (Name.t * binder * comp) list}
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
-  | TopLet of pattern * user
-  | TopLetRec of (Name.t * user_ty * pattern * expr_ty * user) list
-  | TopContainer of user
-  | TopUser of user
+  | TopLet of pattern * comp
+  | TopLetRec of (Name.t * user_ty * pattern * expr_ty * comp) list
+  | TopContainer of comp
+  | TopUser of comp
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty
   | DefineDatatype of (Name.t * datatype) list

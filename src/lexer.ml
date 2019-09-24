@@ -19,14 +19,12 @@ let reserved = [
   ("if", Parser.IF) ;
   ("in", Parser.IN) ;
   ("int", Parser.INT) ;
-  ("kill", Parser.KILL) ;
   ("let", Parser.LET) ;
   ("load", Parser.LOAD) ;
   ("match", Parser.MATCH) ;
   ("of", Parser.OF) ;
   ("operation", Parser.OPERATION) ;
   ("rec", Parser.REC) ;
-  ("raise", Parser.RAISE) ;
   ("run", Parser.RUN) ;
   ("runner", Parser.RUNNER) ;
   ("setenv", Parser.SETENV) ;

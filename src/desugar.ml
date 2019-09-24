@@ -4,12 +4,14 @@ type desugar_error =
   | UnknownOperation of Name.t
   | UnknownConstructor of Name.t
   | UnknownType of Name.t
+  | UnexpectedOperation of Name.t
   | UnexpectedSignal of Name.t
   | UnexpectedException of Name.t
   | UnexpectedComputationTy
   | UnexpectedKernelTy
   | OperationExpected of Name.t
-  | OperationOrSignalExpected of Name.t
+  | ExceptionExpected of Name.t
+  | SignalExpected of Name.t
   | ShadowOperation of Name.t
   | ShadowException of Name.t
   | ShadowSignal of Name.t
@@ -20,8 +22,9 @@ type desugar_error =
   | BareOperation
   | BareSignal
   | MissingFinallyVal
-  | DoubleFinallyVal
-  | DoubleFinallySignal of Name.t
+  | DoubleVal
+  | DoubleException of Name.t
+  | DoubleSignal of Name.t
 
 (** The exception signalling a desugaring error*)
 exception Error of desugar_error Location.located
@@ -45,6 +48,9 @@ let print_error err ppf =
   | UnknownType ty ->
      Format.fprintf ppf "unknown type %t" (Name.print ty)
 
+  | UnexpectedOperation op ->
+     Format.fprintf ppf "operation %t cannot appear here" (Print.exception_name op)
+
   | UnexpectedException sgn ->
      Format.fprintf ppf "exception %t cannot appear here" (Print.exception_name sgn)
 
@@ -60,8 +66,11 @@ let print_error err ppf =
   | OperationExpected x ->
      Format.fprintf ppf "%t is not an operation" (Name.print x)
 
-  | OperationOrSignalExpected x ->
-     Format.fprintf ppf "%t is neither an operation nor a signal" (Name.print x)
+  | SignalExpected x ->
+     Format.fprintf ppf "%t is not a signal" (Name.print x)
+
+  | ExceptionExpected x ->
+     Format.fprintf ppf "%t is not an exception" (Name.print x)
 
   | ShadowOperation op ->
      Format.fprintf ppf "%t is already declared to be an operation" (Name.print op)
@@ -93,11 +102,14 @@ let print_error err ppf =
   | MissingFinallyVal ->
      Format.fprintf ppf "missing finally value clause"
 
-  | DoubleFinallyVal ->
+  | DoubleVal ->
      Format.fprintf ppf "multiple value clauses"
 
-  | DoubleFinallySignal sgl ->
-     Format.fprintf ppf "multile signal %t clauses" (Name.print sgl)
+  | DoubleException sgl ->
+     Format.fprintf ppf "exception %t has multiple clauses" (Name.print sgl)
+
+  | DoubleSignal sgl ->
+     Format.fprintf ppf "signal %t has multiple clauses" (Name.print sgl)
 
 
 (** A desugaring context resolves names to their kinds. *)
@@ -121,10 +133,6 @@ type context = {
     ctx_constructors : constructor_kind Name.Map.t ;
     ctx_types : tydef_kind Name.Map.t
   }
-
-(** During desugating we're either in a user or a kernel mode, so that
-    we know what to desurar to. *)
-type mode = UserMode | KernelMode
 
 (** Initial empty context *)
 let initial =
@@ -154,15 +162,17 @@ let is_operation op ctx =
   | Some Operation -> true
   | Some (Variable | Exception | Signal) | None -> false
 
-let is_signal sgl ctx =
+let check_signal ~loc sgl ctx =
   match lookup_ident sgl ctx with
-  | Some Signal -> true
-  | Some (Variable | Exception | Operation) | None -> false
+  | Some Signal -> ()
+  | Some (Variable | Exception | Operation) | None ->
+     error ~loc (SignalExpected sgl)
 
-let is_exception exc ctx =
-  match lookup_ident exc ctx with
-  | Some Exception -> true
-  | Some (Variable | Signal | Operation) | None -> false
+let check_exception ~loc sgl ctx =
+  match lookup_ident sgl ctx with
+  | Some Exception -> ()
+  | Some (Variable | Signal | Operation) | None ->
+     error ~loc (ExceptionExpected sgl)
 
 (** Check whether [x] shadows an operation or a signal *)
 let check_ident_shadow ~loc x ctx =
@@ -183,9 +193,6 @@ let check_constructor_shadow ~loc x ctx =
   match lookup_constructor x ctx with
   | None -> ()
   | Some _ -> error ~loc (ShadowConstructor x)
-
-let operations ops =
-  List.fold_left (fun ops op -> Name.Set.add op ops) Name.Set.empty ops
 
 let primitive = function
   | Sugared.Empty -> Desugared.Empty
@@ -264,6 +271,23 @@ let operation_signature ~loc sg =
 
     | Sugared.Exception e :: _ ->
        error ~loc (UnexpectedException e)
+
+    | Sugared.Signal s :: _ ->
+       error ~loc (UnexpectedSignal s)
+  in
+  fold Name.Set.empty sg
+
+let exception_signature ~loc sg =
+  let rec fold exc = function
+
+    | [] -> Desugared.Exceptions exc
+
+    | Sugared.Operation o :: sg ->
+       error ~loc (UnexpectedOperation o)
+
+    | Sugared.Exception e :: sg ->
+       let exc = Name.Set.add e exc in
+       fold exc sg
 
     | Sugared.Signal s :: _ ->
        error ~loc (UnexpectedSignal s)
@@ -359,7 +383,7 @@ and user_or_kernel_ty ctx ({Location.it=t'; loc} as t) =
      KernelTy (Location.locate ~loc (Desugared.{kernel_ty; kernel_ops; kernel_exc; kernel_sgn; kernel_world}))
 
 
-let exrp_ty_opt ctx = function
+let expr_ty_opt ctx = function
   | None -> None
   | Some t -> Some (expr_ty ctx t)
 
@@ -436,7 +460,7 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
     | Sugared.Ascribe (e, t) ->
        let w, e = expr ctx e in
        let t = expr_ty ctx t in
-       (w, locate (Desugared.ExprAscribe (e, t)))
+       (w, locate (Desugared.AscribeExpr (e, t)))
 
     | Sugared.Numeral n ->
        ([], locate (Desugared.Numeral n))
@@ -472,15 +496,18 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
        let ws, lst = expr_tuple ctx lst in
        (ws, locate (Desugared.Tuple lst))
 
-    | Sugared.Lambda (pxs, c) ->
-       ([], abstract ~loc ctx pxs c)
+    | Sugared.FunUser (pxs, c) ->
+       ([], user_abstract ~loc ctx pxs c)
+
+    | Sugared.FunKernel (pxs, c) ->
+       ([], kernel_abstract ~loc ctx pxs c)
 
     | Sugared.Runner (lst, t) ->
        let t = expr_ty ctx t in
        let lst = runner_clauses ~loc ctx lst in
        ([], locate (Desugared.Runner (lst, t)))
 
-    | Sugared.(Match _ | If _ | Apply _ | Let _ | LetRec _ | Sequence _ | Run _ | Try _ | Equal _ |
+    | Sugared.(Match _ | If _ | Apply _ | Let _ | LetRec _ | Sequence _ | Using _ | Try _ | Equal _ |
                Getenv | Setenv _ | Raise _ | Kill _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
@@ -496,46 +523,66 @@ and expr_tuple ctx es =
   in
   fold es
 
-(** Abstract 0 or more times to get a computation *)
-and abstract0 ~loc ctx pxs c =
+(** Abstract 0 or more times to get a user computation *)
+and user_abstract0 ~loc ctx pxs c =
   let locate x = Location.locate ~loc x in
   let rec fold ctx = function
     | [] -> comp ctx c
     | px :: pxs ->
        let ctx, px = binder ctx px in
        let c = fold ctx pxs in
-       locate (Desugared.Val (locate (Desugared.Lambda (px, c))))
+       locate (Desugared.Val (locate (Desugared.FunUser (px, c))))
   in
   fold ctx pxs
 
-(** Abstract 1 or more times to get an abstraction *)
-and abstract ~loc ctx pxs c =
+(** Abstract 1 or more times to get a user abstraction *)
+and user_abstract ~loc ctx pxs c =
   match pxs with
   | [] -> assert false
 
   | px :: pxs ->
      let ctx, px = binder ctx px in
-     let c = abstract0 ~loc ctx pxs c in
-     Location.locate ~loc (Desugared.Lambda (px, c))
+     let c = user_abstract0 ~loc ctx pxs c in
+     Location.locate ~loc (Desugared.FunUser (px, c))
 
+(** Abstract 0 or more times to get a kernel computation *)
+and kernel_abstract0 ~loc ctx pxs c =
+  let locate x = Location.locate ~loc x in
+  let rec fold ctx = function
+    | [] -> comp ctx c
+    | px :: pxs ->
+       let ctx, px = binder ctx px in
+       let c = fold ctx pxs in
+       locate (Desugared.Val (locate (Desugared.FunKernel (px, c))))
+  in
+  fold ctx pxs
+
+(** Abstract 1 or more times to get a kernel abstraction *)
+and kernel_abstract ~loc ctx pxs c =
+  match pxs with
+  | [] -> assert false
+
+  | px :: pxs ->
+     let ctx, px = binder ctx px in
+     let c = kernel_abstract0 ~loc ctx pxs c in
+     Location.locate ~loc (Desugared.FunKernel (px, c))
 
 and runner_clauses ~loc ctx lst = List.map (runner_clause ~loc ctx) lst
 
-and runner_clause ~loc ctx (op, px, pw, c) =
+and runner_clause ~loc ctx (op, px, c) =
   match lookup_ident op ctx with
 
   | None -> error ~loc (UnknownOperation op)
 
-  | Some (Signal | Variable) -> error ~loc (OperationExpected op)
+  | Some (Exception | Signal | Variable) -> error ~loc (OperationExpected op)
 
   | Some Operation ->
      let ctx, px = binder ctx px in
-     let ctx, pw = binder ctx pw in
      let c = comp ctx c in
-     (op, px, pw, c)
+     (op, px, c)
 
 (** Desugar a user computation *)
-and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared. =
+and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
   let locate x = Location.locate ~loc x in
   let let_binds ws c =
     let rec fold = function
@@ -548,18 +595,18 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared. =
   in
   match c' with
     (* keep this case in front so that constructors are handled ocrrectly *)
-    | (Sugared.Var _ | Sugared.Numeral _ | Sugared.False | Sugared.True | Sugared.Quoted _ |
-       Sugared.Constructor _ | Sugared.Lambda _ | Sugared.Tuple _ | Sugared.Runner _ |
-       Sugared.RunnerTimes _ | Sugared.RunnerRename _ |
-       Sugared.Apply ({Location.it=Sugared.Constructor _;_}, _)) ->
+    | Sugared.(Var _ | Numeral _ | False | True | Quoted _ | Constructor _ | FunUser _ | FunKernel _ |
+               Tuple _ | Runner _ | Apply ({Location.it=Constructor _;_}, _)) ->
        let ws, e = expr ctx c in
        let return_e = locate (Desugared.Val e) in
        let_binds ws return_e
 
     | Sugared.Ascribe (c, t) ->
        let c = comp ctx c in
-       let t = ty ctx t in
-       locate (Desugared.AscribeComp (c, t))
+       begin match user_or_kernel_ty ctx t with
+       | UserTy t -> locate (Desugared.AscribeUser (c, t))
+       | KernelTy t -> locate (Desugared.AscribeKernel (c, t))
+       end
 
     | Sugared.Match (e, lst) ->
        let w, e = expr ctx e in
@@ -597,37 +644,20 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared. =
        let c = locate (Desugared.Operation (op, e)) in
        let_binds ws c
 
-    | Sugared.Apply ({Location.it=Sugared.Var sgl; _}, e) when is_signal sgl ctx ->
-       let ws, e = expr ctx e in
-       let c = locate (Desugared.Signal (sgl, e)) in
-       let_binds ws c
-
     | Sugared.Apply (e1, e2) ->
        let ws1, e1 = expr ctx e1 in
        let ws2, e2 = expr ctx e2 in
        let app = locate (Desugared.Apply (e1, e2)) in
        let_binds (ws1 @ ws2) app
 
-    | Sugared.(Let (BindVal (p, topt, c1), c2)) ->
-       let c1 =
-         match topt with
-         | None -> comp ctx c1
-         | Some t ->
-            let t = ty ctx t in
-            let c1 = comp ctx c1 in
-            Location.locate ~loc:c1.Location.loc (Desugared.AscribeComp (c1, t))
-       in
+    | Sugared.(Let (BindVal (p, c1), c2)) ->
+       let c1 = comp ctx c1 in
        let ctx, p = pattern ctx p in
        let c2 = comp ctx c2 in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.(Let (BindFun (f, pxs, topt, c1), c2)) ->
-       let c1 =
-         match topt with
-         | None -> c1
-         | Some t -> Location.locate ~loc:c1.Location.loc (Sugared.Ascribe (c1, t))
-       in
-       let e = abstract ~loc ctx pxs c1 in
+    | Sugared.(Let (BindFun (f, pxs, c1), c2)) ->
+       let e = user_abstract ~loc ctx pxs c1 in
        let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Val e) in
        let ctx = extend_ident f Variable ctx in
        let c2 = comp ctx c2 in
@@ -645,12 +675,29 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared. =
        let p = locate Desugared.PattAnonymous in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.Run (e, w, c, fin) ->
+    | Sugared.Getenv ->
+       locate Desugared.Getenv
+
+    | Sugared.Setenv e ->
+       let ws, e = expr ctx e in
+       let_binds ws (locate (Desugared.Setenv e))
+
+    | Sugared.Raise (exc, e) ->
+       check_exception ~loc exc ctx ;
+       let ws, e = expr ctx e in
+       let_binds ws (locate (Desugared.Raise (exc, e)))
+
+    | Sugared.Kill (sgn, e) ->
+       check_signal ~loc sgn ctx ;
+       let ws, e = expr ctx e in
+       let_binds ws (locate (Desugared.Kill (sgn, e)))
+
+    | Sugared.Using (e, w, c, fin) ->
        let ws1, e = expr ctx e in
        let ws2, w = expr ctx w in
        let c = comp ctx c in
        let fin = finally_clauses ~loc ctx fin in
-       let_binds (ws1 @ ws2) (locate (Desugared.Run (e, w, c, fin)))
+       let_binds (ws1 @ ws2) (locate (Desugared.Using (e, w, c, fin)))
 
     | Sugared.Try (c, tr) ->
        let c = comp ctx c in
@@ -676,88 +723,102 @@ and rec_clauses ~loc ctx lst =
     | [] -> ctx, List.rev clauses
 
     | (f, (p, u), pus, s, c) :: lst ->
-       let u = ty ctx u in
+       let u = expr_ty ctx u in
        let t =
          List.fold_right
          (fun (_, u) t ->
-           let u = ty ctx u in
-           Location.locate ~loc:t.Location.loc (Desugared.Arrow (u, t)))
+           let u = expr_ty ctx u in
+           Location.locate ~loc:u.Location.loc
+             Desugared.{ user_ty = Location.locate ~loc:t.Location.loc (ArrowUser (u, t))
+                       ; user_ops = Operations Name.Set.empty
+                       ; user_exc = Exceptions Name.Set.empty })
          pus
-         (ty ctx s)
+         (user_ty ctx s)
        in
        let ctx, p = pattern ctx p in
-       let c = abstract0 ~loc ctx (List.map (fun (p, _) -> (p, None)) pus) c
+       let c = user_abstract0 ~loc ctx (List.map (fun (p, _) -> (p, None)) pus) c
        in
        fold ((f, t, p, u, c) :: clauses) lst
   in
   fold [] lst
 
 and finally_clauses ~loc ctx lst =
-  let rec fold fin_val fin_signals = function
+  let rec fold fin_val fin_raise fin_kill = function
 
     | [] ->
        begin match fin_val with
        | None -> error ~loc MissingFinallyVal
        | Some fin_val ->
-          let fin_signals = List.rev fin_signals in
-          { Desugared.fin_val; Desugared.fin_signals }
+          let fin_kill = List.rev fin_kill in
+          Desugared.{fin_val; fin_raise; fin_kill}
        end
 
     | Sugared.FinVal (px, pw, c) :: lst ->
        begin match fin_val with
-       | Some _ -> error ~loc DoubleFinallyVal
+       | Some _ -> error ~loc DoubleVal
        | None ->
           let ctx, px = binder ctx px in
           let ctx, pw = binder ctx pw in
           let c = comp ctx c in
           let fin_val = Some (px, pw, c) in
-          fold fin_val fin_signals lst
+          fold fin_val fin_raise fin_kill lst
        end
 
-    | Sugared.FinSignal (sgl, px, pw, c) :: lst ->
-       begin match List.exists (fun (sgl', _, _, _) -> Name.equal sgl sgl') fin_signals with
-       | true -> error ~loc (DoubleFinallySignal sgl)
+    | Sugared.FinRaise (exc, px, pw, c) :: lst ->
+       begin match List.exists (fun (exc', _, _, _) -> Name.equal exc exc') fin_raise with
+       | true -> error ~loc (DoubleException exc)
        | false ->
-          if not (is_signal sgl ctx) then error ~loc (SignalExpected sgl) ;
+          check_exception ~loc exc ctx ;
           let ctx, px = binder ctx px in
           let ctx, pw = binder ctx pw in
           let c = comp ctx c in
-          let fin_signals = (sgl, px, pw, c) :: fin_signals in
-          fold fin_val fin_signals lst
+          let fin_raise = (exc, px, pw, c) :: fin_raise in
+          fold fin_val fin_raise fin_kill lst
+       end
+
+    | Sugared.FinKill (sgl, px, c) :: lst ->
+       begin match List.exists (fun (sgl', _, _) -> Name.equal sgl sgl') fin_kill with
+       | true -> error ~loc (DoubleSignal sgl)
+       | false ->
+          check_signal ~loc sgl ctx ;
+          let ctx, px = binder ctx px in
+          let c = comp ctx c in
+          let fin_kill = (sgl, px, c) :: fin_kill in
+          fold fin_val fin_raise fin_kill lst
        end
   in
-  fold None [] lst
+  fold None [] [] lst
 
 and try_clauses ~loc ctx lst =
-  let rec fold try_val try_signals = function
+  let rec fold try_val try_raise = function
 
     | [] ->
        begin match try_val with
        | None -> error ~loc MissingFinallyVal
        | Some try_val ->
-          let try_signals = List.rev try_signals in
-          Desugared.{try_val; try_signals}
+          let try_raise = List.rev try_raise in
+          Desugared.{try_val; try_raise}
        end
 
     | Sugared.TryVal (px, c) :: lst ->
        begin match try_val with
-       | Some _ -> error ~loc DoubleFinallyVal
+       | Some _ -> error ~loc DoubleVal
        | None ->
           let ctx, px = binder ctx px in
           let c = comp ctx c in
           let try_val = Some (px, c) in
-          fold try_val try_signals lst
+          fold try_val try_raise lst
        end
 
-    | Sugared.TrySignal (sgl, px, c) :: lst ->
-       begin match List.exists (fun (sgl', _, _) -> Name.equal sgl sgl') try_signals with
-       | true -> error ~loc (DoubleFinallySignal sgl)
+    | Sugared.TryRaise (exc, px, c) :: lst ->
+       begin match List.exists (fun (exc', _, _) -> Name.equal exc exc') try_raise with
+       | true -> error ~loc (DoubleException exc)
        | false ->
-          if not (is_signal sgl ctx) then error ~loc (SignalExpected sgl) ;
+          check_exception ~loc exc ctx ;
           let ctx, px = binder ctx px in
           let c = comp ctx c in
-          let try_signals = (sgl, px, c) :: try_signals in
-          fold try_val try_signals lst
+          let try_raise = (exc, px, c) :: try_raise in
+          fold try_val try_raise lst
        end
   in
   fold None [] lst
@@ -783,7 +844,7 @@ let datatype ~loc ctx lst =
 
     | (cnstr, Some t) :: lst ->
        check_constructor_shadow ~loc cnstr ctx ;
-       let t = ty ctx t in
+       let t = expr_ty ctx t in
        let ctx = extend_constructor cnstr ConstrApplied ctx in
        fold ctx ((cnstr, Some t) :: clauses) lst
   in
@@ -815,24 +876,13 @@ let toplevel' ctx = function
        let ctx, cmds = load ctx fn in
        ctx, Desugared.TopLoad cmds
 
-    | Sugared.(TopLet (BindVal (p, topt, c))) ->
-       let c =
-         match topt with
-         | None -> comp ctx c
-         | Some t ->
-            let t = ty ctx t in
-            let c1 = comp ctx c in
-            Location.locate ~loc:c1.Location.loc (Desugared.AscribeComp (c1, t))
+    | Sugared.(TopLet (BindVal (p, c))) ->
+       let c = comp ctx c
        and ctx, p = pattern ctx p in
        ctx, Desugared.TopLet (p, c)
 
-    | Sugared.(TopLet (BindFun (f, a, topt, c))) ->
-       let c =
-         match topt with
-         | None -> c
-         | Some t -> Location.locate ~loc:c.Location.loc (Sugared.Ascribe (c, t))
-       in
-       let e = abstract ~loc ctx a c in
+    | Sugared.(TopLet (BindFun (f, a, c))) ->
+       let e = user_abstract ~loc ctx a c in
        let c = Location.locate ~loc:c.Location.loc (Desugared.Val e) in
        let ctx = extend_ident f Variable ctx in
        let p = Location.locate ~loc (Desugared.PattVar f) in
@@ -842,17 +892,17 @@ let toplevel' ctx = function
        let ctx, lst = rec_clauses ~loc ctx lst in
        ctx, Desugared.TopLetRec lst
 
-    | Sugared.TopShell c ->
+    | Sugared.TopContainer c ->
        let c = comp ctx c in
-       ctx, Desugared.TopShell c
+       ctx, Desugared.TopContainer c
 
-    | Sugared.TopComp c ->
+    | Sugared.TopUser c ->
        let c = comp ctx c in
-       ctx, Desugared.TopComp c
+       ctx, Desugared.TopUser c
 
     | Sugared.DefineAlias (t, abbrev) ->
        check_type_shadow ~loc t ctx ;
-       let abbrev = ty ctx abbrev in
+       let abbrev = expr_ty ctx abbrev in
        let ctx = extend_type t TydefAlias ctx in
        ctx, Desugared.DefineAlias (t, abbrev)
 
@@ -865,21 +915,28 @@ let toplevel' ctx = function
        let ctx, lst = datatypes ~loc ctx lst in
        ctx, Desugared.DefineDatatype lst
 
-    | Sugared.DeclareOperation (op, t1, t2) ->
+    | Sugared.DeclareOperation (op, t1, t2, sg) ->
        check_ident_shadow ~loc op ctx ;
-       let t1 = ty ctx t1
-       and t2 = ty ctx t2
-       and ctx = extend_ident op Operation ctx in
-       ctx, Desugared.DeclareOperation (op, t1, t2)
+       let t1 = expr_ty ctx t1
+       and t2 = expr_ty ctx t2
+       and exc = exception_signature ~loc sg in
+       let ctx = extend_ident op Operation ctx in
+       ctx, Desugared.DeclareOperation (op, t1, t2, exc)
+
+    | Sugared.DeclareException (exc, t) ->
+       check_ident_shadow ~loc exc ctx ;
+       let t = expr_ty ctx t in
+       let ctx = extend_ident exc Exception ctx in
+       ctx, Desugared.DeclareException (exc, t)
 
     | Sugared.DeclareSignal (sgl, t) ->
        check_ident_shadow ~loc sgl ctx ;
-       let t = ty ctx t in
+       let t = expr_ty ctx t in
        let ctx = extend_ident sgl Signal ctx in
        ctx, Desugared.DeclareSignal (sgl, t)
 
     | Sugared.External (x, t, s) ->
-       let t = ty ctx t in
+       let t = expr_ty ctx t in
        let ctx = extend_ident x Variable ctx in
        ctx, Desugared.External (x, t, s)
 

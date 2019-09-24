@@ -54,19 +54,20 @@ and term' =
   | Equal of term * term
   | Match of term * (binder * term) list
   | If of term * term * term
-  | Lambda of binder list * term
+  | FunUser of binder list * term
+  | FunKernel of binder list * term
   | Apply of term * term
   | Let of let_binding * term
   | LetRec of rec_clause list * term
   | Sequence of term * term
   | Ascribe of term * ty
   | Runner of runner_clause list * ty
-  | Run of term * term * term * finally_clause list
+  | Using of term * term * term * finally_clause list
   | Try of term * try_clause list
   | Getenv
   | Setenv of term
-  | Raise of term
-  | Kill of term
+  | Raise of Name.t * term
+  | Kill of Name.t * term
 
 and binder = pattern * ty option
 
@@ -77,8 +78,8 @@ and runner_clause = Name.t * binder * term
 and rec_clause = Name.t * typed_binder * typed_binder list * ty * term
 
 and let_binding =
-  | BindVal of pattern * ty option * term
-  | BindFun of Name.t * binder list * ty option * term
+  | BindVal of pattern * term
+  | BindFun of Name.t * binder list * term
 
 and finally_clause =
   | FinVal of binder * binder * term
@@ -87,7 +88,6 @@ and finally_clause =
 
 and try_clause =
   | TryVal of binder * term
-  | TryKill of Name.t * binder * term
   | TryRaise of Name.t * binder * term
 
 (** Parsed top-level command. *)
@@ -97,11 +97,11 @@ and toplevel' =
   | TopLet of let_binding
   | TopLetRec of rec_clause list
   | TopContainer of term
-  | TopComp of term
+  | TopUser of term
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * ty
   | DefineDatatype of (Name.t * datatype) list
-  | DeclareOperation of Name.t * ty * ty
+  | DeclareOperation of Name.t * ty * ty * signature
   | DeclareException of Name.t * ty
   | DeclareSignal of Name.t * ty
   | External of Name.t * ty * string
