@@ -14,17 +14,11 @@ val print :
 (** Unicode or ASCII versions of the arrow, [->] or [→]. *)
 val char_arrow : unit -> string
 
-(** Unicode or ASCII versions of the beginning of an effectful arrow. *)
-val char_prearrow : unit -> string
-
-(** Unicode or ASCII versions of the end of an effectful arrow. *)
-val char_postarrow : unit -> string
-
 (** Unicode or ASCII versions of the double arrow, [=>] or [⇒]. *)
 val char_darrow : unit -> string
 
-(** Unicode or ASCII versions of the lightning sign, [!!] or [↯]. *)
-val char_lightning : unit -> string
+(** Unicode or ASCII versions of the double exclamation mark, [!!] or [‼]. *)
+val char_bangbang : unit -> string
 
 (** Unicode or ASCII versions of the product [*] or [×]. *)
 val char_times : unit -> string
@@ -35,3 +29,9 @@ val sequence :
 
 (** Print a set of names, sorted alphabetically *)
 val names : Name.Set.t -> Format.formatter -> unit
+
+(** Print an identifier as an exception. *)
+val exception_name : Name.t -> Format.formatter -> unit
+
+(** Print an identifier as a signal. *)
+val signal_name : Name.t -> Format.formatter -> unit

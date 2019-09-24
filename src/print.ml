@@ -39,10 +39,14 @@ let names ns ppf =
 let select ascii utf = if !Config.ascii then ascii else utf
 
 let char_arrow () = select "->" "→"
-let char_prearrow () = select "-{" "-{"
-let char_postarrow () = select "}->" "}→"
-
 let char_darrow () = select "=>" "⇒"
+let char_bangbang () = select "!!" "‼"
 let char_times () = select "*" "×"
 
-let char_lightning () = select "!!" "↯"
+let exception_name exc ppf =
+  Format.fprintf ppf "!%t" (Name.print ~parentheses:false exc)
+
+let signal_name sgn ppf =
+  Format.fprintf ppf "%s%t"
+    (char_bangbang ())
+    (Name.print ~parentheses:false sgn)

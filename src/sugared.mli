@@ -1,6 +1,12 @@
 (** Concrete syntax as parsed by the parser. *)
 
-type signature = Name.t list
+(** Operations, exceptions and signals *)
+type effect =
+  | Operation of Name.t
+  | Exception of Name.t
+  | Signal of Name.t
+
+type signature = effect list
 
 (** Primitive types *)
 type primitive =
@@ -17,9 +23,9 @@ and ty' =
   | NamedTy of Name.t
   | Product of ty list
   | Arrow of ty * ty
-  | RunnerTy of Name.t list * signature * ty
+  | RunnerTy of signature * signature * ty
   | ContainerTy of signature
-  | CompTy of ty * signature * ty option
+  | ComputationTy of ty * signature * ty option
 
 (** The body of a datatype definition *)
 type datatype = (Name.t * ty option) list
@@ -54,7 +60,7 @@ and term' =
   | LetRec of rec_clause list * term
   | Sequence of term * term
   | Ascribe of term * ty
-  | Runner of ty * runner_clause list
+  | Runner of runner_clause list * ty
   | Run of term * term * term * finally_clause list
   | Try of term * try_clause list
   | Getenv

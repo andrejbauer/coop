@@ -219,6 +219,26 @@ let print_primitive p ppf =
   | String -> "string"
   | Any -> "any")
 
+(** Pretty-print effect information *)
+type effect =
+  | Operation of Name.t
+  | Exception of Name.t
+  | Signal of Name.t
+
+let effects ~ops ~exc ~sgn =
+  List.map (fun o -> Operation o) (Name.Set.elements ops) @
+  List.map (fun e -> Exception e) (Name.Set.elements exc) @
+  List.map (fun s -> Signal s) (Name.Set.elements sgn)
+
+let print_effect eff ppf =
+  match eff with
+  | Operation o -> Name.print ~parentheses:true o ppf
+  | Exception e -> Print.exception_name e ppf
+  | Signal s -> Print.signal_name s ppf
+
+let print_effects ~ops ~exc ~sgn ppf =
+  Format.fprintf ppf "{%t}" (Print.sequence print_effect "," (effects ~ops ~exc ~sgn))
+
 (** Pretty-print an expresion type *)
 let rec print_expr_ty ?max_level ty ppf =
   match ty with
@@ -238,21 +258,17 @@ let rec print_expr_ty ?max_level ty ppf =
      Print.print ?max_level ~at_level:Level.product ppf "%t"
        (Print.sequence (print_expr_ty ~max_level:Level.product_arg) st lst)
 
-  | ArrowUser (t1, {user_ty=t2; user_ops=Operations ops; user_exc=Exceptions excs}) ->
-     Print.print ?max_level ~at_level:Level.arr ppf "%t@ %t@ %t%t"
+  | ArrowUser (t1, t2) ->
+     Print.print ?max_level ~at_level:Level.arr ppf "%t@ %s@ %t"
        (print_expr_ty ~max_level:Level.arr_left t1)
-       (print_arrow ops)
-       (print_expr_ty ~max_level:Level.arr_right t2)
-       (print_exceptions ~empty:false excs)
+       (Print.char_arrow ())
+       (print_user_ty ~max_level:Level.arr_right t2)
 
-  | ArrowKernel (t1, {kernel_ty=t2; kernel_ops=Operations ops; kernel_exc=Exceptions excs; kernel_sgn=Signals sgns; kernel_world=wt}) ->
-     Print.print ?max_level ~at_level:Level.arr ppf "%t@ %t@ %t%t%t@%t"
+  | ArrowKernel (t1, t2) ->
+     Print.print ?max_level ~at_level:Level.arr ppf "%t@ %s@ %t"
        (print_expr_ty ~max_level:Level.arr_left t1)
-       (print_arrow ops)
-       (print_expr_ty ~max_level:Level.arr_right t2)
-       (print_exceptions ~empty:false excs)
-       (print_signals ~empty:false sgns)
-       (print_expr_ty ~max_level:Level.world_ty wt)
+       (Print.char_arrow ())
+       (print_kernel_ty ~max_level:Level.arr_right t2)
 
   | RunnerTy rnr_ty -> print_runner_ty rnr_ty ppf
 
@@ -260,55 +276,30 @@ let rec print_expr_ty ?max_level ty ppf =
      Format.fprintf ppf "{%t}"
        (Print.names ops)
 
-and print_exceptions ~empty excs ppf =
-  if Name.Set.is_empty excs then
-    (if empty then Format.fprintf ppf "[}")
-  else
-    Format.fprintf ppf "!{%t}" (Print.names excs)
-
-and print_operations ~empty ops ppf =
-  if Name.Set.is_empty ops then
-    (if empty then Format.fprintf ppf "{}")
-  else
-    Format.fprintf ppf "{%t}" (Print.names ops)
-
-and print_signals ~empty sgns ppf =
-  if Name.Set.is_empty sgns then
-    (if empty then Format.fprintf ppf "{}")
-  else
-    Format.fprintf ppf "%s{%t}" (Print.char_lightning ()) (Print.names sgns)
-
-and print_arrow ops ppf =
-  if Name.Set.is_empty ops then
-    Format.fprintf ppf "%s" (Print.char_arrow ())
-  else
-    Format.fprintf ppf "%s%t%s"
-      (Print.char_prearrow ())
-      (Print.names ops)
-      (Print.char_postarrow ())
-
-and print_user_ty ?max_level {user_ty=t; user_ops=Operations ops; user_exc=Exceptions excs} ppf =
-    Print.print ?max_level ~at_level:Level.user_ty ppf "%t@ %t%t"
-      (print_operations ~empty:false ops)
+and print_user_ty ?max_level {user_ty=t; user_ops=Operations ops; user_exc=Exceptions exc} ppf =
+    Print.print ?max_level ~at_level:Level.user_ty ppf "%t@ %t"
       (print_expr_ty ~max_level:Level.world_ty t)
-      (print_exceptions ~empty:false excs)
+      (print_effects ~ops ~exc ~sgn:Name.Set.empty)
 
-and print_kernel_ty ?max_level {kernel_ty=t; kernel_ops=Operations ops; kernel_exc=Exceptions excs; kernel_sgn=Signals sgns; kernel_world=wt} ppf =
-    Print.print ?max_level ~at_level:Level.kernel_ty ppf "%t@ %t%t@%t"
-      (print_operations ~empty:false ops)
+and print_kernel_ty ?max_level {kernel_ty=t;
+                                kernel_ops=Operations ops;
+                                kernel_exc=Exceptions exc;
+                                kernel_sgn=Signals sgn;
+                                kernel_world=wt} ppf =
+    Print.print ?max_level ~at_level:Level.kernel_ty ppf "%t@ %t @@@ %t"
       (print_expr_ty ~max_level:Level.user_ty_left t)
-      (print_exceptions ~empty:false excs)
+      (print_effects ~ops ~exc ~sgn)
       (print_expr_ty ~max_level:Level.world_ty wt)
 
 and print_runner_ty (Operations ops1, Operations ops2, Signals sgns, wt) ppf =
-  Format.fprintf ppf "%t@ %s@ %t%t%t"
-    (print_operations ~empty:true ops1)
+  Format.fprintf ppf "%t@ %s@ %t@ @@@ %t"
+    (print_effects ~ops:ops1 ~exc:Name.Set.empty ~sgn:Name.Set.empty)
     (Print.char_darrow ())
-    (print_operations ~empty:true ops2)
-    (print_signals ~empty:false sgns)
+    (print_effects ~ops:ops2 ~exc:Name.Set.empty ~sgn:sgns)
     (print_expr_ty ~max_level:Level.runner_ty_world wt)
 
-and print_container_ty (Operations ops) ppf = print_operations ~empty:true ops ppf
+and print_container_ty (Operations ops) ppf =
+  print_effects ~ops ~exc:Name.Set.empty ~sgn:Name.Set.empty ppf
 
 let print_datatype (t, cnstrs) ppf =
   let print_clause (cnstr, topt) ppf =

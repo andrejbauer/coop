@@ -66,6 +66,10 @@ let infixop3 = [%sedlex.regexp? ('+' | '-'), Star symbolchar ]
 let infixop4 = [%sedlex.regexp? ('*' | '/' | '%'), Star symbolchar ]
 let infixop5 = [%sedlex.regexp? "**", Star symbolchar ]
 
+let exception_name = [%sedlex.regexp? ("!!" | 8252 (*‼*)), name]
+
+let signal_name = [%sedlex.regexp? '!', name]
+
 let start_longcomment = [%sedlex.regexp? "(*"]
 let end_longcomment= [%sedlex.regexp? "*)"]
 
@@ -128,6 +132,10 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | '='                      -> f (); Parser.EQUAL (Location.locate ~loc:(loc_of lexbuf) (Name.Ident("=", Name.Infix Level.Infix1)))
   | "->" | 8594 | 10230      -> f (); Parser.ARROW
   | "=>" | 8658              -> f (); Parser.DARROW
+
+
+  | exception_name           -> f (); Parser.EXCEPTIONNAME ((Name.Ident (Ulexbuf.lexeme lexbuf, Name.Word)))
+  | signal_name              -> f (); Parser.SIGNALNAME ((Name.Ident (Ulexbuf.lexeme lexbuf, Name.Word)))
 
   (* We record the location of operators here because menhir cannot handle %infix and
      mark_location simultaneously, it seems. *)

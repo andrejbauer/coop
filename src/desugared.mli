@@ -32,12 +32,14 @@ and expr_ty' =
   | RunnerTy of operations * operations * signals * expr_ty
   | ContainerTy of operations
 
-and user_ty =
+and user_ty = user_ty' Location.located
+and user_ty' =
   { user_ty : expr_ty
   ; user_ops : operations
   ; user_exc : exceptions }
 
-and kernel_ty =
+and kernel_ty = kernel_ty' Location.located
+and kernel_ty' =
   { kernel_ty : expr_ty
   ; kernel_ops : operations
   ; kernel_exc : exceptions

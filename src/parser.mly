@@ -3,6 +3,8 @@
 
 (* Names *)
 %token <Name.t> NAME
+%token <Name.t> EXCEPTIONNAME
+%token <Name.t> SIGNALNAME
 %token <Name.t> CONSTRUCTOR
 %token UNDERSCORE
 
@@ -170,7 +172,7 @@ term_:
     { Sugared.If (e1, e2, e3) }
 
   | RUNNER LBRACE lst=runner_clauses RBRACE AT t=ty
-    { Sugared.Runner (t, lst) }
+    { Sugared.Runner (lst, t) }
 
   | USING rnr=infix_term AT w=infix_term RUN c=term FINALLY LBRACE fin=finally RBRACE
     { Sugared.Run (rnr, w, c, fin) }
@@ -402,21 +404,23 @@ ty_:
   | t1=comp_ty ARROW t2=ty
     { Sugared.Arrow (t1, t2) }
 
-  | sgn1=signature AT tw=comp_ty DARROW sgn2=signature
+  | sgn1=signature DARROW sgn2=signature AT tw=prod_ty
     { Sugared.RunnerTy (sgn1, sgn2, tw) }
 
 
 comp_ty: mark_location(comp_ty_) { $1 }
 comp_ty_:
-  | t=prod_ty BANG lst=signature
-    { Sugared.CompTy (t, lst, None) }
+  | t=prod_ty sgn=signature
+    { Sugared.ComputationTy (t, sgn, None) }
 
-  | t=prod_ty BANG lst=signature AT tw=prod_ty
-    { Sugared.CompTy (t, lst, Some tw) }
+  | t=prod_ty sgn=signature AT tw=prod_ty
+    { Sugared.ComputationTy (t, sgn, Some tw) }
+
+  | t=prod_ty AT tw=prod_ty
+    { Sugared.ComputationTy (t, [], Some tw) }
 
   | prod_ty_
     { $1 }
-
 
 prod_ty: mark_location(prod_ty_) { $1 }
 prod_ty_:
@@ -450,11 +454,25 @@ simple_ty_:
   | t=var_name
     { Sugared.NamedTy t }
 
-  | LBRACE ops=separated_list(COMMA, var_name) RBRACE
-    { Sugared.ContainerTy ops }
+  | sgn=signature
+    { Sugared.ContainerTy sgn }
 
   | LPAREN t=ty_ RPAREN
     { t }
+
+effect:
+  | op=NAME
+    { Sugared.Operation op }
+
+  | exc=EXCEPTIONNAME
+    { Sugared.Exception exc }
+
+  | sgn=SIGNALNAME
+    { Sugared.Signal sgn }
+
+signature:
+  | LBRACE sgn=separated_list(COMMA, effect) RBRACE
+    { sgn }
 
 datatype:
   | x=var_name EQUAL lst=constructor_clauses
@@ -470,10 +488,6 @@ constructor_clause:
 
   | cnstr=CONSTRUCTOR
     { (cnstr, None) }
-
-signature:
-  | LBRACE lst=separated_list(COMMA, var_name) RBRACE
-    { lst }
 
 mark_location(X):
   x=X
