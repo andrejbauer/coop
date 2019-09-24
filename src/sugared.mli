@@ -68,6 +68,8 @@ and term' =
   | Setenv of term
   | Raise of Name.t * term
   | Kill of Name.t * term
+  | ExecUser of term * try_clause list
+  | ExecKernel of term * term * finally_clause list
 
 and binder = pattern * ty option
 
@@ -75,7 +77,7 @@ and typed_binder = pattern * ty
 
 and runner_clause = Name.t * binder * term
 
-and rec_clause = Name.t * typed_binder * typed_binder list * ty * term
+and rec_clause = Name.t * typed_binder * ty * term
 
 and let_binding =
   | BindVal of pattern * term

@@ -350,10 +350,6 @@ and eval_user env Location.{it=c'; loc} =
      let env = extend_rec ~loc fs env in
      eval_user env c
 
-  | Syntax.UserLetReck (fs, c) ->
-     let env = extend_reck ~loc fs env in
-     eval_user env c
-
   | Syntax.(UserOperation (op, u, Exceptions excs)) ->
      let u = eval_expr env u in
      Value.UserOperation (op, u, user_return, reraise_user excs)
@@ -423,10 +419,6 @@ and eval_kernel env Location.{it=c';loc} w =
 
   | Syntax.KernelLetRec (fs, c) ->
      let env = extend_rec ~loc fs env in
-     eval_kernel env c w
-
-  | Syntax.KernelLetReck (fs, c) ->
-     let env = extend_reck ~loc fs env in
      eval_kernel env c w
 
   | Syntax.(KernelOperation (op, u, Exceptions excs)) ->
@@ -534,18 +526,9 @@ and eval_finally ~loc env Syntax.{fin_val=(px, pw, c); fin_raise; fin_kill} =
 
 and extend_rec ~loc fs env =
   let env' = ref env in
-  let mk_closure (p, c) =
-    Value.ClosureUser (fun v -> eval_user (extend_pattern ~loc p v !env') c)
-  in
-  let fs = List.map mk_closure fs in
-  let env = extend_vars fs env in
-  env' := env ;
-  env
-
-and extend_reck ~loc fs env =
-  let env' = ref env in
-  let mk_closure (p, c) =
-    Value.ClosureKernel (fun v -> eval_kernel (extend_pattern ~loc p v !env') c)
+  let mk_closure = function
+    | Syntax.RecUser (p, c) -> Value.ClosureUser (fun v -> eval_user (extend_pattern ~loc p v !env') c)
+    | Syntax.RecKernel (p, c) -> Value.ClosureKernel (fun v -> eval_kernel (extend_pattern ~loc p v !env') c)
   in
   let fs = List.map mk_closure fs in
   let env = extend_vars fs env in
@@ -634,17 +617,6 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
 
   | Syntax.TopLetRec (pcs, fts) ->
      let env_vars = extend_rec ~loc pcs env_vars in
-     if not quiet then
-       List.iter
-         (fun (f, t) ->
-           Format.printf "@[<hov>val %t@ :@ %t@ =@ <fun>@]@."
-                         (Name.print f)
-                         (Syntax.print_expr_ty t))
-         fts ;
-     { env with env_vars }
-
-  | Syntax.TopLetReck (pcs, fts) ->
-     let env_vars = extend_reck ~loc pcs env_vars in
      if not quiet then
        List.iter
          (fun (f, t) ->

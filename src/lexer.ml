@@ -9,12 +9,14 @@ let reserved = [
   ("else", Parser.ELSE) ;
   ("empty", Parser.EMPTY) ;
   ("end", Parser.END) ;
+  ("exec", Parser.EXEC) ;
+  ("execK", Parser.EXECK) ;
   ("external", Parser.EXTERNAL) ;
   ("exception", Parser.EXCEPTION) ;
   ("false", Parser.FALSE) ;
   ("finally", Parser.FINALLY) ;
   ("fun", Parser.FUN) ;
-  ("funk", Parser.FUNK) ;
+  ("funK", Parser.FUNK) ;
   ("getenv", Parser.GETENV) ;
   ("if", Parser.IF) ;
   ("in", Parser.IN) ;
@@ -64,9 +66,9 @@ let infixop3 = [%sedlex.regexp? ('+' | '-'), Star symbolchar ]
 let infixop4 = [%sedlex.regexp? ('*' | '/' | '%'), Star symbolchar ]
 let infixop5 = [%sedlex.regexp? "**", Star symbolchar ]
 
-let exception_name = [%sedlex.regexp? ("!!" | 8252 (*‼*)), name]
+let exception_name = [%sedlex.regexp? '!', name]
 
-let signal_name = [%sedlex.regexp? '!', name]
+let signal_name = [%sedlex.regexp? ("!!" | 8252 (*‼*)), name]
 
 let start_longcomment = [%sedlex.regexp? "(*"]
 let end_longcomment= [%sedlex.regexp? "*)"]
@@ -131,9 +133,11 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | "->" | 8594 | 10230      -> f (); Parser.ARROW
   | "=>" | 8658              -> f (); Parser.DARROW
 
+  | exception_name           -> f (); let e = Ulexbuf.lexeme lexbuf in
+                                      Parser.EXCEPTIONNAME (Name.Ident (String.sub e 2 (String.length e - 2), Name.Word))
 
-  | exception_name           -> f (); Parser.EXCEPTIONNAME ((Name.Ident (Ulexbuf.lexeme lexbuf, Name.Word)))
-  | signal_name              -> f (); Parser.SIGNALNAME ((Name.Ident (Ulexbuf.lexeme lexbuf, Name.Word)))
+  | signal_name              -> f (); let s = Ulexbuf.lexeme lexbuf in
+                                      Parser.SIGNALNAME (Name.Ident (String.sub s 2 (String.length s - 2), Name.Word))
 
   (* We record the location of operators here because menhir cannot handle %infix and
      mark_location simultaneously, it seems. *)

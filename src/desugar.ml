@@ -8,7 +8,6 @@ type desugar_error =
   | UnexpectedSignal of Name.t
   | UnexpectedException of Name.t
   | UnexpectedComputationTy
-  | UnexpectedKernelTy
   | OperationExpected of Name.t
   | ExceptionExpected of Name.t
   | SignalExpected of Name.t
@@ -59,9 +58,6 @@ let print_error err ppf =
 
   | UnexpectedComputationTy ->
      Format.fprintf ppf "expected an expression type here"
-
-  | UnexpectedKernelTy ->
-     Format.fprintf ppf "unexpected kernel type"
 
   | OperationExpected x ->
      Format.fprintf ppf "%t is not an operation" (Name.print x)
@@ -168,11 +164,11 @@ let check_signal ~loc sgl ctx =
   | Some (Variable | Exception | Operation) | None ->
      error ~loc (SignalExpected sgl)
 
-let check_exception ~loc sgl ctx =
-  match lookup_ident sgl ctx with
+let check_exception ~loc exc ctx =
+  match lookup_ident exc ctx with
   | Some Exception -> ()
   | Some (Variable | Signal | Operation) | None ->
-     error ~loc (ExceptionExpected sgl)
+     error ~loc (ExceptionExpected exc)
 
 (** Check whether [x] shadows an operation or a signal *)
 let check_ident_shadow ~loc x ctx =
@@ -341,27 +337,6 @@ let rec expr_ty ctx {Location.it=t'; loc} =
   in
   Location.locate ~loc t'
 
-and user_ty ctx ({Location.it=t'; loc} as t) =
-  let t' =
-    match t' with
-
-    | Sugared.(Primitive _ | NamedTy _ | Product _ | Arrow _ | RunnerTy _ | ContainerTy _) ->
-       let t = expr_ty ctx t in
-       Desugared.{user_ty = t;
-                  user_ops = Operations Name.Set.empty;
-                  user_exc = Exceptions Name.Set.empty}
-
-    | Sugared.ComputationTy (t, sg, None) ->
-       let user_ty = expr_ty ctx t
-       and user_ops, user_exc = operation_exception_signature ~loc sg in
-       Desugared.{user_ty; user_ops; user_exc}
-
-  | Sugared.ComputationTy (_, _, Some _) ->
-     error ~loc UnexpectedKernelTy
-
-  in
-  Location.locate ~loc t'
-
 and user_or_kernel_ty ctx ({Location.it=t'; loc} as t) =
   match t' with
 
@@ -507,8 +482,9 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
        let lst = runner_clauses ~loc ctx lst in
        ([], locate (Desugared.Runner (lst, t)))
 
-    | Sugared.(Match _ | If _ | Apply _ | Let _ | LetRec _ | Sequence _ | Using _ | Try _ | Equal _ |
-               Getenv | Setenv _ | Raise _ | Kill _) ->
+    | Sugared.(Match _ | If _ | Apply _ | Let _ | LetRec _ |
+               Sequence _ | Using _ | Try _ | Equal _ | Getenv | Setenv _ | Raise _ | Kill _ |
+               ExecUser _ | ExecKernel _) ->
        let c = comp ctx e in
        let x = Name.anonymous () in
        ([(x, c)], locate (Desugared.Var x))
@@ -699,10 +675,21 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let fin = finally_clauses ~loc ctx fin in
        let_binds (ws1 @ ws2) (locate (Desugared.Using (e, w, c, fin)))
 
-    | Sugared.Try (c, tr) ->
+    | Sugared.Try (c, hnd) ->
        let c = comp ctx c in
-       let tr = try_clauses ~loc ctx tr in
-       locate (Desugared.Try (c, tr))
+       let hnd = try_clauses ~loc ctx hnd in
+       locate (Desugared.Try (c, hnd))
+
+    | Sugared.ExecUser (c, hnd) ->
+       let c = comp ctx c in
+       let hnd = try_clauses ~loc ctx hnd in
+       locate (Desugared.ExecUser (c, hnd))
+
+    | Sugared.ExecKernel (c, w, fin) ->
+       let ws, w = expr ctx w in
+       let c = comp ctx c in
+       let fin = finally_clauses ~loc ctx fin in
+       let_binds ws (locate (Desugared.ExecKernel (c, w, fin)))
 
 and match_clauses ctx lst =
   List.map (match_clause ctx) lst
@@ -712,35 +699,28 @@ and match_clause ctx (p, c) =
   let c = comp ctx c in
   (p, c)
 
+
+and rec_clause ctx (f, (p, u), t, c) =
+  let u = expr_ty ctx u in
+  let c, p =
+    let ctx, p = pattern ctx p in
+    let c = comp ctx c in
+    c, p
+  in
+  begin match user_or_kernel_ty ctx t with
+  | UserTy t -> Desugared.RecUser (f, p, u, t, c)
+  | KernelTy t -> Desugared.RecKernel (f, p, u, t, c)
+  end
+
 and rec_clauses ~loc ctx lst =
   let ctx =
     List.fold_left
-      (fun ctx (f, _, _, _, _) -> extend_ident f Variable ctx)
+      (fun ctx (f, _, _, _) -> extend_ident f Variable ctx)
       ctx
       lst
   in
-  let rec fold clauses = function
-    | [] -> ctx, List.rev clauses
-
-    | (f, (p, u), pus, s, c) :: lst ->
-       let u = expr_ty ctx u in
-       let t =
-         List.fold_right
-         (fun (_, u) t ->
-           let u = expr_ty ctx u in
-           Location.locate ~loc:u.Location.loc
-             Desugared.{ user_ty = Location.locate ~loc:t.Location.loc (ArrowUser (u, t))
-                       ; user_ops = Operations Name.Set.empty
-                       ; user_exc = Exceptions Name.Set.empty })
-         pus
-         (user_ty ctx s)
-       in
-       let ctx, p = pattern ctx p in
-       let c = user_abstract0 ~loc ctx (List.map (fun (p, _) -> (p, None)) pus) c
-       in
-       fold ((f, t, p, u, c) :: clauses) lst
-  in
-  fold [] lst
+  let lst = List.map (rec_clause ctx) lst in
+  ctx, lst
 
 and finally_clauses ~loc ctx lst =
   let rec fold fin_val fin_raise fin_kill = function

@@ -805,26 +805,29 @@ let top_extend_pattern ctx p t =
 (** Check that the operations [ops1] are a subset of [ops2], issue and error or a warning
    if necessary. *)
 let check_operations ~fatal ~loc (Syntax.Operations ops1) (Syntax.Operations ops2) =
-  if Name.Set.subset ops1 ops2 then
-    error ~loc (UnhandledOperations (Name.Set.diff ops2 ops1))
-  else
-    warning ~loc (UnhandledOperations (Name.Set.diff ops2 ops1))
+  if not (Name.Set.subset ops1 ops2) then
+    (if fatal then
+       error ~loc (UnhandledOperations (Name.Set.diff ops1 ops2))
+     else
+       warning ~loc (UnhandledOperations (Name.Set.diff ops1 ops2)))
 
 (** Check that the exceptions [exc1] are a subset of [exc2], issue and error or a warning
    if necessary. *)
 let check_exceptions ~fatal ~loc (Syntax.Exceptions exc1) (Syntax.Exceptions exc2) =
-  if Name.Set.subset exc1 exc2 then
-    error ~loc (UnhandledExceptions (Name.Set.diff exc2 exc1))
-  else
-    warning ~loc (UnhandledExceptions (Name.Set.diff exc2 exc1))
+  if not (Name.Set.subset exc1 exc2) then
+    (if fatal then
+       error ~loc (UnhandledExceptions (Name.Set.diff exc1 exc2))
+     else
+       warning ~loc (UnhandledExceptions (Name.Set.diff exc1 exc2)))
 
 (** Check that the signals [sgn1] are a subset of [sgn2], issue and error or a warning
    if necessary. *)
 let check_signals ~fatal ~loc (Syntax.Signals sgn1) (Syntax.Signals sgn2) =
-  if Name.Set.subset sgn1 sgn2 then
-    error ~loc (UnhandledSignals (Name.Set.diff sgn2 sgn1))
-  else
-    warning ~loc (UnhandledSignals (Name.Set.diff sgn2 sgn1))
+  if not (Name.Set.subset sgn1 sgn2) then
+    (if fatal then
+       error ~loc (UnhandledSignals (Name.Set.diff sgn1 sgn2))
+     else
+       warning ~loc (UnhandledSignals (Name.Set.diff sgn1 sgn2)))
 
 
 (** [infer_expr ctx e] infers the expression type [ty] of an expression [e]. It
@@ -1010,11 +1013,6 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
      let c, c_ty = infer_user ctx c in
      locate (Syntax.UserLetRec (pcs, c)), c_ty
 
-  | Desugared.LetReck (fs, c) ->
-     let ctx, pcs, _fts = infer_letreck ctx fs in
-     let c, c_ty = infer_user ctx c in
-     locate (Syntax.UserLetReck (pcs, c)), c_ty
-
   | Desugared.Match (e, lst) ->
      let e, e_ty = infer_expr ctx e in
      let lst, ty = infer_user_match_clauses ~loc ctx e_ty lst in
@@ -1131,11 +1129,6 @@ and infer_kernel ?world (ctx : context) {Location.it=c'; loc} =
      let c, c_ty = infer_kernel ?world ctx c in
      locate (Syntax.KernelLetRec (pcs, c)), c_ty
 
-  | Desugared.LetReck (fs, c) ->
-     let ctx, pcs, _fts = infer_letreck ctx fs in
-     let c, c_ty = infer_kernel ?world ctx c in
-     locate (Syntax.KernelLetReck (pcs, c)), c_ty
-
   | Desugared.Match (e, lst) ->
      let e, e_ty = infer_expr ctx e in
      let lst, ty = infer_kernel_match_clauses ?world ~loc ctx e_ty lst in
@@ -1234,43 +1227,41 @@ and infer_kernel_handler ?world ~loc ctx ty_val Desugared.{try_val=(px,c_val); t
 and infer_letrec ctx fs =
   let ctx, fts =
     List.fold_left
-      (fun (ctx, fts) (f, t, _, u, _) ->
-        let t = user_ty t
-        and u = expr_ty u in
-        extend_ident f (Syntax.ArrowUser (u, t)) ctx,
-        (f, u, t) :: fts)
-      (ctx, [])
-      fs
-  in
-  let pcs =
-    List.map2
-    (fun (_, _, p, _, c) (_, u, t) ->
-      let ctx, p = extend_pattern ctx p u in
-      let c = check_user ctx c t in
-      (p, c))
-    fs fts
-  in
-  ctx, pcs, fts
+      (fun (ctx, fts) -> function
+        | Desugared.RecUser (f, _, t, u, _) ->
+           let t = expr_ty t
+           and u = user_ty u in
+           let v = Syntax.ArrowUser (t, u) in
+           extend_ident f v ctx,
+           (f, v) :: fts
 
-(* Infer kernel [let reck] *)
-and infer_letreck ctx fs =
-  let ctx, fts =
-    List.fold_left
-      (fun (ctx, fts) (f, t, _, u, _) ->
-        let t = kernel_ty t
-        and u = expr_ty u in
-        extend_ident f (Syntax.ArrowKernel (u, t)) ctx,
-        (f, u, t) :: fts)
+        | Desugared.RecKernel (f, _, t, u, _) ->
+           let t = expr_ty t
+           and u = kernel_ty u in
+           let v = Syntax.ArrowKernel (t, u) in
+           extend_ident f v ctx,
+           (f, v) :: fts)
       (ctx, [])
       fs
   in
   let pcs =
-    List.map2
-    (fun (_, _, p, _, c) (_, u, t) ->
-      let ctx, p = extend_pattern ctx p u in
-      let c = check_kernel ctx c t in
-      (p, c))
-    fs fts
+    List.map
+    (function
+
+     | Desugared.RecUser (_, p, t, u, c) ->
+        let t = expr_ty t
+        and u = user_ty u in
+        let ctx, p = extend_pattern ctx p t in
+        let c = check_user ctx c u in
+        Syntax.RecUser (p, c)
+
+     | Desugared.RecKernel (_, p, t, u, c) ->
+        let t = expr_ty t
+        and u = kernel_ty u in
+        let ctx, p = extend_pattern ctx p t in
+        let c = check_kernel ctx c u in
+        Syntax.RecKernel (p, c))
+    fs
   in
   ctx, pcs, fts
 
@@ -1438,14 +1429,9 @@ and check_user ctx ({Location.it=c'; loc} as c) check_ty =
      locate (Syntax.UserLet (p, c1, c2))
 
   | Desugared.LetRec (fs, c) ->
-     let ctx, pcs, _ = infer_letrec ctx fs in
+     let ctx, pcs, _fts = infer_letrec ctx fs in
      let c = check_user ctx c check_ty in
      locate (Syntax.UserLetRec (pcs, c))
-
-  | Desugared.LetReck (fs, c) ->
-     let ctx, pcs, _ = infer_letreck ctx fs in
-     let c = check_user ctx c check_ty in
-     locate (Syntax.UserLetReck (pcs, c))
 
   | Desugared.(Equal _ | Apply _ | AscribeUser _ | Raise _ | Operation _ |
                (* TODO it should be possible to do checking on the following three *)
@@ -1493,11 +1479,6 @@ and check_kernel ctx (Location.{it=c';loc} as c) check_ty =
      let c = check_kernel ctx c check_ty in
      locate (Syntax.KernelLetRec (pcs, c))
 
-  | Desugared.LetReck (fs, c) ->
-     let ctx, pcs, _ = infer_letreck ctx fs in
-     let c = check_kernel ctx c check_ty in
-     locate (Syntax.KernelLetReck (pcs, c))
-
   | Desugared.(AscribeKernel _ | Equal _ | Apply _ | Raise _ | Kill _ |
                Operation _ | Getenv | Setenv _ | Try _ | ExecUser _) ->
      let c, c_ty = infer_kernel ctx c in
@@ -1532,7 +1513,6 @@ let rec toplevel ~quiet ctx {Location.it=d'; loc} =
 
     | Desugared.TopLetRec fs ->
        let ctx, pcs, fts = infer_letrec ctx fs in
-       let fts = List.map (fun (f, u, t) -> (f, Syntax.ArrowUser (u, t))) fts in
        ctx, Syntax.TopLetRec (pcs, fts)
 
     | Desugared.TopContainer c ->

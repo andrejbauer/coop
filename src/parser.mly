@@ -26,6 +26,7 @@
 %token LET REC IN
 %token MATCH WITH BAR
 %token USING RUN TRY FINALLY VAL
+%token EXEC EXECK
 
 (* Toplevel commands *)
 
@@ -118,8 +119,9 @@ toplevel_:
   | CONTAINER c=infix_term
     { Sugared.TopContainer c }
 
-  | OPERATION op=var_name COLON t1=prod_ty ARROW t2=prod_ty ops=signature
-    { Sugared.DeclareOperation (op, t1, t2, ops) }
+  | OPERATION op=var_name COLON t1=prod_ty ARROW t2=prod_ty ops=signature?
+    { let ops = match ops with None -> [] | Some ops -> ops in
+      Sugared.DeclareOperation (op, t1, t2, ops) }
 
   | EXCEPTION exc=var_name OF t=ty
     { Sugared.DeclareException (exc, t) }
@@ -176,8 +178,14 @@ term_:
   | USING rnr=infix_term AT w=infix_term RUN c=term FINALLY LBRACE fin=finally RBRACE
     { Sugared.Using (rnr, w, c, fin) }
 
-  | TRY c=term WITH LBRACE tr=trying RBRACE
-    { Sugared.Try (c, tr) }
+  | TRY c=term WITH LBRACE hnd=trying RBRACE
+    { Sugared.Try (c, hnd) }
+
+  | EXECK c=infix_term AT w=infix_term WITH LBRACE fin=finally RBRACE
+    { Sugared.ExecKernel (c, w, fin) }
+
+  | EXEC c=term WITH LBRACE hnd=trying RBRACE
+    { Sugared.ExecUser (c, hnd) }
 
 infix_term: mark_location(infix_term_) { $1 }
 infix_term_:
@@ -335,8 +343,8 @@ typed_binder:
     { (p, t) }
 
 recursive_clause:
-  | f=var_name px=typed_binder pxs=typed_binder* COLON t=ty EQUAL c=term
-    { (f, px, pxs, t, c) }
+  | f=var_name px=typed_binder COLON t=ty EQUAL c=term
+    { (f, px, t, c) }
 
 annot:
   | COLON t = ty

@@ -79,8 +79,7 @@ and user' =
   | UserEqual of expr * expr
   | UserTry of user * user exception_handler
   | UserLet of pattern * user * user
-  | UserLetRec of user rec_clause list * user
-  | UserLetReck of kernel rec_clause list * user
+  | UserLetRec of rec_clause list * user
   | UserApply of expr * expr
   | UserMatch of expr * (pattern * user) list
   | UserOperation of Name.t * expr * exceptions
@@ -95,8 +94,7 @@ and kernel' =
   | KernelEqual of expr * expr
   | KernelTry of kernel * kernel exception_handler
   | KernelLet of pattern * kernel * kernel
-  | KernelLetRec of user rec_clause list * kernel
-  | KernelLetReck of kernel rec_clause list * kernel
+  | KernelLetRec of rec_clause list * kernel
   | KernelApply of expr * expr
   | KernelMatch of expr * (pattern * kernel) list
   | KernelOperation of Name.t * expr * exceptions
@@ -118,15 +116,16 @@ and 'a exception_handler =
 
 and runner_clause = Name.t * pattern * kernel
 
-and 'a rec_clause = pattern * 'a
+and rec_clause =
+  | RecUser of pattern * user
+  | RecKernel of pattern * kernel
 
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * user
-  | TopLetRec of user rec_clause list * (Name.t * expr_ty) list
-  | TopLetReck of kernel rec_clause list * (Name.t * expr_ty) list
+  | TopLetRec of rec_clause list * (Name.t * expr_ty) list
   | TopContainer of user * operations
   | TopUser of user * expr_ty
   | DefineAbstract of Name.t

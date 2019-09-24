@@ -83,8 +83,7 @@ and comp' =
   | Equal of expr * expr
   | Try of comp * exception_handler
   | Let of pattern * comp * comp
-  | LetRec of (Name.t * user_ty * pattern * expr_ty * comp) list * comp
-  | LetReck of (Name.t * kernel_ty * pattern * expr_ty * comp) list * comp
+  | LetRec of rec_clause list * comp
   | Apply of expr * expr
   | Match of expr * (binder * comp) list
   | Operation of Name.t * expr
@@ -109,12 +108,16 @@ and finally =
   ; fin_raise : (Name.t * binder * binder * comp) list
   ; fin_kill : (Name.t * binder * comp) list}
 
+and rec_clause =
+  | RecUser of Name.t * pattern * expr_ty * user_ty * comp
+  | RecKernel of Name.t * pattern * expr_ty * kernel_ty * comp
+
 (** Top-level commands. *)
 type toplevel = toplevel' Location.located
 and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * comp
-  | TopLetRec of (Name.t * user_ty * pattern * expr_ty * comp) list
+  | TopLetRec of rec_clause list
   | TopContainer of comp
   | TopUser of comp
   | DefineAbstract of Name.t
