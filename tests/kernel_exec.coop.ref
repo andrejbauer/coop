@@ -1,0 +1,2 @@
+signal bong of int
+val a : int = 42

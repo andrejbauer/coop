@@ -1,0 +1,11 @@
+(* Test kernel computations in user mode *)
+
+signal bong of int
+
+let a =
+  execK
+    (let x = getenv in !!bong x ; 13) @ 42
+  with {
+  | val v @ _ -> v
+  | !!bong v -> v
+  }
