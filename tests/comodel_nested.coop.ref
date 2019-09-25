@@ -1,6 +1,6 @@
 operation get : unit → int
 operation put : int → unit
 operation tick : unit → int
-val state : {get, put} @ int ⇒ {} = <runner>
-val ticker : {tick} @ unit ⇒ {get, put} = <runner>
+val state : {get, put} ⇒ {} @ int = <runner>
+val ticker : {tick} ⇒ {get, put} @ unit = <runner>
 val demo : (int × int × int) × int = ((5, 6, 7), 8)

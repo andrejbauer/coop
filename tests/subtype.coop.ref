@@ -1,18 +1,16 @@
 Type warning at file "./subtype.coop", line 25, charaters 0-6:
-the following signals are potentially unhandled: die
+the following exceptions are potentially unhandled: die
 
 Type warning at file "./subtype.coop", line 35, charaters 0-7:
-the following signals are potentially unhandled: die
+the following exceptions are potentially unhandled: die
 
 operation op : int → int
-signal die of unit
+exception die of unit
 signal croak of int
-val apply :
-  (int → int ! {op; die}) → (int → int ! {op; die}) ! {}
-  = <fun>
-val g : int → int ! {op; die} = <fun>
-val c : {op} @ int ⇒ {croak} = <runner>
-val demo : int → (int × int) × int ! {die} = <fun>
+val apply : (int → int {op, !die}) → (int → int {op, !die}) {} = <fun>
+val g : int → int {op, !die} = <fun>
+val c : {op} ⇒ {‼croak} @ int = <runner>
+val demo : int → (int × int) × int {!die} = <fun>
 - : (int × int) × int = ((1001, 1003), 5)
 - : int = 23
-- : (int × int) × int = ((1, -1), 1)
+- : (int × int) × int = ((1, -1), 666)
