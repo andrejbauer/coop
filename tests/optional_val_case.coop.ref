@@ -1,0 +1,4 @@
+val a : int = 42
+exception boom of int
+val b : int = 42
+val c : int = 8

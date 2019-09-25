@@ -1,4 +1,0 @@
-let f (x : any) = x
-let a = f 5
-let b = f (fun (x : int) -> x + 2)
-let c = ((1,2,3) : any)
