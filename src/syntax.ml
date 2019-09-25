@@ -12,7 +12,6 @@ type primitive =
   | Int
   | Bool
   | String
-  | Any
 
 (** Types of expressions *)
 type expr_ty =
@@ -176,28 +175,28 @@ let pollute_kernel {kernel_ty; kernel_ops=Operations ops; kernel_exc=Exceptions 
   ; kernel_world }
 
 (** The user type of the given operation [op] *)
-let operation_user_ty t op =
+let operation_user_ty t op exc =
   { user_ty = t
   ; user_ops = Operations (Name.Set.add op Name.Set.empty)
-  ; user_exc = empty_exceptions }
+  ; user_exc = exc }
 
 (** The kernel type of the given operation [op] *)
-let operation_kernel_ty t op tw =
+let operation_kernel_ty t op exc tw =
   { kernel_ty = t
   ; kernel_ops = Operations (Name.Set.add op Name.Set.empty)
-  ; kernel_exc = empty_exceptions
+  ; kernel_exc = exc
   ; kernel_sgn = empty_signals
   ; kernel_world = tw }
 
 (** The user type of a raise *)
 let raise_user_ty exc =
-  { user_ty = Primitive Any
+  { user_ty = Primitive Empty
   ; user_ops = empty_operations
   ; user_exc = Exceptions (Name.Set.add exc Name.Set.empty) }
 
 (** The kernel type of a raise *)
 let raise_kernel_ty exc w_ty =
-  { kernel_ty = Primitive Any
+  { kernel_ty = Primitive Empty
   ; kernel_ops = empty_operations
   ; kernel_exc = Exceptions (Name.Set.add exc Name.Set.empty)
   ; kernel_sgn = empty_signals
@@ -205,7 +204,7 @@ let raise_kernel_ty exc w_ty =
 
 (** The kernel type of a kill *)
 let kill_ty sgn w_ty =
-  { kernel_ty = Primitive Any
+  { kernel_ty = Primitive Empty
   ; kernel_ops = empty_operations
   ; kernel_exc = empty_exceptions
   ; kernel_sgn = Signals (Name.Set.add sgn Name.Set.empty)
@@ -218,8 +217,7 @@ let print_primitive p ppf =
   | Empty -> "empty"
   | Int -> "int"
   | Bool -> "bool"
-  | String -> "string"
-  | Any -> "any")
+  | String -> "string")
 
 (** Pretty-print effect information *)
 type effect =
@@ -280,7 +278,7 @@ let rec print_expr_ty ?max_level ty ppf =
 
 and print_user_ty ?max_level {user_ty=t; user_ops=Operations ops; user_exc=Exceptions exc} ppf =
     Print.print ?max_level ~at_level:Level.user_ty ppf "%t@ %t"
-      (print_expr_ty ~max_level:Level.world_ty t)
+      (print_expr_ty ~max_level:Level.user_ty_left t)
       (print_effects ~ops ~exc ~sgn:Name.Set.empty)
 
 and print_kernel_ty ?max_level {kernel_ty=t;
@@ -289,7 +287,7 @@ and print_kernel_ty ?max_level {kernel_ty=t;
                                 kernel_sgn=Signals sgn;
                                 kernel_world=wt} ppf =
     Print.print ?max_level ~at_level:Level.kernel_ty ppf "%t@ %t @@@ %t"
-      (print_expr_ty ~max_level:Level.user_ty_left t)
+      (print_expr_ty ~max_level:Level.kernel_ty_left t)
       (print_effects ~ops ~exc ~sgn)
       (print_expr_ty ~max_level:Level.world_ty wt)
 

@@ -1,15 +1,15 @@
 operation tickle : unit -> unit
-signal giggle of unit
+exception giggle of unit
 
 let a = if false then tickle () else ()
 
-let b = if false then giggle () else ()
+let b = if false then !giggle () else ()
 
-let c = if false then (giggle () ; tickle ()) else ()
+let c = if false then (!giggle () ; tickle ()) else ()
 
 let d =
   using (runner {} @ unit) @ () run
-    if false then giggle () else tickle ()
-  finally {
+    if false then !giggle () else tickle ()
+  with {
   | val _ @ _ -> ()
   }

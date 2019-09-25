@@ -639,7 +639,7 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
      let shl = as_container ~loc v in
      let env = set_container shl env in
      if not quiet then
-       Format.printf "@[<hov>container@ {%t}@]@." (Syntax.print_container_ty ops) ;
+       Format.printf "@[<hov>container@ %t@]@." (Syntax.print_container_ty ops) ;
      env
 
   | Syntax.DefineAbstract t ->

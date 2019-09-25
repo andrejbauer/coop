@@ -6,7 +6,7 @@ let demo1 = fact 10
 type list = Nil | Cons of int * list
 
 let demo2 =
-  let rec range (a : int) (b : int) : list =
+  let rec range (a : int) : int -> list = fun (b : int) ->
     if a < b then Cons (a, range (a + 1) b) else Nil
   in
   range 10 20

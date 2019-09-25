@@ -41,7 +41,8 @@ type error =
   | TypeExpectedButFunction of Syntax.expr_ty
   | TypeExpectedButTuple of Syntax.expr_ty
   | TypeExpectedButUnit of Syntax.expr_ty
-  | FunctionExpected of Syntax.expr_ty
+  | UserFunctionExpected of Syntax.expr_ty
+  | KernelFunctionExpected of Syntax.expr_ty
   | RunnerExpected of Syntax.expr_ty
   | ContainerExpected of Syntax.expr_ty
   | CannotInferArgument
@@ -130,8 +131,12 @@ let print_error err ppf =
      Format.fprintf ppf "this expression is the unit but should have type@ %t"
        (Syntax.print_expr_ty ty)
 
-  | FunctionExpected ty ->
-     Format.fprintf ppf "this expression should be a function but has type@ %t"
+  | UserFunctionExpected ty ->
+     Format.fprintf ppf "this expression should be a user function but has type@ %t"
+       (Syntax.print_expr_ty ty)
+
+  | KernelFunctionExpected ty ->
+     Format.fprintf ppf "this expression should be a kernel function but has type@ %t"
        (Syntax.print_expr_ty ty)
 
   | RunnerExpected ty ->
@@ -370,10 +375,6 @@ let rec expr_subty ~loc ctx t u =
 
   | _, Syntax.(Primitive Empty) -> false
 
-  | Syntax.(Primitive Any), _ -> false
-
-  | _, Syntax.(Primitive Any) -> true
-
   | Syntax.Abstract t1, Syntax.Abstract t2 -> Name.equal t1 t2
 
   | Syntax.Primitive p1, Syntax.Primitive p2 -> p1 = p2
@@ -581,8 +582,8 @@ and join_user_ty ~loc ctx
   Syntax.{user_ty=t1; user_ops=ops1; user_exc=exc1}
   Syntax.{user_ty=t2; user_ops=ops2; user_exc=exc2}
   =
-  let t = join_expr_ty ~loc ctx t1 t2
-  and ops = join_operations ops1 ops2
+  let t = join_expr_ty ~loc ctx t1 t2 in
+  let ops = join_operations ops1 ops2
   and exc = join_exceptions exc1 exc2 in
   Syntax.{user_ty=t; user_ops=ops; user_exc=exc}
 
@@ -641,7 +642,6 @@ let rec expr_ty {Location.it=t'; loc} =
        | Desugared.Bool -> Syntax.Bool
        | Desugared.Int -> Syntax.Int
        | Desugared.String -> Syntax.String
-       | Desugared.Any -> Syntax.Any
      in
      Syntax.Primitive p
 
@@ -871,13 +871,14 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
   | Desugared.FunUser ((p, None), _) ->
      error ~loc:p.Location.loc CannotInferArgument
 
-  | Desugared.FunKernel ((p, Some t), c) ->
+  | Desugared.FunKernel ((p, Some t), wt, c) ->
      let t = expr_ty t in
+     let wt = expr_ty wt in
      let ctx, p = extend_pattern ctx p t in
-     let c, c_ty = infer_kernel ctx c in
+     let c, c_ty = infer_kernel ~world:wt ctx c in
      locate (Syntax.FunKernel (p, c)), Syntax.ArrowKernel (t, c_ty)
 
-  | Desugared.FunKernel ((p, None), _) ->
+  | Desugared.FunKernel ((p, None), _, _) ->
      error ~loc:p.Location.loc CannotInferArgument
 
   | Desugared.Runner (coops, w_ty) ->
@@ -891,10 +892,8 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
   let locate = Location.locate ~loc in
   match e', norm_ty ~loc ctx ty with
 
-  (* Synthesizing terms and [any] type *)
-  | _, Normal Syntax.(Primitive Any)
   | Desugared.(Quoted _ | Numeral _ | Boolean _ | Constructor _ | FunUser ((_, Some _), _) |
-                Var _ | AscribeExpr _ | Runner _ ), _ ->
+               FunKernel _ | Var _ | AscribeExpr _ | Runner _ ), _ ->
      let e, ty' = infer_expr ctx e in
      if expr_subty ~loc ctx ty' ty
      then
@@ -911,24 +910,6 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
           locate (Syntax.FunUser (p, c))
        | None ->
           error ~loc (TypeExpectedButFunction ty)
-     end
-
-  | Desugared.FunKernel ((p, t_opt), e), ty' ->
-     begin
-       match as_kernel_arrow ty' with
-       | None ->
-          error ~loc (TypeExpectedButFunction ty)
-       | Some (t, u) ->
-          let t =
-            match t_opt with
-            | None -> t
-            | Some ({Location.loc;_} as t') ->
-               let t' = expr_ty t' in
-               if expr_subty ~loc ctx t t' then t' else error ~loc (ExprTypeMismatch (t, t'))
-          in
-          let ctx, p = extend_pattern ctx p t in
-          let c = check_kernel ctx e u in
-          locate (Syntax.FunKernel (p, c))
      end
 
   | Desugared.Tuple es, ty' ->
@@ -1025,14 +1006,14 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
           let e2 = check_expr ctx e2 u1 in
           locate (Syntax.UserApply (e1, e2)), u2
        | None ->
-          error ~loc:(e1.Location.loc) (FunctionExpected t1)
+          error ~loc:(e1.Location.loc) (UserFunctionExpected t1)
      end
 
   | Desugared.Operation (op, e) ->
-     let ty1, ty2, exc_ops = lookup_operation ~loc op ctx in
+     let ty1, ty2, exc = lookup_operation ~loc op ctx in
      let e = check_expr ctx e ty1 in
-     let e_ty = Syntax.operation_user_ty ty2 op in
-     locate (Syntax.(UserOperation (op, e, exc_ops))), e_ty
+     let ty = Syntax.operation_user_ty ty2 op exc in
+     locate (Syntax.(UserOperation (op, e, exc))), ty
 
   | Desugared.Raise (exc, e) ->
      let e_ty = lookup_exception ~loc exc ctx in
@@ -1141,15 +1122,15 @@ and infer_kernel ?world (ctx : context) {Location.it=c'; loc} =
           let e2 = check_expr ctx e2 u1 in
           locate (Syntax.KernelApply (e1, e2)), u2
        | None ->
-          error ~loc:(e1.Location.loc) (FunctionExpected t1)
+          error ~loc:(e1.Location.loc) (KernelFunctionExpected t1)
      end
 
   | Desugared.Operation (op, e) ->
      let w_ty = get_world () in
-     let ty1, ty2, exc_ops = lookup_operation ~loc op ctx in
+     let ty1, ty2, exc = lookup_operation ~loc op ctx in
      let e = check_expr ctx e ty1 in
-     let e_ty = Syntax.operation_kernel_ty ty2 op w_ty in
-     locate (Syntax.(KernelOperation (op, e, exc_ops))), e_ty
+     let e_ty = Syntax.operation_kernel_ty ty2 op exc w_ty in
+     locate (Syntax.(KernelOperation (op, e, exc))), e_ty
 
   | Desugared.Raise (exc, e) ->
      let w_ty = get_world () in
@@ -1507,7 +1488,7 @@ let rec toplevel ~quiet ctx {Location.it=d'; loc} =
        ctx, Syntax.TopLoad lst
 
     | Desugared.TopLet (p, c) ->
-       let c, Syntax.{user_ty=c_ty';_} = top_infer_user ~fatal:true ctx c in
+       let c, Syntax.{user_ty=c_ty';_} = top_infer_user ~fatal:false ctx c in
        let ctx, p, xts = top_extend_pattern ctx p c_ty' in
        ctx, Syntax.TopLet (p, xts, c)
 

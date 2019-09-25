@@ -1,21 +1,21 @@
-signal boom of unit
+exception boom of unit
 
-let rec f (x : int) : empty ! {boom} = boom ()
+let rec f (x : int) : empty {!boom} = !boom ()
 
 let g (x : int) =
   using (runner {} @ unit) @ () run
-    (match f x with {}) : int ! {boom}
-  finally {
+    (match f x with {}) : int {!boom}
+  with {
   | val x @ _ -> x
-  | boom _ @ _ -> boom ()
+  | !boom _ @ _ -> !boom ()
   }
 ;;
 
-using stdio ;;
+container stdio ;;
 
 using (runner {} @ unit) @ () run
   g 43
-finally {
+with {
  | val x @ _ -> print_value x
- | boom _ @ _ -> print_string "Boom!\n"
+ | !boom _ @ _ -> print_string "Boom!\n"
 }

@@ -52,6 +52,9 @@ val kernel_bind : 'a kernel -> ('a -> 'b kernel) -> 'b kernel
 (** Native exception used by container cooperations *)
 exception CoopException of exc
 
+(** Raise a [CoopException] *)
+val coop_raise : exc -> 'a
+
 (** Give a descriptive name of a value. *)
 val name : t -> string
 

@@ -1,21 +1,25 @@
 (* Pervasives loaded at startup. *)
 
-operation print_value : any -> unit
+(* Exceptions that are used by builtin functions. Make sure they are
+   in synch with src/external.ml *)
+exception division_by_zero of unit
+exception malformed_integer of unit
+
 operation print_string : string -> unit
-operation read_int : unit -> int
+operation read_int : unit -> int {!malformed_integer}
 operation read_string : unit -> string
 operation flush : unit -> unit
 
-type io_shell = {print_value, print_string, read_int, read_string, flush}
+type io_container = {print_string, read_int, read_string, flush}
 
 external pure : {} = "pure"
-external stdio : io_shell = "stdio"
+external stdio : io_container = "stdio"
 
 (* Arithmetic *)
 external ( + ) : int -> int -> int = "+"
 external ( - ) : int -> int -> int = "-"
 external ( * ) : int -> int -> int = "*"
-external ( / ) : int -> int -> int = "/"
+external ( / ) : int -> int -> int {!division_by_zero} = "/"
 external ( % ) : int -> int -> int = "%"
 
 external ( <> ) : int -> int -> bool = "<>"

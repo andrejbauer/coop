@@ -64,10 +64,12 @@ val runner_ty_world : t
 (** The level of a user type with its dirt *)
 val user_ty : t
 val user_ty_left : t
+val user_ty_right : t
 
 (** The level of a kernel type with its dirt *)
 val kernel_ty : t
 val kernel_ty_left : t
+val kernel_ty_right : t
 
 (** The level of a world type *)
 val world_ty : t

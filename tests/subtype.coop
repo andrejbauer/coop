@@ -1,24 +1,24 @@
 operation op : int -> int
-signal die of unit
+exception die of unit
 signal croak of int
 
-let apply (h : int -> int ! {op, die}) (n : int) = h n
+let apply (h : int -> int {op, !die}) (n : int) = h n
 
 let g (n : int) =
-  if n > 0 then op n else die ()
+  if n > 0 then op n else !die ()
 
 let c =
-  runner { op k @ w ->  if k > 10 then croak w else (w, k + w) } @ int
+  runner { op k ->  if k > 10 then !!croak getenv else let w = getenv in setenv (k + w) ; w } @ int
 
 let demo (n : int) =
   using c @ 1 run
     let a = apply g n in
     let b = apply g n in
     (1000 + a, 1000 + b)
-  finally {
+  with {
   | val x @ w -> (x, w)
-  | croak k @ w -> ((k,-1), w)
-  | die () @ w -> die ()
+  | !!croak k -> ((k,-1), 666)
+  | !die () @ w -> !die ()
   }
 ;;
 
@@ -26,9 +26,9 @@ demo 2 ;;
 
 using (runner {} @ unit) @ () run
   demo (-3)
-finally {
+with {
   | val x @ _ -> 42
-  | die () @ _ -> 23
+  | !die () @ _ -> 23
 }
 ;;
 

@@ -79,8 +79,8 @@ let interactive_shell state =
            (Runtime.print_error err) ;
          state
 
-      | External.Error msg ->
-         Print.error "@[<hov>Error in external function: %s@]@." msg ;
+      | External.InternalError msg ->
+         Print.error "@[<hov>Internal error, please report: %s@]@." msg ;
          state
 
       | Sys.Break ->
@@ -169,8 +169,8 @@ let main =
            (Location.print loc)
            (Runtime.print_error err)
 
-      | External.Error msg ->
-         Print.error "@[<hov>Error in external function: %s@]@." msg
+      | External.InternalError msg ->
+         Print.error "@[<hov>Internal error, please report: %s@]@." msg
   in
 
   run_code Toplevel.initial !files

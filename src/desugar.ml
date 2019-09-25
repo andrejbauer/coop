@@ -19,6 +19,7 @@ type desugar_error =
   | ConstructorMustApply of Name.t
   | ShadowType of Name.t
   | BareOperation
+  | BareException
   | BareSignal
   | MissingFinallyVal
   | DoubleVal
@@ -92,8 +93,11 @@ let print_error err ppf =
   | BareOperation ->
      Format.fprintf ppf "this operation should be applied to an argument"
 
+  | BareException ->
+     Format.fprintf ppf "if you want to raise an exception, prefix it with !"
+
   | BareSignal ->
-     Format.fprintf ppf "this signal should be applied to an argument"
+     Format.fprintf ppf "if you want to send a signal, prefix it with %s" (Print.char_bangbang ())
 
   | MissingFinallyVal ->
      Format.fprintf ppf "missing finally value clause"
@@ -158,6 +162,12 @@ let is_operation op ctx =
   | Some Operation -> true
   | Some (Variable | Exception | Signal) | None -> false
 
+let check_operation ~loc op ctx =
+  match lookup_ident op ctx with
+  | Some Operation -> ()
+  | Some (Variable | Exception | Signal) | None ->
+     error ~loc (OperationExpected op)
+
 let check_signal ~loc sgl ctx =
   match lookup_ident sgl ctx with
   | Some Signal -> ()
@@ -195,97 +205,110 @@ let primitive = function
   | Sugared.Int -> Desugared.Int
   | Sugared.Bool -> Desugared.Bool
   | Sugared.String -> Desugared.String
-  | Sugared.Any -> Desugared.Any
-
 
 (** Manipulation of signatures *)
 
-let operation_exception_signal_signature sg =
+let operation_exception_signal_signature ~loc ctx sg =
   let rec fold ops exc sgn = function
 
     | [] ->
        Desugared.(Operations ops, Exceptions exc, Signals sgn)
 
     | Sugared.Operation o :: sg ->
+       check_operation ~loc o ctx ;
        let ops = Name.Set.add o ops in
        fold ops exc sgn sg
 
     | Sugared.Exception e :: sg ->
+       check_exception ~loc e ctx ;
        let exc = Name.Set.add e exc in
        fold ops exc sgn sg
 
     | Sugared.Signal s :: sg ->
+       check_signal ~loc s ctx ;
        let sgn = Name.Set.add s sgn in
        fold ops exc sgn sg
   in
   fold Name.Set.empty Name.Set.empty Name.Set.empty sg
 
-let operation_exception_signature ~loc sg =
+let operation_exception_signature ~loc ctx sg =
   let rec fold ops exc = function
 
     | [] -> Desugared.(Operations ops, Exceptions exc)
 
     | Sugared.Operation o :: sg ->
+       check_operation ~loc o ctx ;
        let ops = Name.Set.add o ops in
        fold ops exc sg
 
     | Sugared.Exception e :: sg ->
+       check_exception ~loc e ctx ;
        let exc = Name.Set.add e exc in
        fold ops exc sg
 
     | Sugared.Signal s :: _ ->
+       check_signal ~loc s ctx ;
        error ~loc (UnexpectedSignal s)
   in
   fold Name.Set.empty Name.Set.empty sg
 
-let operation_signal_signature ~loc sg =
+let operation_signal_signature ~loc ctx sg =
   let rec fold ops sgn = function
 
     | [] -> Desugared.(Operations ops, Signals sgn)
 
     | Sugared.Operation o :: sg ->
+       check_operation ~loc o ctx ;
        let ops = Name.Set.add o ops in
        fold ops sgn sg
 
     | Sugared.Exception e :: _ ->
+       check_exception ~loc e ctx ;
        error ~loc (UnexpectedException e)
 
     | Sugared.Signal s :: _ ->
+       check_signal ~loc s ctx ;
        let sgn = Name.Set.add s sgn in
        fold ops sgn sg
   in
   fold Name.Set.empty Name.Set.empty sg
 
-let operation_signature ~loc sg =
+let operation_signature ~loc ctx sg =
   let rec fold ops = function
 
     | [] -> Desugared.Operations ops
 
     | Sugared.Operation o :: sg ->
+       check_operation ~loc o ctx ;
        let ops = Name.Set.add o ops in
        fold ops sg
 
     | Sugared.Exception e :: _ ->
+       check_exception ~loc e ctx ;
        error ~loc (UnexpectedException e)
 
     | Sugared.Signal s :: _ ->
+       check_signal ~loc s ctx ;
        error ~loc (UnexpectedSignal s)
   in
   fold Name.Set.empty sg
 
-let exception_signature ~loc sg =
+let exception_signature ~loc ctx sg =
   let rec fold exc = function
 
     | [] -> Desugared.Exceptions exc
 
     | Sugared.Operation o :: sg ->
+       check_operation ~loc o ctx ;
        error ~loc (UnexpectedOperation o)
 
     | Sugared.Exception e :: sg ->
+       check_exception ~loc e ctx ;
        let exc = Name.Set.add e exc in
        fold exc sg
 
     | Sugared.Signal s :: _ ->
+       check_signal ~loc s ctx ;
        error ~loc (UnexpectedSignal s)
   in
   fold Name.Set.empty sg
@@ -323,13 +346,13 @@ let rec expr_ty ctx {Location.it=t'; loc} =
        end
 
     | Sugared.RunnerTy (sg1, sg2, wt) ->
-       let ops1 = operation_signature ~loc sg1
+       let ops1 = operation_signature ~loc ctx sg1
        and wt = expr_ty ctx wt
-       and ops2, sgn = operation_signal_signature ~loc sg2 in
+       and ops2, sgn = operation_signal_signature ~loc ctx sg2 in
        Desugared.RunnerTy (ops1, ops2, sgn, wt)
 
     | Sugared.ContainerTy sg ->
-       let ops = operation_signature ~loc sg in
+       let ops = operation_signature ~loc ctx sg in
        Desugared.ContainerTy ops
 
     | Sugared.ComputationTy _ ->
@@ -348,12 +371,12 @@ and user_or_kernel_ty ctx ({Location.it=t'; loc} as t) =
 
   | Sugared.ComputationTy (t, sg, None) ->
      let user_ty = expr_ty ctx t
-     and user_ops, user_exc = operation_exception_signature ~loc sg in
+     and user_ops, user_exc = operation_exception_signature ~loc ctx sg in
      UserTy (Location.locate ~loc (Desugared.{user_ty; user_ops; user_exc}))
 
   | Sugared.ComputationTy (t, sg, Some wt) ->
      let kernel_ty = expr_ty ctx t
-     and kernel_ops, kernel_exc, kernel_sgn = operation_exception_signal_signature sg
+     and kernel_ops, kernel_exc, kernel_sgn = operation_exception_signal_signature ~loc ctx sg
      and kernel_world = expr_ty ctx wt in
      KernelTy (Location.locate ~loc (Desugared.{kernel_ty; kernel_ops; kernel_exc; kernel_sgn; kernel_world}))
 
@@ -428,7 +451,7 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
          | None -> error ~loc (UnknownIdentifier x)
          | Some Variable -> ([], locate (Desugared.Var x))
          | Some Operation -> error ~loc BareOperation
-         | Some Exception -> error ~loc BareOperation
+         | Some Exception -> error ~loc BareException
          | Some Signal -> error ~loc BareSignal
        end
 
@@ -474,8 +497,8 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
     | Sugared.FunUser (pxs, c) ->
        ([], user_abstract ~loc ctx pxs c)
 
-    | Sugared.FunKernel (pxs, c) ->
-       ([], kernel_abstract ~loc ctx pxs c)
+    | Sugared.FunKernel (px, wt, c) ->
+       ([], kernel_abstract ~loc ctx px wt c)
 
     | Sugared.Runner (lst, t) ->
        let t = expr_ty ctx t in
@@ -521,27 +544,12 @@ and user_abstract ~loc ctx pxs c =
      let c = user_abstract0 ~loc ctx pxs c in
      Location.locate ~loc (Desugared.FunUser (px, c))
 
-(** Abstract 0 or more times to get a kernel computation *)
-and kernel_abstract0 ~loc ctx pxs c =
-  let locate x = Location.locate ~loc x in
-  let rec fold ctx = function
-    | [] -> comp ctx c
-    | px :: pxs ->
-       let ctx, px = binder ctx px in
-       let c = fold ctx pxs in
-       locate (Desugared.Val (locate (Desugared.FunKernel (px, c))))
-  in
-  fold ctx pxs
-
-(** Abstract 1 or more times to get a kernel abstraction *)
-and kernel_abstract ~loc ctx pxs c =
-  match pxs with
-  | [] -> assert false
-
-  | px :: pxs ->
+(** Abstract a kernel comptuation *)
+and kernel_abstract ~loc ctx px wt c =
+     let wt = expr_ty ctx wt in
      let ctx, px = binder ctx px in
-     let c = kernel_abstract0 ~loc ctx pxs c in
-     Location.locate ~loc (Desugared.FunKernel (px, c))
+     let c = comp ctx c in
+     Location.locate ~loc (Desugared.FunKernel (px, wt, c))
 
 and runner_clauses ~loc ctx lst = List.map (runner_clause ~loc ctx) lst
 
@@ -899,7 +907,7 @@ let toplevel' ctx = function
        check_ident_shadow ~loc op ctx ;
        let t1 = expr_ty ctx t1
        and t2 = expr_ty ctx t2
-       and exc = exception_signature ~loc sg in
+       and exc = exception_signature ~loc ctx sg in
        let ctx = extend_ident op Operation ctx in
        ctx, Desugared.DeclareOperation (op, t1, t2, exc)
 

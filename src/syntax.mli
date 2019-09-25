@@ -12,7 +12,6 @@ type primitive =
   | Int
   | Bool
   | String
-  | Any
 
 (** Types of expressions *)
 type expr_ty =
@@ -157,10 +156,10 @@ val pollute_user : user_ty -> operations -> exceptions -> user_ty
 val pollute_kernel : kernel_ty -> operations -> exceptions -> signals -> kernel_ty
 
 (** Make a user computation type with a single operation. *)
-val operation_user_ty : expr_ty -> Name.t -> user_ty
+val operation_user_ty : expr_ty -> Name.t -> exceptions -> user_ty
 
 (** Make a kernel computation type with a single operation. *)
-val operation_kernel_ty : expr_ty -> Name.t -> expr_ty -> kernel_ty
+val operation_kernel_ty : expr_ty -> Name.t -> exceptions -> expr_ty -> kernel_ty
 
 (** The user type of a raise *)
 val raise_user_ty : Name.t -> user_ty

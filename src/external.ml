@@ -1,26 +1,33 @@
 (** Foreign function interface. *)
 
-exception Error of string
+let mk_ident s = Name.Ident (s, Name.Word)
 
-let error msg = raise (Error msg)
+(** Internal errors which do not happen to well-typed programs. *)
+exception InternalError of string
 
+let internal_error msg = raise (InternalError msg)
+
+(** User exceptions that are also defined in the pervasives file.
+    Make sure the names and types of values match! *)
+
+let division_by_zero = Value.Exception (mk_ident "division_by_zero", Value.unit_val)
+
+let malformed_integer = Value.Exception (mk_ident "malformed_integer", Value.unit_val)
+
+(** Conversion of values to OCaml values. *)
 let as_int = function
   | Value.Numeral n -> n
   | Value.(Constructor _ | Boolean _ | Quoted _ | Tuple _ |
     ClosureUser _ | ClosureKernel _ | Runner _ | Abstract | Container _) ->
-     error "integer expected"
+     internal_error "integer expected"
 
 let as_string = function
   | Value.Quoted s -> s
   | Value.(Constructor _ | Boolean _ | Numeral _ | Tuple _ |
     ClosureUser _ | ClosureKernel _ | Runner _ | Abstract | Container _) ->
-     error "string expected"
+     internal_error "string expected"
 
 (** Wrappers that convert OCaml data to Coop data. *)
-
-let coop_unit = Value.Tuple []
-
-let mk_ident s = Name.Ident (s, Name.Word)
 
 let wrap_container coops =
   let coops =
@@ -35,14 +42,10 @@ let pure_container = []
 
 let stdio_container =
 
-  let print_value v =
-    Format.printf "%t" (Value.print v) ;
-    coop_unit
-
-  and print_string v =
+  let print_string v =
     let s = as_string v in
     Format.printf "%s" s ;
-    coop_unit
+    Value.unit_val
 
   and read_string _ =
     Format.printf "@." ;
@@ -54,19 +57,21 @@ let stdio_container =
       Format.printf "@." ;
       let k = Stdlib.read_int () in
       Value.Numeral k
-    with Failure _ -> error "malformed integer"
+    with Failure _ -> Value.coop_raise malformed_integer
   in
-  [ ("print_value", print_value);
-    ("print_string", print_string);
+  [ ("print_string", print_string);
     ("read_string", read_string);
     ("read_int", read_int);
-    ("flush", fun _ -> Format.printf "@." ; coop_unit)
+    ("flush", fun _ -> Format.printf "@." ; Value.unit_val)
   ]
 
 let wrap_binary f =
-  Value.ClosureUser (fun v1 -> Value.user_return (Value.ClosureUser (fun v2 -> Value.user_return (f v1 v2))))
+  Value.ClosureUser (fun v1 ->
+     Value.user_return (Value.ClosureUser
+       (fun v2 -> Value.user_return (f v1 v2))))
 
-let wrap_unary f = Value.ClosureUser (fun v -> Value.user_return (f v))
+let wrap_unary f =
+  Value.ClosureUser (fun v -> Value.user_return (f v))
 
 let wrap_string_string_string f =
   wrap_binary (fun v1 v2 ->
@@ -106,8 +111,8 @@ let externals =
     ("+", wrap_int_int_int ( + )) ;
     ("*", wrap_int_int_int ( * )) ;
     ("-", wrap_int_int_int ( - )) ;
-    ("/", wrap_int_int_int (fun a b -> try a / b with Division_by_zero -> error "division by zero")) ;
-    ("%", wrap_int_int_int (fun a b -> try a mod b with Division_by_zero -> error "division by zero")) ;
+    ("/", wrap_int_int_int (fun a b -> try a / b with Division_by_zero -> Value.coop_raise division_by_zero)) ;
+    ("%", wrap_int_int_int (fun a b -> try a mod b with Division_by_zero -> Value.coop_raise division_by_zero)) ;
     ("~-", wrap_int_int ( ~- )) ;
     ("<>",  wrap_int_int_bool ((<>) : int -> int -> bool)) ;
     ("<",  wrap_int_int_bool ((<) : int -> int -> bool)) ;

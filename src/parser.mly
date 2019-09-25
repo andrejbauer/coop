@@ -9,7 +9,7 @@
 %token UNDERSCORE
 
 (* Primitive types *)
-%token EMPTY INT UNIT BOOL STRING ANY
+%token EMPTY INT UNIT BOOL STRING
 
 (* Parentheses & punctuations *)
 %token LPAREN RPAREN
@@ -20,12 +20,12 @@
 %token <int> NUMERAL
 %token BEGIN END
 %token FALSE TRUE IF THEN ELSE
-%token FUN FUNK
+%token FUN
 %token RUNNER
 %token GETENV SETENV
 %token LET REC IN
 %token MATCH WITH BAR
-%token USING RUN TRY FINALLY VAL
+%token USING RUN TRY VAL
 %token EXEC EXECK
 
 (* Toplevel commands *)
@@ -154,8 +154,8 @@ term_:
   | FUN a=binder+ ARROW e=term
     { Sugared.FunUser (a, e) }
 
-  | FUNK a=binder+ ARROW e=term
-    { Sugared.FunKernel (a, e) }
+  | FUN a=binder AT wt=prod_ty ARROW e=term
+    { Sugared.FunKernel (a, wt, e) }
 
   | LET bnd=let_binding IN c=term
     { Sugared.Let (bnd, c) }
@@ -175,7 +175,7 @@ term_:
   | RUNNER LBRACE lst=runner_clauses RBRACE AT t=ty
     { Sugared.Runner (lst, t) }
 
-  | USING rnr=infix_term AT w=infix_term RUN c=term FINALLY LBRACE fin=finally RBRACE
+  | USING rnr=infix_term AT w=infix_term RUN c=term WITH LBRACE fin=finally RBRACE
     { Sugared.Using (rnr, w, c, fin) }
 
   | TRY c=term WITH LBRACE hnd=trying RBRACE
@@ -459,9 +459,6 @@ simple_ty_:
 
   | STRING
     { Sugared.(Primitive String) }
-
-  | ANY
-    { Sugared.(Primitive Any) }
 
   | t=var_name
     { Sugared.NamedTy t }

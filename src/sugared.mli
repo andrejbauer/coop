@@ -14,7 +14,6 @@ type primitive =
   | Int
   | Bool
   | String
-  | Any
 
 (** Parsed type. *)
 type ty = ty' Location.located
@@ -55,7 +54,7 @@ and term' =
   | Match of term * (binder * term) list
   | If of term * term * term
   | FunUser of binder list * term
-  | FunKernel of binder list * term
+  | FunKernel of binder * ty * term
   | Apply of term * term
   | Let of let_binding * term
   | LetRec of rec_clause list * term

@@ -36,12 +36,6 @@ let constr_arg = constr - 1
 
 (* Type levels *)
 
-let user_ty = 800
-let user_ty_left = 700
-
-let kernel_ty = 800
-let kernel_ty_left = 700
-
 let world_ty = 1000
 
 let arr = 900
@@ -50,6 +44,14 @@ let arr_right = arr
 
 let product = 700
 let product_arg = product - 1
+
+let user_ty = 800
+let user_ty_left = 700
+let user_ty_right = product
+
+let kernel_ty = 800
+let kernel_ty_left = 700
+let kernel_ty_right = product
 
 let runner_ty = 750
 let runner_ty_world = product

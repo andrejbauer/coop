@@ -3,8 +3,8 @@ operation put : int -> unit
 
 let state =
   runner {
-  | get t @ w -> (w, w)
-  | put x @ w -> ((), x)
+  | get t -> getenv
+  | put x -> setenv x
   } @ int
 
 let demo =
@@ -14,6 +14,6 @@ let demo =
     let b = get () in
     put 3 ;
     (a, b)
-  finally {
+  with {
     val x @ w -> (x, w)
   }

@@ -3,9 +3,9 @@
 (** Reserved words. *)
 let reserved = [
   ("and", Parser.AND) ;
-  ("any", Parser.ANY) ;
   ("begin", Parser.BEGIN) ;
   ("bool", Parser.BOOL) ;
+  ("container", Parser.CONTAINER) ;
   ("else", Parser.ELSE) ;
   ("empty", Parser.EMPTY) ;
   ("end", Parser.END) ;
@@ -14,9 +14,7 @@ let reserved = [
   ("external", Parser.EXTERNAL) ;
   ("exception", Parser.EXCEPTION) ;
   ("false", Parser.FALSE) ;
-  ("finally", Parser.FINALLY) ;
   ("fun", Parser.FUN) ;
-  ("funK", Parser.FUNK) ;
   ("getenv", Parser.GETENV) ;
   ("if", Parser.IF) ;
   ("in", Parser.IN) ;
@@ -34,6 +32,7 @@ let reserved = [
   ("string", Parser.STRING);
   ("then", Parser.THEN) ;
   ("true", Parser.TRUE) ;
+  ("try", Parser.TRY) ;
   ("type", Parser.TYPE) ;
   ("unit", Parser.UNIT) ;
   ("using", Parser.USING) ;
@@ -134,10 +133,16 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | "=>" | 8658              -> f (); Parser.DARROW
 
   | exception_name           -> f (); let e = Ulexbuf.lexeme lexbuf in
-                                      Parser.EXCEPTIONNAME (Name.Ident (String.sub e 2 (String.length e - 2), Name.Word))
+                                      let e = String.sub e 1 (String.length e - 1) in
+                                      Parser.EXCEPTIONNAME (Name.Ident (e, Name.Word))
 
   | signal_name              -> f (); let s = Ulexbuf.lexeme lexbuf in
-                                      Parser.SIGNALNAME (Name.Ident (String.sub s 2 (String.length s - 2), Name.Word))
+                                      let s = if s.[0] = '!' then
+                                                String.sub s 2 (String.length s - 2)
+                                              else
+                                                String.sub s 1 (String.length s - 1)
+                                      in
+                                      Parser.SIGNALNAME (Name.Ident (s, Name.Word))
 
   (* We record the location of operators here because menhir cannot handle %infix and
      mark_location simultaneously, it seems. *)

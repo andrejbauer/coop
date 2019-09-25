@@ -1,3 +1,3 @@
-exception Error of string
+exception InternalError of string
 
 val lookup : string -> Value.t option

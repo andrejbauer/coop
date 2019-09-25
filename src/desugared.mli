@@ -17,7 +17,6 @@ type primitive =
   | Int
   | Bool
   | String
-  | Any
 
 (** Expression types *)
 type expr_ty = expr_ty' Location.located
@@ -71,7 +70,7 @@ and expr' =
   | Tuple of expr list
   | Constructor of Name.t * expr option
   | FunUser of binder * comp
-  | FunKernel of binder * comp
+  | FunKernel of binder * expr_ty * comp
   | Runner of (Name.t * binder * comp) list * expr_ty
 
 (** Computations *)
