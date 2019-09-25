@@ -1158,10 +1158,11 @@ and infer_kernel ?world (ctx : context) {Location.it=c'; loc} =
      locate (Syntax.KernelSetenv e), t
 
   | Desugared.ExecUser (c, hnd) ->
+     let w_ty = get_world () in
      let c, Syntax.{user_ty=c_ty; user_ops=c_ops; _} =
        infer_user ctx c
      in
-     let hnd, hnd_ty = infer_kernel_handler ?world ~loc ctx c_ty hnd in
+     let hnd, hnd_ty = infer_kernel_handler ~world:w_ty ~loc ctx c_ty hnd in
      let t = Syntax.pollute_kernel hnd_ty c_ops Syntax.empty_exceptions Syntax.empty_signals in
      locate (Syntax.KernelExec (c, hnd)), t
 
@@ -1170,39 +1171,49 @@ and infer_kernel ?world (ctx : context) {Location.it=c'; loc} =
 
 (** Infer the type of an exception handler, where [ty_val] is the type of the argument for
    the [val] case. *)
-and infer_user_handler ~loc ctx ty_val Desugared.{try_val=(px,c_val); try_raise} =
-  let px, c_val, ty =
-    let ctx, px = extend_binder ctx px ty_val in
-    let c_val, ty = infer_user ctx c_val in
-    (px, c_val, ty)
-  in
-  let try_raise =
-    List.map
-      (fun (exc, px, c) ->
+and infer_user_handler ~loc ctx ty_val Desugared.{try_val; try_raise} =
+  let rec fold ty try_raise = function
+    | [] -> ty, List.rev try_raise
+    | (exc, px, c) :: lst ->
        let ty_exc = lookup_exception ~loc exc ctx in
        let ctx, px = extend_binder ctx px ty_exc in
-       let c = check_user ctx c ty in
-       (exc, px, c))
-      try_raise
+       let c, c_ty = infer_user ctx c in
+       let ty = join_user_ty ~loc:c.Location.loc ctx c_ty ty in
+       let try_raise = (exc, px, c) :: try_raise in
+       fold ty try_raise lst
   in
-  Syntax.{try_val = (px, c_val); try_raise}, ty
+  let try_val, ty =
+    match try_val with
+    | None -> None, Syntax.pure_user_ty ty_val
+    | Some (px,c_val) ->
+       let ctx, px = extend_binder ctx px ty_val in
+       let c_val, ty = infer_user ctx c_val in
+       Some (px, c_val), ty
+  in
+  let ty, try_raise = fold ty [] try_raise in
+  Syntax.{try_val; try_raise}, ty
 
-and infer_kernel_handler ?world ~loc ctx ty_val Desugared.{try_val=(px,c_val); try_raise} =
-  let px, c_val, ty =
-    let ctx, px = extend_binder ctx px ty_val in
-    let c_val, ty = infer_kernel ?world ctx c_val in
-    (px, c_val, ty)
-  in
-  let try_raise =
-    List.map
-      (fun (exc, px, c) ->
-        let ty_exc = lookup_exception ~loc exc ctx in
+and infer_kernel_handler ~world ~loc ctx ty_val Desugared.{try_val; try_raise} =
+  let rec fold ty try_raise = function
+    | [] -> ty, List.rev try_raise
+    | (exc, px, c) :: lst ->
+       let ty_exc = lookup_exception ~loc exc ctx in
        let ctx, px = extend_binder ctx px ty_exc in
-       let c = check_kernel ctx c ty in
-       (exc, px, c))
-      try_raise
+       let c, c_ty = infer_kernel ~world ctx c in
+       let ty = join_kernel_ty ~loc:c.Location.loc ctx c_ty ty in
+       let try_raise = (exc, px, c) :: try_raise in
+       fold ty try_raise lst
   in
-  Syntax.{try_val = (px, c_val); try_raise}, ty
+  let try_val, ty =
+    match try_val with
+    | None -> None, Syntax.pure_kernel_ty ty_val world
+    | Some (px,c_val) ->
+       let ctx, px = extend_binder ctx px ty_val in
+       let c_val, ty = infer_kernel ~world ctx c_val in
+       Some (px, c_val), ty
+  in
+  let ty, try_raise = fold ty [] try_raise in
+  Syntax.{try_val; try_raise}, ty
 
 (** Infer user [let rec] *)
 and infer_letrec ctx fs =

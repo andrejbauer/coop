@@ -96,7 +96,7 @@ and comp' =
 
 (** Exception handler *)
 and exception_handler = {
-   try_val : binder * comp ;
+   try_val : (binder * comp) option ;
    try_raise : (Name.t * binder * comp) list
 }
 

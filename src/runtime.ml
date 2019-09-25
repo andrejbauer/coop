@@ -372,7 +372,7 @@ and eval_user env Location.{it=c'; loc} =
      user_exec ~loc w r fin
 
   | Syntax.UserTry (c, hnd) ->
-     let (exc_val, exc_raise) = eval_exception_handler eval_user ~loc env hnd in
+     let (exc_val, exc_raise) = eval_user_exception_handler ~loc env hnd in
      let rec fold = function
 
        | Value.UserVal v -> exc_val v
@@ -434,7 +434,7 @@ and eval_kernel env Location.{it=c';loc} w =
      Value.(KernelSignal (Signal (sgn, v)))
 
   | Syntax.KernelExec (c, hnd) ->
-     let (h_val, h_exc) = eval_exception_handler eval_kernel ~loc env hnd in
+     let (h_val, h_exc) = eval_kernel_exception_handler ~loc env hnd in
      let rec fold = function
        | Value.UserVal v -> h_val v w
 
@@ -451,7 +451,7 @@ and eval_kernel env Location.{it=c';loc} w =
      fold r
 
   | Syntax.KernelTry (c, hnd) ->
-     let (exc_val, exc_raise) = eval_exception_handler eval_kernel ~loc env hnd in
+     let (exc_val, exc_raise) = eval_kernel_exception_handler ~loc env hnd in
      let rec fold = function
 
        | Value.KernelVal (v, w) -> exc_val v w
@@ -479,19 +479,33 @@ and eval_kernel env Location.{it=c';loc} w =
      let v = eval_expr env e in
      Value.(KernelVal (unit_val, Value.World v))
 
-and eval_exception_handler :
-  'a 'b . (Value.t list -> 'a -> 'b) -> loc:Location.t ->
-          Value.t list -> 'a Syntax.exception_handler ->
-          (Value.t -> 'b) * (Value.t -> 'b) Name.Map.t
-= fun eval ~loc env Syntax.{try_val=(px,c); try_raise=excs} ->
-  let f_val v = (let env = extend_pattern ~loc px v env in eval env c)
+and eval_user_exception_handler ~loc env Syntax.{try_val; try_raise} =
+  let f_val v =
+    match try_val with
+    | Some (px,c) -> let env = extend_pattern ~loc px v env in eval_user env c
+    | None -> Value.user_return v
   and f_excs =
     List.fold_left
     (fun m (exc, px, c) ->
-      let f_exc v = (let env = extend_pattern ~loc px v env in eval env c) in
+      let f_exc v = (let env = extend_pattern ~loc px v env in eval_user env c) in
       Name.Map.add exc f_exc m)
     Name.Map.empty
-    excs
+    try_raise
+  in
+  (f_val, f_excs)
+
+and eval_kernel_exception_handler ~loc env Syntax.{try_val; try_raise} =
+  let f_val v =
+    match try_val with
+    | Some (px,c) -> let env = extend_pattern ~loc px v env in eval_kernel env c
+    | None -> Value.kernel_return v
+  and f_excs =
+    List.fold_left
+    (fun m (exc, px, c) ->
+      let f_exc v = (let env = extend_pattern ~loc px v env in eval_kernel env c) in
+      Name.Map.add exc f_exc m)
+    Name.Map.empty
+    try_raise
   in
   (f_val, f_excs)
 

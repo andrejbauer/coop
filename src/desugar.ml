@@ -781,12 +781,8 @@ and try_clauses ~loc ctx lst =
   let rec fold try_val try_raise = function
 
     | [] ->
-       begin match try_val with
-       | None -> error ~loc MissingFinallyVal
-       | Some try_val ->
-          let try_raise = List.rev try_raise in
-          Desugared.{try_val; try_raise}
-       end
+       let try_raise = List.rev try_raise in
+       Desugared.{try_val; try_raise}
 
     | Sugared.TryVal (px, c) :: lst ->
        begin match try_val with

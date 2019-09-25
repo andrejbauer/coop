@@ -110,7 +110,7 @@ and finally =
 
 (** Exception handler *)
 and 'a exception_handler =
-  { try_val : pattern * 'a
+  { try_val : (pattern * 'a) option
   ; try_raise : (Name.t * pattern * 'a) list }
 
 and runner_clause = Name.t * pattern * kernel
