@@ -7,7 +7,7 @@ using
 in
   moo ()
 finally {
-| val _ @ _ -> 1
+| return _ @ _ -> 1
 | moo () @ _ -> 2
 } ;;
 
@@ -22,7 +22,7 @@ let demo =
   run
     op ()
   finally {
-  | val _ @ _ -> 1
+  | return _ @ _ -> 1
   | sgl () @ _ -> 2
   }
 

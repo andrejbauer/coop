@@ -24,5 +24,5 @@ let demo =
       let b = tick () in
       let c = tick () in
       (a, b, c)
-    with { val v @ w -> v }
-  with { val v @ w -> (v, w) }
+    with { return v @ w -> v }
+  with { return v @ w -> (v, w) }

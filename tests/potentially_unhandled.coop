@@ -11,5 +11,5 @@ let d =
   using ({} @ unit) @ () run
     if false then !giggle () else tickle ()
   with {
-  | val _ @ _ -> ()
+  | return _ @ _ -> ()
   }

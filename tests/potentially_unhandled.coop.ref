@@ -10,6 +10,6 @@ the following operations are potentially unhandled: tickle
 Type warning at file "./potentially_unhandled.coop", line 8, charaters 8-54:
 the following exceptions are potentially unhandled: giggle
 
-Type error at file "./potentially_unhandled.coop", line 11, charaters 2-105:
+Type error at file "./potentially_unhandled.coop", line 11, charaters 2-108:
 the following exceptions are potentially unhandled: giggle
 

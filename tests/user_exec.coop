@@ -9,5 +9,5 @@ let demo =
   using adder @ () run
     add (3, 4)
   with {
-    val x @ _ -> x
+    return x @ _ -> x
   }

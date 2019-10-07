@@ -37,7 +37,7 @@ let demo1 =
   run
     job ()
   finally {
-  | val _ @ f -> f
+  | return _ @ f -> f
   | disk_full _ @ f -> f
   }
 
@@ -46,6 +46,6 @@ let demo2 =
   run
     job ()
   finally {
-  | val _ @ f -> f
+  | return _ @ f -> f
   | disk_full _ @ f -> f
   }

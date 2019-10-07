@@ -16,7 +16,7 @@ let demo (n : int) =
     let b = apply g n in
     (1000 + a, 1000 + b)
   with {
-  | val x @ w -> (x, w)
+  | return x @ w -> (x, w)
   | !!croak k -> ((k,-1), 666)
   | !die () @ w -> !die ()
   }
@@ -27,7 +27,7 @@ demo 2 ;;
 using ({} @ unit) @ () run
   demo (-3)
 with {
-  | val x @ _ -> 42
+  | return x @ _ -> 42
   | !die () @ _ -> 23
 }
 ;;

@@ -25,7 +25,7 @@ let demo1 =
     let c = tick () in
     put 3 ;
     (a, b, c)
-  finally { val x @ w -> (x, w) }
+  finally { return x @ w -> (x, w) }
 
 let demo2 =
   using state :*: (state as {get'=get, put'=put}) @ (2, 3) run
@@ -35,4 +35,4 @@ let demo2 =
     let b = get' () in
     put' (b + 10) ;
     (a, b)
-  finally { val x @ w -> (x, w) }
+  finally { return x @ w -> (x, w) }

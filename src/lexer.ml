@@ -25,6 +25,7 @@ let reserved = [
   ("of", Parser.OF) ;
   ("operation", Parser.OPERATION) ;
   ("rec", Parser.REC) ;
+  ("return", Parser.RETURN) ;
   ("run", Parser.RUN) ;
   ("setenv", Parser.SETENV) ;
   ("signal", Parser.SIGNAL);
@@ -35,7 +36,6 @@ let reserved = [
   ("type", Parser.TYPE) ;
   ("unit", Parser.UNIT) ;
   ("using", Parser.USING) ;
-  ("val", Parser.VAL) ;
   ("with", Parser.WITH) ;
 ]
 

@@ -15,5 +15,5 @@ let demo =
     put 3 ;
     (a, b)
   with {
-    val x @ w -> (x, w)
+    return x @ w -> (x, w)
   }

@@ -36,7 +36,7 @@ let demo1 =
     let b = get () in
     put 3 ;
     (a, b)
-  finally { val x @ _ -> x }
+  finally { return x @ _ -> x }
 
 let state2 = state ⊗ state'
 
@@ -48,7 +48,7 @@ let demo2 =
     put' (a + 10) ;
     let b = get' () in
     (a, b)
-  finally { val x @ w -> (x, w) }
+  finally { return x @ w -> (x, w) }
 
 (* Combine two copies of state, one of which only allows positive values. *)
 let demo3 =
@@ -59,7 +59,7 @@ let demo3 =
     let b = get' () in
     (a, b)
   finally {
-  | val x @ w -> (x, w)
+  | return x @ w -> (x, w)
   | negative k @ w -> ((0, k), w)
   }
 
@@ -74,6 +74,6 @@ let demo3' =
     put (-1) ;
     (a, b)
   finally {
-  | val x @ w -> (x, w)
+  | return x @ w -> (x, w)
   | negative k @ w -> ((666, k), w)
   }

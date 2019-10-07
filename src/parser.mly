@@ -24,7 +24,7 @@
 %token GETENV SETENV
 %token LET REC IN
 %token MATCH WITH BAR
-%token USING RUN TRY VAL
+%token USING RUN TRY RETURN
 %token EXEC EXECK
 
 (* Toplevel commands *)
@@ -308,7 +308,7 @@ finally:
     { lst }
 
 finally_clause:
-  | VAL px=binder AT pw=binder ARROW t=term
+  | RETURN px=binder AT pw=binder ARROW t=term
     { Sugared.FinVal (px, pw, t) }
 
   | exc=EXCEPTIONNAME px=binder AT pw=binder ARROW c=term
@@ -324,7 +324,7 @@ trying:
     { lst }
 
 try_clause:
-  | VAL px=binder ARROW t=term
+  | RETURN px=binder ARROW t=term
     { Sugared.TryVal (px, t) }
 
   | exc=EXCEPTIONNAME px=binder ARROW c=term

@@ -110,11 +110,11 @@ let demo =
   let r =
     using io_recorder @ Nil run
       conversation1 ()
-    finally { val _ @ r -> reverse r }
+    finally { return _ @ r -> reverse r }
   in
     using io_player @ r run
       conversation2 ()
     finally {
-    | val v @ r -> (v, r)
+    | return v @ r -> (v, r)
     | sync_error () @ _ -> sync_error ()
     }

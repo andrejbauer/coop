@@ -1,3 +1,6 @@
-Syntax error at file "./empty_type.coop", line 19, charaters 16-27:
-unknown identifier print_value
-
+exception boom of unit
+val f : int → empty {!boom} = <fun>
+val g : int → int {!boom} = <fun>
+container {flush, print_string, read_int, read_string}
+Boom!
+- : unit = ()

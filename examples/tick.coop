@@ -19,4 +19,4 @@ let demo =
     let r1 = job () in
     let r2 = job () in
     (r1, r2)
-  finally { val v @ _ -> v }
+  finally { return v @ _ -> v }
