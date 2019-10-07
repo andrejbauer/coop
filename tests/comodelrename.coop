@@ -5,7 +5,7 @@ operation dog : bool -> bool
 operation cat : bool -> bool
 
 let c =
-  runner {
+  {
   | cow () @ () -> (42, ())
   | dog b @ () -> (true, ())
   } @ unit

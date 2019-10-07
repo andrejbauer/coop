@@ -24,7 +24,7 @@ let reverse (r : io_record) =
   rev Nil r
 
 let io_recorder =
-  runner {
+  {
   | print_int k @ r -> print_value k ; ((), Cons (PrintInt k, r))
   | print_string s @ r -> print_string s ; ((), Cons (PrintString s, r))
   | read_int () @ r -> let k = read_int () in (k, Cons (ReadInt k, r))
@@ -35,7 +35,7 @@ let io_recorder =
 signal sync_error of unit
 
 let io_player =
-  runner {
+  {
 
   | print_int k @ r ->
       match r with {

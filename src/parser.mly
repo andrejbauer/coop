@@ -21,7 +21,6 @@
 %token BEGIN END
 %token FALSE TRUE IF THEN ELSE
 %token FUN
-%token RUNNER
 %token GETENV SETENV
 %token LET REC IN
 %token MATCH WITH BAR
@@ -172,7 +171,7 @@ term_:
   | IF e1=term THEN e2=term ELSE e3=term
     { Sugared.If (e1, e2, e3) }
 
-  | RUNNER LBRACE lst=runner_clauses RBRACE AT t=ty
+  | LBRACE lst=runner_clauses RBRACE AT t=ty
     { Sugared.Runner (lst, t) }
 
   | USING rnr=infix_term AT w=infix_term RUN c=term WITH LBRACE fin=finally RBRACE

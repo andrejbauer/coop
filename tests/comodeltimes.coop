@@ -7,13 +7,13 @@ operation put' : int -> unit
 operation tick : unit -> int
 
 let state =
-  runner {
+  {
   | get t @ w -> (w, w)
   | put x @ w -> ((), x)
   } @ int
 
 let ticker =
-  runner { tick () @ w -> (w, w+1) } @ int
+  { tick () @ w -> (w, w+1) } @ int
 
 let c = state ⊗ ticker
 

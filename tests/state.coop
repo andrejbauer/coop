@@ -2,7 +2,7 @@ operation get : unit -> int
 operation put : int -> unit
 
 let state =
-  runner {
+  {
   | get t -> getenv
   | put x -> setenv x
   } @ int

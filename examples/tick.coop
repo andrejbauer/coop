@@ -2,7 +2,7 @@
 operation tick : unit -> int
 
 let ticker =
-  runner {
+  {
   | tick () @ w -> (w, w+1)
   } @ int
 ;;

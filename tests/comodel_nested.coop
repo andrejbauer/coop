@@ -3,14 +3,14 @@ operation put : int -> unit
 operation tick : unit -> int
 
 let state =
-  runner {
+  {
   | get t -> getenv
   | put x -> setenv x
   } @ int
 
 (* A ticker which uses state to tick *)
 let ticker =
-  runner {
+  {
    tick () ->
      let x = get () in
      put (exec x + 1 with {}) ;

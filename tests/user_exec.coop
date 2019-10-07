@@ -3,7 +3,7 @@
 operation add : int * int -> int
 
 let adder =
-  runner { add (a, b) -> exec (a + b) with { } } @ unit
+  { add (a, b) -> exec (a + b) with { } } @ unit
 
 let demo =
   using adder @ () run

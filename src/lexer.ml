@@ -26,7 +26,6 @@ let reserved = [
   ("operation", Parser.OPERATION) ;
   ("rec", Parser.REC) ;
   ("run", Parser.RUN) ;
-  ("runner", Parser.RUNNER) ;
   ("setenv", Parser.SETENV) ;
   ("signal", Parser.SIGNAL);
   ("string", Parser.STRING);

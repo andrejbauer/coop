@@ -8,7 +8,7 @@ let b = if false then !giggle () else ()
 let c = if false then (!giggle () ; tickle ()) else ()
 
 let d =
-  using (runner {} @ unit) @ () run
+  using ({} @ unit) @ () run
     if false then !giggle () else tickle ()
   with {
   | val _ @ _ -> ()

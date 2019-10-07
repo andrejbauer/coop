@@ -3,7 +3,7 @@ exception boom of unit
 let rec f (x : int) : empty {!boom} = !boom ()
 
 let g (x : int) =
-  using (runner {} @ unit) @ () run
+  using ({} @ unit) @ () run
     (match f x with {}) : int {!boom}
   with {
   | val x @ _ -> x
@@ -13,7 +13,7 @@ let g (x : int) =
 
 container stdio ;;
 
-using (runner {} @ unit) @ () run
+using ({} @ unit) @ () run
   g 43
 with {
  | val x @ _ -> print_value x
