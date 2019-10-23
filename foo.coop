@@ -1,6 +1,0 @@
-signal Foo of unit ;;
-
-operation cow : unit -> unit ;;
-
-let demo =
-  using {

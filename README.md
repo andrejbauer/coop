@@ -1,7 +1,6 @@
 # Coop
 
-Coop is a prototype programming language for programming with algebraic
-comodels, a concept dual to algebraic operations and handlers.
+Coop is a prototype programming language for programming with *runners*, also known as *comodels*.
 
 Coop is part of ongoing research by [Danel Ahman](https://danel.ahman.ee) and
 [Andrej Bauer](http://www.andrej.com/). Until a proper publication has appeared,
@@ -13,18 +12,21 @@ lecture notes [What is algebraic about algebraic effects and
 handlers?](https://arxiv.org/abs/1807.05923), especially Section 4 which covers
 comodels.
 
+
 ## Prerequisites
 
 To compile Coop you need:
 
 * [OCaml](https://ocaml.org) and [OPAM](https://opam.ocaml.org)
 
-* The OPAM packages `menhir` and `sedlex`:
+* The OPAM packages `menhir`, `sedlex`, and `dune`:
 
         opam install menhir
         opam install sedlex
+        opam install dune
 
 * It is recommended that you also install the `rlwrap` or `ledit` command line wrapper.
+
 
 ## Compilation
 
@@ -35,7 +37,10 @@ You can type:
 * `make clean` to clean up.
 * `make doc` to generate HTML documentation (see the generated [`coop.docdir/index.html`](coop.docdir/index.html)).
 
-## Language features
+
+# Language features
+
+`[Note: everything below here is obsolete.]`
 
 ### Concrete syntax
 
