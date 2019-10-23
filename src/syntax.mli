@@ -1,10 +1,10 @@
 (** Type-checked syntax of Coop. *)
 
-type operations = Operations of Name.Opset.t
+type operations = Operations of Name.Set.t
 
-type exceptions = Exceptions of Name.Idset.t
+type exceptions = Exceptions of Name.Set.t
 
-type signals = Signals of Name.Idset.t
+type signals = Signals of Name.Set.t
 
 (** Primitive types *)
 type primitive =

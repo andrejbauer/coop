@@ -10,36 +10,12 @@ type fixity =
 (** An identifier. *)
 type t = Ident of string * fixity
 
-(** An operation name. *)
-type op = Op of t
-
 (** A set of identifiers. *)
-module Idset :
+module Set :
 sig
   (** These are just an interface to the [Map] module from the standard library. *)
 
   type elt = t
-  type t
-
-  val empty : t
-  val is_empty : t -> bool
-  val remove : elt -> t -> t
-  val add : elt -> t -> t
-  val mem : elt -> t -> bool
-  val elements : t -> elt list
-  val subset : t -> t -> bool
-  val union : t -> t -> t
-  val inter : t -> t -> t
-  val diff : t -> t -> t
-  val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
-end
-
-(** A set of operation names. *)
-module Opset :
-sig
-  (** These are just an interface to the [Map] module from the standard library. *)
-
-  type elt = op
   type t
 
   val empty : t
