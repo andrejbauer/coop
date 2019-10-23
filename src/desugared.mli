@@ -72,6 +72,8 @@ and expr' =
   | FunUser of binder * comp
   | FunKernel of binder * expr_ty * comp
   | Runner of (Name.t * binder * comp) list * expr_ty
+  | RunnerRename of expr * (Name.t * Name.t) list
+  | RunnerTimes of expr * expr
 
 (** Computations *)
 and comp = comp' Location.located

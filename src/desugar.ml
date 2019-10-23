@@ -505,6 +505,33 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
        let lst = runner_clauses ~loc ctx lst in
        ([], locate (Desugared.Runner (lst, t)))
 
+   | Sugared.RunnerTimes (e1, e2) ->
+       let ws1, e1 = expr ctx e1
+       and ws2, e2 = expr ctx e2 in
+       (ws1 @ ws2, locate (Desugared.RunnerTimes (e1, e2)))
+
+    | Sugared.RunnerRename (e, rnm) ->
+       let ws, e = expr ctx e in
+       let rnm =
+         List.map
+           (fun (x, y) ->
+             let x =
+               match lookup_ident x ctx with
+               | None -> error ~loc (UnknownIdentifier x)
+               | Some (Variable | Exception | Signal)-> error ~loc (OperationExpected x)
+               | Some Operation -> x
+             in
+             let y =
+               match lookup_ident y ctx with
+               | None -> error ~loc (UnknownIdentifier x)
+               | Some (Variable | Exception | Signal)-> error ~loc (OperationExpected x)
+               | Some Operation -> y
+             in
+             (x, y))
+           rnm
+       in
+       (ws, locate (Desugared.RunnerRename (e, rnm)))
+
     | Sugared.(Match _ | If _ | Apply _ | Let _ | LetRec _ |
                Sequence _ | Using _ | Try _ | Equal _ | Getenv | Setenv _ | Raise _ | Kill _ |
                ExecUser _ | ExecKernel _) ->
@@ -580,7 +607,8 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
   match c' with
     (* keep this case in front so that constructors are handled ocrrectly *)
     | Sugared.(Var _ | Numeral _ | False | True | Quoted _ | Constructor _ | FunUser _ | FunKernel _ |
-               Tuple _ | Runner _ | Apply ({Location.it=Constructor _;_}, _)) ->
+               Tuple _ | Runner _ | Sugared.RunnerTimes _ | Sugared.RunnerRename _ |
+               Apply ({Location.it=Constructor _;_}, _)) ->
        let ws, e = expr ctx c in
        let return_e = locate (Desugared.Val e) in
        let_binds ws return_e

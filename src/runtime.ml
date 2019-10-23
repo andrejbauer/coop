@@ -9,9 +9,12 @@ type error =
   | UnhandledSignal of Name.t
   | UnhandledException of Name.t
   | UnknownExternal of string
+  | IllegalRenaming of Name.t
   | IllegalComparison of Value.t
   | FunctionExpected
   | RunnerExpected
+  | RunnerDoubleOperation of Name.t
+  | PairExpected
   | ContainerExpected
   | PatternMismatch
 
@@ -40,6 +43,9 @@ let print_error err ppf =
   | UnknownExternal s ->
      Format.fprintf ppf "unknown external %s" s
 
+  | IllegalRenaming op ->
+     Format.fprintf ppf "illegal runner renaming %t, please report" (Name.print op)
+
   | IllegalComparison v ->
      Format.fprintf ppf "cannot compare %s" (Value.names v)
 
@@ -48,6 +54,12 @@ let print_error err ppf =
 
   | RunnerExpected ->
      Format.fprintf ppf "runner expected, please report"
+
+  | RunnerDoubleOperation op ->
+     Format.fprintf ppf "cannot combine runners that both implement %t" (Name.print op)
+
+  | PairExpected ->
+     Format.fprintf ppf "pair expected, please report"
 
   | ContainerExpected ->
      Format.fprintf ppf "container expected, please report"
@@ -162,6 +174,12 @@ let match_clauses ~loc env ps v =
        end
   in
   fold ps
+
+let as_pair ~loc = function
+  | Value.Tuple [v1; v2] -> (v1, v2)
+  | Value.(ClosureUser _ | ClosureKernel _ | Numeral _ | Boolean _ | Quoted _ | Constructor _
+    | Tuple ([] | [_] | _::_::_::_) | Runner _ | Abstract | Container _) ->
+     error ~loc PairExpected
 
 let as_closure_user ~loc = function
   | Value.ClosureUser f -> f
@@ -317,6 +335,58 @@ let rec eval_expr env {Location.it=e'; loc} =
          lst
      in
      Value.(Runner rnr)
+
+  | Syntax.RunnerTimes (e1, e2) ->
+     let wrap lens_get lens_put coop v w =
+       let rec fold = function
+       | Value.KernelVal (v, w'') -> Value.KernelVal (v, lens_put w w'')
+       | Value.KernelException (e, w'') -> Value.KernelException (e, lens_put w w'')
+       | Value.KernelSignal _ as s -> s
+       | Value.KernelOperation (op, u, l_val, l_exc) ->
+          let l_val v = fold (l_val v)
+          and l_exc = Name.Map.map (fun f v -> fold (f v)) l_exc in
+          Value.KernelOperation (op, u, l_val, l_exc)
+       in
+       let w' = lens_get w in
+       fold (coop v w')
+     in
+     let rnr1 = as_runner ~loc (eval_expr env e1)
+     and rnr2 = as_runner ~loc (eval_expr env e2) in
+     let rnr =
+       Name.Map.merge
+         (fun op f1 f2 ->
+           match f1, f2 with
+           | None, None -> None
+           | Some f1, None ->
+              let lens_get (Value.World w) =
+                let (w1, _) = as_pair ~loc w in Value.World w1
+              and lens_put (Value.World w) (Value.World w1) =
+                let (_, w2) = as_pair ~loc w in Value.World (Value.Tuple [w1; w2])
+              in
+              Some (wrap lens_get lens_put f1)
+           | None, Some f2 ->
+              let lens_get (Value.World w) =
+                let (_, w2) = as_pair ~loc w in Value.World w2
+              and lens_put (Value.World w) (Value.World w2) =
+                let (w1, _) = as_pair ~loc w in Value.World (Value.Tuple [w1; w2])
+              in
+              Some (wrap lens_get lens_put f2)
+           | Some _, Some _ -> error ~loc (RunnerDoubleOperation op))
+         rnr1 rnr2
+     in
+     Value.Runner rnr
+
+  | Syntax.RunnerRename (e, rnm) ->
+     let rnr = as_runner ~loc (eval_expr env e) in
+     let rnr =
+       Name.Map.fold
+         (fun op f rnr ->
+           match Name.Map.find op rnm with
+           | None -> error ~loc (IllegalRenaming op)
+           | Some op' -> Name.Map.add op' f rnr)
+         rnr Name.Map.empty
+     in
+     Value.Runner rnr
 
 and eval_user env Location.{it=c'; loc} =
   match c' with

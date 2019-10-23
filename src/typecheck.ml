@@ -45,6 +45,7 @@ type error =
   | KernelFunctionExpected of Syntax.expr_ty
   | RunnerExpected of Syntax.expr_ty
   | ContainerExpected of Syntax.expr_ty
+  | RunnerDoubleOperations of Name.Set.t
   | CannotInferArgument
   | CannotInferMatch
   | CannotInferWorld
@@ -56,6 +57,8 @@ type error =
   | UnhandledSignals of Name.Set.t
   | UnexpectedKernelComputation
   | UnexpectedUserComputation
+  | RenamingMismatch of Name.t * Name.t
+  | RenamingDomain of Name.t
 
 exception Error of error Location.located
 
@@ -147,6 +150,11 @@ let print_error err ppf =
      Format.fprintf ppf "this expression should be a container but has type@ %t"
        (Syntax.print_expr_ty ty)
 
+  | RunnerDoubleOperations ops ->
+     let ops = Name.Set.elements ops in
+     Format.fprintf ppf "these runners both handle the following operations:@ %t"
+       (Print.sequence (Name.print ~parentheses:true) "," ops)
+
   | CannotInferArgument ->
      Format.fprintf ppf "cannot infer the type of this argument"
 
@@ -186,8 +194,19 @@ let print_error err ppf =
   | UnexpectedUserComputation ->
      Format.fprintf ppf "user computations are not allowed here"
 
+  | RenamingMismatch (op, op') ->
+     Format.fprintf ppf "cannot rename, the type of  %t is not a subtype of  %t"
+       (Name.print op)
+       (Name.print op')
+
+  | RenamingDomain op ->
+     Format.fprintf ppf "cannot rename %t, it is not there"
+       (Name.print op)
+
+
 (** [error ~loc err] raises the given type-checking error. *)
 let error ~loc err = Stdlib.raise (Error (Location.locate ~loc err))
+
 
 (** [warning ~loc err] warns about the given type-checking error. *)
 let warning ~loc err =
@@ -195,17 +214,21 @@ let warning ~loc err =
                 (Location.print loc)
                 (print_error err)
 
+
 (** Extend the context with the type of deBruijn index 0 *)
 let extend_ident x ty ctx =
   { ctx with ctx_idents = (x, ty) :: ctx.ctx_idents }
+
 
 let rec extend_idents xts ctx =
   match xts with
   | [] -> ctx
   | (x, t) :: xts -> extend_idents xts (extend_ident x t ctx)
 
+
 let extend_alias x ty ctx =
   { ctx with ctx_aliases = Name.Map.add x ty ctx.ctx_aliases }
+
 
 let extend_datatype x cnstrs ctx =
   { ctx with ctx_datatypes = (x, cnstrs) :: ctx.ctx_datatypes }
@@ -829,7 +852,6 @@ let check_signals ~fatal ~loc (Syntax.Signals sgn1) (Syntax.Signals sgn2) =
      else
        warning ~loc (UnhandledSignals (Name.Set.diff sgn1 sgn2)))
 
-
 (** [infer_expr ctx e] infers the expression type [ty] of an expression [e]. It
    returns the processed expression [e] and its type [ty]. *)
 let rec infer_expr (ctx : context) {Location.it=e'; loc} =
@@ -886,6 +908,50 @@ let rec infer_expr (ctx : context) {Location.it=e'; loc} =
      let coops, ops1, ops2, sgns = infer_coops ~loc ctx w_ty coops in
      locate (Syntax.Runner coops), Syntax.RunnerTy (ops1, ops2, sgns, w_ty)
 
+ | Desugared.RunnerTimes (e1, e2) ->
+     let rnr1, (ops1, ops1', sgn1, w1_ty) = infer_runner ctx e1
+     and rnr2, (ops2, ops2', sgn2, w2_ty) = infer_runner ctx e2 in
+     let w_ty = Syntax.Product [w1_ty; w2_ty] in
+     let (Syntax.Operations ops') = meet_operations ops1 ops2 in
+     if not (Name.Set.is_empty ops') then
+       error ~loc (RunnerDoubleOperations ops') ;
+     let ops = join_operations ops1 ops2 in
+     let ops' = join_operations ops1' ops2' in
+     let sgn = join_signals sgn1 sgn2 in
+     locate (Syntax.RunnerTimes (rnr1, rnr2)), Syntax.RunnerTy (ops, ops', sgn, w_ty)
+
+  | Desugared.RunnerRename (e, rnm) ->
+     let e, (Syntax.Operations ops1, ops2, sgn, w_ty) = infer_runner ctx e in
+     begin
+       match List.find_opt (fun (op, _) -> not (Name.Set.mem op ops1)) rnm with
+       | None -> ()
+       | Some (op, _) -> error ~loc (RenamingDomain op)
+     end ;
+     let ops1', rnm' =
+       Name.Set.fold
+         (fun op (ops', rnm') ->
+           let (op_ty1, op_ty2, Syntax.Exceptions op_exc) = lookup_operation ~loc op ctx in
+           let op' =
+             match List.assoc_opt op rnm with
+             | None -> op
+             | Some op' ->
+                let (op_ty1', op_ty2', Syntax.Exceptions op_exc') = lookup_operation ~loc op' ctx in
+                if not (expr_subty ~loc ctx op_ty1 op_ty1' &&
+                        expr_subty ~loc ctx op_ty2 op_ty2' &&
+                        Name.Set.subset op_exc op_exc')
+                then
+                  error ~loc (RenamingMismatch (op, op')) ;
+                op'
+           in
+           if Name.Set.mem op' ops' then error ~loc (DuplicateOperation op') ;
+           Name.Set.add op' ops', Name.Map.add op op' rnm')
+         ops1
+         (Name.Set.empty, Name.Map.empty)
+     in
+     locate (Syntax.RunnerRename (e, rnm')),
+     Syntax.(RunnerTy (Syntax.Operations ops1', ops2, sgn, w_ty))
+
+
 (** [check_expr ctx e ty] checks that expression [e] has type [ty] in context [ctx].
     It returns the processed expression [e]. *)
 and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
@@ -893,7 +959,7 @@ and check_expr (ctx : context) ({Location.it=e'; loc} as e) ty =
   match e', norm_ty ~loc ctx ty with
 
   | Desugared.(Quoted _ | Numeral _ | Boolean _ | Constructor _ | FunUser ((_, Some _), _) |
-               FunKernel _ | Var _ | AscribeExpr _ | Runner _ ), _ ->
+               FunKernel _ | Var _ | AscribeExpr _ | Runner _ | RunnerTimes _ | RunnerRename _), _ ->
      let e, ty' = infer_expr ctx e in
      if expr_subty ~loc ctx ty' ty
      then

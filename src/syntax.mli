@@ -70,6 +70,8 @@ and expr' =
   | FunUser of pattern * user
   | FunKernel of pattern * kernel
   | Runner of runner_clause list
+  | RunnerTimes of expr * expr
+  | RunnerRename of expr * Name.t Name.Map.t
 
 (** User computations *)
 and user = user' Location.located

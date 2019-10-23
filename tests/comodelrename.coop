@@ -6,8 +6,8 @@ operation cat : bool -> bool
 
 let c =
   {
-  | cow () @ () -> (42, ())
-  | dog b @ () -> (true, ())
+  | cow () -> 42
+  | dog b -> true
   } @ unit
 
 let d = c as {cat=dog}

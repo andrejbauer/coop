@@ -8,12 +8,16 @@ operation tick : unit -> int
 
 let state =
   {
-  | get t @ w -> (w, w)
-  | put x @ w -> ((), x)
+  | get t -> getenv
+  | put x -> setenv x
   } @ int
 
 let ticker =
-  { tick () @ w -> (w, w+1) } @ int
+  { tick () ->
+      let k = getenv in
+      setenv (user k + 1 with {}) ;
+      k 
+  } @ int
 
 let c = state ⊗ ticker
 

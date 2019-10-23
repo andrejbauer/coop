@@ -3,8 +3,8 @@ operation put : int → unit
 operation get' : unit → int
 operation put' : int → unit
 operation tick : unit → int
-val state : {get, put} @ int ⇒ {} = <runner>
-val ticker : {tick} @ int ⇒ {} = <runner>
-val c : {get, put, tick} @ int × int ⇒ {} = <runner>
+val state : {get, put} ⇒ {} @ int = <runner>
+val ticker : {tick} ⇒ {} @ int = <runner>
+val c : {get, put, tick} ⇒ {} @ int × int = <runner>
 val demo1 : (int × int × int) × (int × int) = ((10, 0, 1), (3, 2))
 val demo2 : (int × int) × (int × int) = ((2, 5), (7, 15))

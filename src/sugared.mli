@@ -61,6 +61,8 @@ and term' =
   | Sequence of term * term
   | Ascribe of term * ty
   | Runner of runner_clause list * ty
+  | RunnerTimes of term * term
+  | RunnerRename of term * (Name.t * Name.t) list
   | Using of term * term * term * finally_clause list
   | Try of term * try_clause list
   | Getenv

@@ -17,10 +17,11 @@
 %token COLON ARROW DARROW SEMI SEMISEMI COMMA
 
 (* Expressions and computations *)
+%token OTIMES
 %token <int> NUMERAL
 %token BEGIN END
 %token FALSE TRUE IF THEN ELSE
-%token FUN
+%token FUN AS
 %token GETENV SETENV
 %token LET REC IN
 %token MATCH WITH BAR
@@ -46,7 +47,7 @@
 %left     INFIXOP1 EQUAL
 %right    INFIXOP2 AT
 %left     INFIXOP3
-%left     INFIXOP4 STAR
+%left     INFIXOP4 OTIMES STAR
 %right    INFIXOP5
 
 %start <Sugared.toplevel list> file
@@ -186,6 +187,10 @@ term_:
   | USER c=term WITH LBRACE hnd=trying RBRACE
     { Sugared.ExecUser (c, hnd) }
 
+  | rnr=infix_term AS LBRACE lst=separated_list(COMMA, op_renaming) RBRACE
+    { Sugared.RunnerRename (rnr, lst) }
+
+
 infix_term: mark_location(infix_term_) { $1 }
 infix_term_:
   | e=app_term_
@@ -200,6 +205,9 @@ infix_term_:
       let e1 = Location.locate ~loc (Sugared.Apply (op, e2)) in
       Sugared.Apply (e1, e3)
     }
+
+  | e1=infix_term OTIMES e2=infix_term
+    { Sugared.RunnerTimes (e1, e2) }
 
 app_term: mark_location(app_term_) { $1 }
 app_term_:
@@ -481,6 +489,10 @@ effect:
 signature:
   | LBRACE sgn=separated_list(COMMA, effect) RBRACE
     { sgn }
+
+op_renaming:
+  | op1=var_name EQUAL op2=var_name
+    { (op2, op1) }
 
 datatype:
   | x=var_name EQUAL lst=constructor_clauses
