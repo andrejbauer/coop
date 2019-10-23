@@ -3,7 +3,10 @@ operation tick : unit -> int
 
 let ticker =
   {
-  | tick () @ w -> (w, w+1)
+  | tick () ->
+      let w = getenv in
+      setenv (user w + 1 with {});
+      w
   } @ int
 ;;
 
