@@ -14,14 +14,16 @@ operation write : int -> unit
 
 signal disk_full of unit
 
-(** A file writer that is full after n writes. *)
+(** A runner that implements a file writer that is full after n writes. *)
 let file_writer (n : int) =
   {
-  | write k @ w ->
-     if length w >= n then
-       disk_full ()
+  | write k ->
+     let w = getenv in 
+     if (user length w >= n with {}) then
+       !!disk_full ()
      else
-       ((), Cons (k, w))
+       (setenv (Cons (k, w));
+       ())
   } @ file
 
 let job (_ : unit) =
@@ -32,20 +34,22 @@ let job (_ : unit) =
     write 5 ;
     write 6
 
+(* Write 6 times to a file, don't trigger a signal. *)
 let demo1 =
   using file_writer 10 @ Nil
   run
     job ()
   finally {
   | return _ @ f -> f
-  | disk_full _ @ f -> f
+  | !!disk_full _ -> Nil
   }
 
+(* Write 6 times to a file, trigger a signal. *)
 let demo2 =
   using file_writer 3 @ Nil
   run
     job ()
   finally {
   | return _ @ f -> f
-  | disk_full _ @ f -> f
+  | !!disk_full _ -> Nil
   }
