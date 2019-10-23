@@ -8,7 +8,7 @@ let g (n : int) =
   if n > 0 then op n else !die ()
 
 let c =
-  { op k ->  if (exec k > 10 with {}) then !!croak getenv else let w = getenv in setenv (exec k + w with {}) ; w } @ int
+  { op k ->  if (user k > 10 with {}) then !!croak getenv else let w = getenv in setenv (user k + w with {}) ; w } @ int
 
 let demo (n : int) =
   using c @ 1 run

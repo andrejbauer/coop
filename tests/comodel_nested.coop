@@ -13,7 +13,7 @@ let ticker =
   {
    tick () ->
      let x = get () in
-     put (exec x + 1 with {}) ;
+     put (user x + 1 with {}) ;
      x
   } @ unit
 

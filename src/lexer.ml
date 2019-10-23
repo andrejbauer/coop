@@ -9,8 +9,6 @@ let reserved = [
   ("else", Parser.ELSE) ;
   ("empty", Parser.EMPTY) ;
   ("end", Parser.END) ;
-  ("exec", Parser.EXEC) ;
-  ("execK", Parser.EXECK) ;
   ("external", Parser.EXTERNAL) ;
   ("exception", Parser.EXCEPTION) ;
   ("false", Parser.FALSE) ;
@@ -20,6 +18,7 @@ let reserved = [
   ("if", Parser.IF) ;
   ("in", Parser.IN) ;
   ("int", Parser.INT) ;
+  ("kernel", Parser.KERNEL) ;
   ("let", Parser.LET) ;
   ("load", Parser.LOAD) ;
   ("match", Parser.MATCH) ;
@@ -36,6 +35,7 @@ let reserved = [
   ("try", Parser.TRY) ;
   ("type", Parser.TYPE) ;
   ("unit", Parser.UNIT) ;
+  ("user", Parser.USER) ;
   ("using", Parser.USING) ;
   ("with", Parser.WITH) ;
 ]

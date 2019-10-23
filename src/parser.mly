@@ -25,7 +25,7 @@
 %token LET REC IN
 %token MATCH WITH BAR
 %token USING RUN TRY FINALLY RETURN
-%token EXEC EXECK
+%token USER KERNEL
 
 (* Toplevel commands *)
 
@@ -180,10 +180,10 @@ term_:
   | TRY c=term WITH LBRACE hnd=trying RBRACE
     { Sugared.Try (c, hnd) }
 
-  | EXECK c=infix_term AT w=infix_term FINALLY LBRACE fin=finally RBRACE
+  | KERNEL c=infix_term AT w=infix_term FINALLY LBRACE fin=finally RBRACE
     { Sugared.ExecKernel (c, w, fin) }
 
-  | EXEC c=term WITH LBRACE hnd=trying RBRACE
+  | USER c=term WITH LBRACE hnd=trying RBRACE
     { Sugared.ExecUser (c, hnd) }
 
 infix_term: mark_location(infix_term_) { $1 }

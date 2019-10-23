@@ -3,7 +3,7 @@
 signal bong of int
 
 let a =
-  execK
+  kernel
     (let x = getenv in !!bong x ; 13) @ 42
   finally {
   | return v @ _ -> v
