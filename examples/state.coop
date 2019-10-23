@@ -14,8 +14,8 @@ signal negative of int
 (** Basic state *)
 let state =
   {
-  | get () @ w -> (w, w)
-  | put w' @ _ -> ((), w')
+  | get () -> getenv
+  | put x -> setenv x
   } @ int
 
 (** A copy of state with renamed operations *)
@@ -24,8 +24,8 @@ let state' = state as {get'=get, put'=put}
 (** State that only allows non-negative integers to be stored *)
 let positive_state =
   {
-  | get _ @ w -> (w, w)
-  | put w @ _ -> if w < 0 then negative w else ((), w)
+  | get _ -> getenv
+  | put w -> if (user w < 0 with {}) then !!negative w else (setenv w)
   } @ int
 
 (** This is how we use ordinary state, initialized with 1 *)
@@ -60,7 +60,7 @@ let demo3 =
     (a, b)
   finally {
   | return x @ w -> (x, w)
-  | negative k @ w -> ((0, k), w)
+  | !!negative k -> ((0, k), (42, 23))
   }
 
 (* Combine two copies of state, one of which only allows positive values,
@@ -75,5 +75,5 @@ let demo3' =
     (a, b)
   finally {
   | return x @ w -> (x, w)
-  | negative k @ w -> ((666, k), w)
+  | !!negative k -> ((666, k), (42, 23))
   }
