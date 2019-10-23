@@ -10,32 +10,61 @@ type fixity =
 (** An identifier. *)
 type t = Ident of string * fixity
 
+(** The name of an operation. *)
+type op = Op of t
+
 let equal i1 i2 = (i1 = i2)
 
-module Set =
+(** Sets of identifiers *)
+module Idset =
 struct
-  module S = Set.Make(
+  module I = Set.Make(
                  struct
                    type nonrec t = t
                    let compare = Stdlib.compare
                  end)
 
   type elt = t
-  type t = S.t
+  type t = I.t
 
-  let empty = S.empty
-  let is_empty = S.is_empty
-  let remove = S.remove
-  let add = S.add
-  let mem = S.mem
-  let elements = S.elements
-  let subset = S.subset
-  let union = S.union
-  let inter = S.inter
-  let fold = S.fold
+  let empty = I.empty
+  let is_empty = I.is_empty
+  let remove = I.remove
+  let add = I.add
+  let mem = I.mem
+  let elements = I.elements
+  let subset = I.subset
+  let union = I.union
+  let inter = I.inter
+  let fold = I.fold
 
-  let diff s1 s2 = S.diff s1 s2
+  let diff s1 s2 = I.diff s1 s2
+end
 
+(** Sets of operation names *)
+module Opset =
+struct
+  module O = Set.Make(
+                 struct
+                   type nonrec t = op
+                   let compare = Stdlib.compare
+                 end)
+
+  type elt = op
+  type t = O.t
+
+  let empty = O.empty
+  let is_empty = O.is_empty
+  let remove = O.remove
+  let add = O.add
+  let mem = O.mem
+  let elements = O.elements
+  let subset = O.subset
+  let union = O.union
+  let inter = O.inter
+  let fold = O.fold
+
+  let diff s1 s2 = O.diff s1 s2
 end
 
 module Map =

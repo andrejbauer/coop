@@ -1,10 +1,10 @@
 (** Type-checked abstract syntax of Coop. *)
 
-type operations = Operations of Name.Set.t
+type operations = Operations of Name.Opset.t
 
-type exceptions = Exceptions of Name.Set.t
+type exceptions = Exceptions of Name.Idset.t
 
-type signals = Signals of Name.Set.t
+type signals = Signals of Name.Idset.t
 
 (** Primitive types *)
 type primitive =
@@ -140,9 +140,9 @@ let unit_ty = Product []
 
 (** Empty sets of gadgets *)
 
-let empty_operations = Operations Name.Set.empty
-let empty_exceptions = Exceptions Name.Set.empty
-let empty_signals = Signals Name.Set.empty
+let empty_operations = Operations Name.Opset.empty
+let empty_exceptions = Exceptions Name.Idset.empty
+let empty_signals = Signals Name.Idset.empty
 
 (** Make a pure user-computation type *)
 let pure_user_ty t =
@@ -162,28 +162,28 @@ let pure_kernel_ty t tw =
 let pollute_user {user_ty; user_ops=Operations ops; user_exc=Exceptions exc}
                  (Operations ops') (Exceptions exc') =
   { user_ty
-  ; user_ops = Operations (Name.Set.union ops ops')
-  ; user_exc = Exceptions (Name.Set.union exc exc') }
+  ; user_ops = Operations (Name.Opset.union ops ops')
+  ; user_exc = Exceptions (Name.Idset.union exc exc') }
 
 (** Pollute a kernel type with given operations, exceptions, and signals *)
 let pollute_kernel {kernel_ty; kernel_ops=Operations ops; kernel_exc=Exceptions exc; kernel_sgn=Signals sgn; kernel_world}
                  (Operations ops') (Exceptions exc') (Signals sgn') =
   { kernel_ty
-  ; kernel_ops = Operations (Name.Set.union ops ops')
-  ; kernel_exc = Exceptions (Name.Set.union exc exc')
-  ; kernel_sgn = Signals (Name.Set.union sgn sgn')
+  ; kernel_ops = Operations (Name.Opset.union ops ops')
+  ; kernel_exc = Exceptions (Name.Idset.union exc exc')
+  ; kernel_sgn = Signals (Name.Idset.union sgn sgn')
   ; kernel_world }
 
 (** The user type of the given operation [op] *)
 let operation_user_ty t op exc =
   { user_ty = t
-  ; user_ops = Operations (Name.Set.add op Name.Set.empty)
+  ; user_ops = Operations (Name.Opset.add op Name.Opset.empty)
   ; user_exc = exc }
 
 (** The kernel type of the given operation [op] *)
 let operation_kernel_ty t op exc tw =
   { kernel_ty = t
-  ; kernel_ops = Operations (Name.Set.add op Name.Set.empty)
+  ; kernel_ops = Operations (Name.Opset.add op Name.Opset.empty)
   ; kernel_exc = exc
   ; kernel_sgn = empty_signals
   ; kernel_world = tw }
@@ -192,13 +192,13 @@ let operation_kernel_ty t op exc tw =
 let raise_user_ty exc =
   { user_ty = Primitive Empty
   ; user_ops = empty_operations
-  ; user_exc = Exceptions (Name.Set.add exc Name.Set.empty) }
+  ; user_exc = Exceptions (Name.Idset.add exc Name.Idset.empty) }
 
 (** The kernel type of a raise *)
 let raise_kernel_ty exc w_ty =
   { kernel_ty = Primitive Empty
   ; kernel_ops = empty_operations
-  ; kernel_exc = Exceptions (Name.Set.add exc Name.Set.empty)
+  ; kernel_exc = Exceptions (Name.Idset.add exc Name.Idset.empty)
   ; kernel_sgn = empty_signals
   ; kernel_world = w_ty }
 
@@ -207,7 +207,7 @@ let kill_ty sgn w_ty =
   { kernel_ty = Primitive Empty
   ; kernel_ops = empty_operations
   ; kernel_exc = empty_exceptions
-  ; kernel_sgn = Signals (Name.Set.add sgn Name.Set.empty)
+  ; kernel_sgn = Signals (Name.Idset.add sgn Name.Idset.empty)
   ; kernel_world = w_ty }
 
 (** Pretty-print a primitive type *)
@@ -226,9 +226,9 @@ type effect =
   | Signal of Name.t
 
 let effects ~ops ~exc ~sgn =
-  List.map (fun o -> Operation o) (Name.Set.elements ops) @
-  List.map (fun e -> Exception e) (Name.Set.elements exc) @
-  List.map (fun s -> Signal s) (Name.Set.elements sgn)
+  List.map (fun o -> Operation o) (Name.Opset.elements ops) @
+  List.map (fun e -> Exception e) (Name.Idset.elements exc) @
+  List.map (fun s -> Signal s) (Name.Idset.elements sgn)
 
 let print_effect eff ppf =
   match eff with

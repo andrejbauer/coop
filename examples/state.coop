@@ -14,8 +14,8 @@ signal negative of int
 (** Basic state *)
 let state =
   {
-  | get () @ w -> (w, w)
-  | put w' @ _ -> ((), w')
+  | get () -> getenv
+  | put x -> setenv x
   } @ int
 
 (** A copy of state with renamed operations *)

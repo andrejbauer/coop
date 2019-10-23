@@ -28,7 +28,7 @@ val sequence :
   ('a -> Format.formatter -> unit) -> string -> 'a list -> Format.formatter -> unit
 
 (** Print a set of names, sorted alphabetically *)
-val names : Name.Set.t -> Format.formatter -> unit
+val names : Name.Idset.t -> Format.formatter -> unit
 
 (** Print an identifier as an exception. *)
 val exception_name : Name.t -> Format.formatter -> unit

@@ -31,7 +31,7 @@ let sequence print_u separator us ppf =
 
 (** Print a set of names as a sequence *)
 let names ns ppf =
-  let ns = List.sort Stdlib.compare (Name.Set.elements ns) in
+  let ns = List.sort Stdlib.compare (Name.Idset.elements ns) in
   sequence (Name.print ~parentheses:true) "," ns ppf
 
 (** Unicode and ascii versions of symbols. *)
