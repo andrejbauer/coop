@@ -531,7 +531,7 @@ let rec join_expr_ty ~loc ctx t1 t2 =
 
   | Syntax.(Datatype _ | Primitive _ | Product _ |
             ArrowUser _ | ArrowKernel _ | RunnerTy _ | Abstract _ | ContainerTy _), _ ->
-     error ~loc (ExprTypeMismatch (t2, t2))
+     error ~loc (ExprTypeMismatch (t1, t2))
 
 and meet_expr_ty ~loc ctx t1 t2 =
   match t1, t2 with
