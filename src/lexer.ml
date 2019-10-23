@@ -14,6 +14,7 @@ let reserved = [
   ("external", Parser.EXTERNAL) ;
   ("exception", Parser.EXCEPTION) ;
   ("false", Parser.FALSE) ;
+  ("finally", Parser.FINALLY) ;
   ("fun", Parser.FUN) ;
   ("getenv", Parser.GETENV) ;
   ("if", Parser.IF) ;

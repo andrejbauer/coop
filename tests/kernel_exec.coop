@@ -5,7 +5,7 @@ signal bong of int
 let a =
   execK
     (let x = getenv in !!bong x ; 13) @ 42
-  with {
+  finally {
   | return v @ _ -> v
   | !!bong v -> v
   }

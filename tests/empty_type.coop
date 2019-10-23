@@ -5,7 +5,7 @@ let rec f (x : int) : empty {!boom} = !boom ()
 let g (x : int) =
   using ({} @ unit) @ () run
     (match f x with {}) : int {!boom}
-  with {
+  finally {
   | return x @ _ -> x
   | !boom _ @ _ -> !boom ()
   }
@@ -15,7 +15,7 @@ container stdio ;;
 
 using ({} @ unit) @ () run
   g 43
-with {
+finally {
  | return x @ _ -> print_string "All is well!\n"
  | !boom _ @ _ -> print_string "Boom!\n"
 }

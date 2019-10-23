@@ -10,6 +10,6 @@ let c = if false then (!giggle () ; tickle ()) else ()
 let d =
   using ({} @ unit) @ () run
     if false then !giggle () else tickle ()
-  with {
+  finally {
   | return _ @ _ -> ()
   }

@@ -24,7 +24,7 @@
 %token GETENV SETENV
 %token LET REC IN
 %token MATCH WITH BAR
-%token USING RUN TRY RETURN
+%token USING RUN TRY FINALLY RETURN
 %token EXEC EXECK
 
 (* Toplevel commands *)
@@ -174,13 +174,13 @@ term_:
   | LBRACE lst=runner_clauses RBRACE AT t=ty
     { Sugared.Runner (lst, t) }
 
-  | USING rnr=infix_term AT w=infix_term RUN c=term WITH LBRACE fin=finally RBRACE
+  | USING rnr=infix_term AT w=infix_term RUN c=term FINALLY LBRACE fin=finally RBRACE
     { Sugared.Using (rnr, w, c, fin) }
 
   | TRY c=term WITH LBRACE hnd=trying RBRACE
     { Sugared.Try (c, hnd) }
 
-  | EXECK c=infix_term AT w=infix_term WITH LBRACE fin=finally RBRACE
+  | EXECK c=infix_term AT w=infix_term FINALLY LBRACE fin=finally RBRACE
     { Sugared.ExecKernel (c, w, fin) }
 
   | EXEC c=term WITH LBRACE hnd=trying RBRACE
