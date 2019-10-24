@@ -2,10 +2,10 @@
 
 Coop is a prototype programming language for programming with *runners*, also known as *comodels*.
 
-Coop is part of ongoing research by [Danel Ahman](https://danel.ahman.ee) and
-[Andrej Bauer](http://www.andrej.com/). Until a proper publication has appeared,
-you may wish to consult Danel's talk [Comodels as a gateway for interacting with
-the external world ](https://danel.ahman.ee/talks/msr19.pdf).
+Coop is part of ongoing research by [Danel Ahman](https://danel.ahman.ee) and [Andrej
+Bauer](http://www.andrej.com/). Until a proper publication has appeared, you may wish to
+consult Danel's talk [Interacting with external resources using runners (aka
+comodels)](https://danel.ahman.ee/talks/chocola19.pdf).
 
 For a general background on algebraic effects and handlers we suggest the
 lecture notes [What is algebraic about algebraic effects and
