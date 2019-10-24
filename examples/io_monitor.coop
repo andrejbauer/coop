@@ -1,7 +1,5 @@
-(** We define two cohandlers, one for recording an IO interaction,
-    and one for replaing it. *)
-
-operation print_int : int -> unit
+(** We define two runners, one for recording an IO interaction,
+    and one for replaying it. *)
 
 type io_action =
   | PrintInt of int
@@ -15,7 +13,8 @@ type io_record =
   | Cons of io_action * io_record
 
 let reverse (r : io_record) =
-  let rec rev (acc : io_record) (r : io_record) : io_record =
+  let rec rev (acc : io_record) : io_record -> io_record =
+    fun (r : io_record) ->
     match r with {
     | Nil -> acc
     | Cons (a, r) -> rev (Cons (a, acc)) r
@@ -25,11 +24,11 @@ let reverse (r : io_record) =
 
 let io_recorder =
   {
-  | print_int k @ r -> print_value k ; ((), Cons (PrintInt k, r))
-  | print_string s @ r -> print_string s ; ((), Cons (PrintString s, r))
-  | read_int () @ r -> let k = read_int () in (k, Cons (ReadInt k, r))
-  | read_string () @ r -> let s = read_string () in (s, Cons (ReadString s, r))
-  | flush () @ r -> flush () ; ((), Cons (Flush, r))
+  | print_int k -> print_int k ; setenv (Cons (PrintInt k, getenv))
+  | print_string s -> print_string s ; setenv (Cons (PrintString s, getenv))
+  | read_int () -> let k = read_int () in setenv (Cons (ReadInt k, getenv)) ; k
+  | read_string () -> let s = read_string () in setenv (Cons (ReadString s, getenv)) ; s
+  | flush () -> flush () ; setenv (Cons (Flush, getenv))
   } @ io_record
 
 signal sync_error of unit
@@ -37,50 +36,52 @@ signal sync_error of unit
 let io_player =
   {
 
-  | print_int k @ r ->
-      match r with {
+  | print_int k ->
+      match getenv with {
       | Cons (PrintInt m, r) ->
         if k = m then
-          print_string "DEBUG PRINT: " ; print_value k ; flush () ;
-          ((), r)
+          print_string "DEBUG PRINT: " ; print_int k ; flush () ;
+          setenv r
         else
-          sync_error ()
-      | _ -> sync_error ()
+          !!sync_error ()
+      | _ -> !!sync_error ()
       }
 
-   | print_string s @ r ->
-      match r with {
+   | print_string s ->
+      match getenv with {
       | Cons (PrintString t, r) ->
         if s = t then
            print_string "DEBUG PRINT: " ; print_string s ; flush () ;
-           ((), r)
+           setenv r
         else
-           sync_error ()
-      | _ -> sync_error ()
+           !!sync_error ()
+      | _ -> !!sync_error ()
       }
 
-   | read_int () @ r ->
-      match r with {
+   | read_int () ->
+      match getenv with {
       | Cons (ReadInt k, r) ->
-           print_string "DEBUG READ: " ; print_value k ; flush () ;
-           (k, r)
-      | _ -> sync_error ()
+           print_string "DEBUG READ: " ; print_int k ; flush () ;
+           setenv r ;
+           k
+      | _ -> !!sync_error ()
       }
 
-   | read_string () @ r ->
-      match r with {
+   | read_string () ->
+      match getenv with {
       | Cons (ReadString s, r) ->
            print_string "DEBUG READ: " ; print_string s ; flush () ;
-           (s, r)
-      | _ -> sync_error ()
+           setenv r ;
+           s
+      | _ -> !!sync_error ()
       }
 
-    | flush () @ r ->
-      match r with {
+    | flush () ->
+      match getenv with {
       | Cons (Flush, r) ->
            print_string "DEBUG FLUSH" ; flush () ;
-           ((), r)
-      | _ -> sync_error ()
+           setenv r
+      | _ -> !!sync_error ()
       }
   } @ io_record
 
@@ -104,17 +105,21 @@ let conversation2 (_ : unit) =
   ()
 ;;
 
-using stdio ;;
+container stdio ;;
 
 let demo =
   let r =
     using io_recorder @ Nil run
       conversation1 ()
-    finally { return _ @ r -> reverse r }
+    finally {
+    | return _ @ r -> reverse r
+    | !malformed_integer _ @ _ -> !malformed_integer ()
+    }
   in
     using io_player @ r run
       conversation2 ()
     finally {
-    | return v @ r -> (v, r)
-    | sync_error () @ _ -> sync_error ()
+    | return v @ r -> ()
+    | !malformed_integer _ @ _ -> !malformed_integer ()
+    | !!sync_error () -> print_string "DEBUG: sync_error occurred\n"
     }

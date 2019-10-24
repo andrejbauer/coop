@@ -42,7 +42,12 @@ let pure_container = []
 
 let stdio_container =
 
-  let print_string v =
+  let print_int v =
+    let k = as_int v in
+    Format.printf "%d" k ;
+    Value.unit_val
+
+  and print_string v =
     let s = as_string v in
     Format.printf "%s" s ;
     Value.unit_val
@@ -59,7 +64,8 @@ let stdio_container =
       Value.Numeral k
     with Failure _ -> Value.coop_raise malformed_integer
   in
-  [ ("print_string", print_string);
+  [ ("print_int", print_int);
+    ("print_string", print_string);
     ("read_string", read_string);
     ("read_int", read_int);
     ("flush", fun _ -> Format.printf "@." ; Value.unit_val)
