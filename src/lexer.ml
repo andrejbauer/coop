@@ -132,7 +132,7 @@ and token_aux ({ Ulexbuf.stream;_ } as lexbuf) =
   | '='                      -> f (); Parser.EQUAL (Location.locate ~loc:(loc_of lexbuf) (Name.Ident("=", Name.Infix Level.Infix1)))
   | "->" | 8594 | 10230      -> f (); Parser.ARROW
   | "=>" | 8658              -> f (); Parser.DARROW
-  | ":*:" | 8855             -> f (); Parser.OTIMES
+  | "><" | 8904             -> f (); Parser.BOWTIE
 
   | exception_name           -> f (); let e = Ulexbuf.lexeme lexbuf in
                                       let e = String.sub e 1 (String.length e - 1) in

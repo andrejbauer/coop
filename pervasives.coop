@@ -5,12 +5,13 @@
 exception division_by_zero of unit
 exception malformed_integer of unit
 
+operation print_int : int -> unit
 operation print_string : string -> unit
 operation read_int : unit -> int {!malformed_integer}
 operation read_string : unit -> string
 operation flush : unit -> unit
 
-type io_container = {print_string, read_int, read_string, flush}
+type io_container = {print_int, print_string, read_int, read_string, flush}
 
 external pure : {} = "pure"
 external stdio : io_container = "stdio"
