@@ -17,7 +17,7 @@
 %token COLON ARROW DARROW SEMI SEMISEMI COMMA
 
 (* Expressions and computations *)
-%token OTIMES
+%token BOWTIE
 %token <int> NUMERAL
 %token BEGIN END
 %token FALSE TRUE IF THEN ELSE
@@ -47,7 +47,7 @@
 %left     INFIXOP1 EQUAL
 %right    INFIXOP2 AT
 %left     INFIXOP3
-%left     INFIXOP4 OTIMES STAR
+%left     INFIXOP4 BOWTIE STAR
 %right    INFIXOP5
 
 %start <Sugared.toplevel list> file
@@ -206,7 +206,7 @@ infix_term_:
       Sugared.Apply (e1, e3)
     }
 
-  | e1=infix_term OTIMES e2=infix_term
+  | e1=infix_term BOWTIE e2=infix_term
     { Sugared.RunnerTimes (e1, e2) }
 
 app_term: mark_location(app_term_) { $1 }

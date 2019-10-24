@@ -19,7 +19,7 @@ let ticker =
       k 
   } @ int
 
-let c = state ⊗ ticker
+let c = state ⋈ ticker
 
 let demo1 =
   using c @ (10, 0) run
@@ -32,7 +32,7 @@ let demo1 =
   finally { return x @ w -> (x, w) }
 
 let demo2 =
-  using state :*: (state as {get'=get, put'=put}) @ (2, 3) run
+  using state >< (state as {get'=get, put'=put}) @ (2, 3) run
     let a = get () in
     put' (a + 3) ;
     put 7 ;
