@@ -7,13 +7,10 @@ Coop is part of ongoing research by [Danel Ahman](https://danel.ahman.ee) and
 you may wish to consult Danel's talk [Comodels as a gateway for interacting with
 the external world ](https://danel.ahman.ee/talks/msr19.pdf).
 
-For a general background on algebraic effects and handlers we suggest the
-lecture notes [What is algebraic about algebraic effects and
-handlers?](https://arxiv.org/abs/1807.05923), especially Section 4 which covers
-comodels.
 
+## Installation
 
-## Prerequisites
+### Prerequisites
 
 To compile Coop you need:
 
@@ -27,8 +24,12 @@ To compile Coop you need:
 
 * It is recommended that you also install the `rlwrap` or `ledit` command line wrapper.
 
+### Obtaining Coop
 
-## Compilation
+If you're reading this file then you have probably found the [Coop GitHub repository](https://github.com/andrejbauer/coop),
+where Coop is available.
+
+### Compilation
 
 You can type:
 
@@ -37,8 +38,15 @@ You can type:
 * `make clean` to clean up.
 * `make doc` to generate HTML documentation (see the generated [`coop.docdir/index.html`](coop.docdir/index.html)).
 
+## Language features
 
-# Language features
+Coop is an extension of `λ-coop`, a calculus devised by Danel Ahman and Andrej Bauer (publication is forthcoming)
+
+
+The language is described in some detail in the [Coop manual](./doc/manual.txt).
+
+## 
+
 
 `[Note: everything below here is obsolete.]`
 
