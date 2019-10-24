@@ -40,7 +40,7 @@ You can type:
 
 ## Language features
 
-To find out more about Coop, please consult the [Coop manual](./doc/manual.md).
+To find out more about Coop, please consult the [Coop manual](./Manual.md).
 
 ### Theoretical background
 
