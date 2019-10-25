@@ -96,6 +96,20 @@ shorthand `operation op : τ → ρ` is equivalent to `operation op : τ → ρ 
 An operation `op` with argument `v` is called with `op v`. Such calls are
 handled by [runners](#runners), or by [containers](#containers) at the toplevel.
 
+#### Example
+
+The file `pervasives.coop` delcares the I/O operations
+
+    operation print_int : int → unit
+    operation print_string : string → unit
+    operation read_int : unit → int {!malformed_integer}
+    operation read_string : unit → string
+    operation flush : unit → unit
+
+Notice that `read_int` may throw a `malformed_integer` exception. Coop keeps track of
+exceptions and issues a warning if the `malformed_integer` exception is not handled.
+
+
 ### Exceptions
 
 Exceptions are used to indicate a *recoverable* error that user code should
@@ -107,6 +121,13 @@ level with the directive
 An exception `exc` with argument `v` is raised with `!exc v`. Exceptions may be
 caught with [exception handlers](#exception-handling).
 
+#### Example
+
+The file `pervasives.coop` declares the exceptions
+
+    exception division_by_zero of unit
+    exception malformed_integer of unit
+
 ### Signals
 
 Signals are used to indicate an *unrecoverable* error that prevents the user
@@ -117,6 +138,7 @@ at the top level with the directive
 
 In kernel mode only, a signal `sig` with argument `v` is sent with `‼sig v`.
 Signals cannot be caught, but they may be [finalized](#run-statement).
+
 
 ### Effect signatures
 
@@ -132,6 +154,7 @@ is *pure*, i.e., it performs no effects (but it may run forever).
 
 An **operation signature** `{op₁, op₂, …}` is an effect signature which lists only operations.
 Similarly an **exception signature** `{!exc₁, !exc₂, …}` lists only exceptions.
+
 
 ## Types
 
@@ -197,6 +220,21 @@ of type `τ` in kernel mode, where the kernel state has type `ρ`. It may call t
 listed operations, raise the listed exceptions, and send the listed signals (and
 no others).
 
+#### Example
+
+Executing a kernel comptuations of type
+
+    int ! {print, fopen, !permission_denied, ‼device_error}
+
+results in one of the following:
+
+* an integer return value
+* an operation call `print` or `fopen`
+* the exception `permision_denied`
+* the signal `device_error`
+
+
+
 ### Type definitions
 
 At the top level a **type alias** `t` may be introduced with
@@ -221,6 +259,13 @@ An **abstract type** `t` is declared as
     type t
 
 Such a type has no values. (Exercise: what's it good for?)
+
+#### Example
+
+The type of integer lists may be defined as
+
+    type int_list = Nil | Cons of int * int_list
+
 
 ## Values
 
