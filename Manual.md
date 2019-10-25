@@ -6,11 +6,27 @@ This short manual explains the syntax and the basic concepts of Coop.
 
 * [Overview](#overview)
 * [Computational effects](#computational-effects)
+  * [Operations](#operations)
+  * [Exceptions](#exceptions)
+  * [Signals](#signals)
+  * [Effect signatures](#effect-signatures)
 * [Types](#types)
+  * [Value types](#value-types)
+  * [User and kernel types](#user-and-kernel-types)
+  * [Type definitions](#type-definitions)
 * [Values](#values)
+  * [Functions](#functions)
+  * [Runners](#runners)
+  * [Patterns](#patterns)
 * [User and kernel computations](#user-and-kernel-computations)
+  * [Common computations](#common-computations)
+  * [User mode](#user-mode)
+  * [Kernel mode](#kernel-mode)
 * [Top-level directives](#top-level-directives)
+  * [External values](#external-values)
+  * [Containers](#containers)
 * [Syntax](#syntax)
+  * [UTF and ASCII](#utf-and-ascii)
 
 **Note:** Coop recognizes UTF8 characters such as `→`, `⇒` and `⋈`. Every such symbol also
 has an ASCII equivalent, e.g., `->`, `=>`, `><`. We use here the UTF8 characters. Please
@@ -311,7 +327,7 @@ page by a browser, an operating system by hardware, or a virtual machine, etc. W
 the parlance of software systems, and refer to the two layers generically as the **user**
 and **kernel computations**.
 
-### Constructs common to both modes
+### Common computations
 
 Many constructs are common both modes.
 
