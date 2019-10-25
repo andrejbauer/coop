@@ -1225,11 +1225,10 @@ and infer_kernel ?world (ctx : context) {Location.it=c'; loc} =
 
   | Desugared.ExecUser (c, hnd) ->
      let w_ty = get_world () in
-     let c, Syntax.{user_ty=c_ty; user_ops=c_ops; _} =
-       infer_user ctx c
-     in
-     let hnd, hnd_ty = infer_kernel_handler ~world:w_ty ~loc ctx c_ty hnd in
-     let t = Syntax.pollute_kernel hnd_ty c_ops Syntax.empty_exceptions Syntax.empty_signals in
+     let c, Syntax.{user_ty; user_ops; user_exc=Exceptions user_exc} = infer_user ctx c in
+     let (Syntax.{try_raise;_} as hnd), hnd_ty = infer_kernel_handler ~world:w_ty ~loc ctx user_ty hnd in
+     let exc_default = List.fold_left (fun exc_default (e, _, _) -> Name.Set.remove e exc_default) user_exc try_raise in
+     let t = Syntax.pollute_kernel hnd_ty user_ops (Syntax.Exceptions exc_default) Syntax.empty_signals in
      locate (Syntax.KernelExec (c, hnd)), t
 
   | Desugared.(AscribeUser _ | Using _ | ExecKernel _) ->

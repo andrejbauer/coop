@@ -262,7 +262,12 @@ let reraise_kernel w excs =
     excs
     Name.Map.empty
 
-let lookup_exception ~loc excs exc =
+(** Lookup an exception, to be used in a [with] clause. *)
+let lookup_with_exception excs exc =
+  Name.Map.find exc excs
+
+(** Lookup an exception, to be used in a [finally clause] *)
+let lookup_finally_exception ~loc excs exc =
   match Name.Map.find exc excs with
   | None -> error ~loc (UnhandledException exc)
   | Some f -> f
@@ -447,9 +452,11 @@ and eval_user env Location.{it=c'; loc} =
 
        | Value.UserVal v -> exc_val v
 
-       | Value.(UserException (Exception (exc, v)))  ->
-          let f = lookup_exception ~loc exc_raise exc in
-          f v
+       | Value.(UserException (Exception (exc, v))) as e ->
+          begin match lookup_with_exception exc_raise exc with
+          | Some f -> f v
+          | None -> e
+          end
 
        | Value.UserOperation (op, v, f_val, f_exc) ->
           let f_val v = fold (f_val v)
@@ -508,9 +515,11 @@ and eval_kernel env Location.{it=c';loc} w =
      let rec fold = function
        | Value.UserVal v -> h_val v w
 
-       | Value.(UserException (Exception (exc, v))) ->
-          let f_exc = lookup_exception ~loc h_exc exc in
-          f_exc v w
+       | Value.(UserException (Exception (exc, v) as e)) ->
+          begin match lookup_with_exception h_exc exc with
+          | Some f -> f v w
+          | None -> Value.(KernelException (e, w))
+          end
 
        | Value.UserOperation (op, v, f_val, f_exc) ->
           let f_val v = fold (f_val v)
@@ -526,9 +535,11 @@ and eval_kernel env Location.{it=c';loc} w =
 
        | Value.KernelVal (v, w) -> exc_val v w
 
-       | Value.(KernelException (Exception (exc, v), w))  ->
-          let f = lookup_exception ~loc exc_raise exc in
-          f v w
+       | Value.(KernelException (Exception (exc, v), w)) as e ->
+          begin match lookup_with_exception exc_raise exc with
+          | Some f -> f v w
+          | None ->  e
+          end
 
        | Value.KernelSignal _ as r ->
           r
@@ -626,7 +637,7 @@ and user_using ~loc rnr w r (fin_val, fin_raise, fin_kill) =
        fin_val (v, w)
 
     | Value.(UserException (Exception (exc, v))) ->
-       let f_exc = lookup_exception ~loc fin_raise exc in
+       let f_exc = lookup_finally_exception ~loc fin_raise exc in
        f_exc (v, w)
 
     | Value.UserOperation (op, v, f_val, f_exc) ->
@@ -644,7 +655,7 @@ and user_exec ~loc w r (fin_val, fin_raise, fin_kill) =
   | Value.KernelVal (v, w) -> fin_val (v, w)
 
   | Value.(KernelException (Exception (exc, v), w)) ->
-     let f_exc = lookup_exception ~loc fin_raise exc in
+     let f_exc = lookup_finally_exception ~loc fin_raise exc in
      f_exc (v, w)
 
   | Value.(KernelSignal (Signal (sgn, v))) ->
@@ -672,7 +683,7 @@ let top_eval_user {env_vars; env_container=coops} ({Location.loc; _} as c) =
            using (f_val (coop v))
          with
          | Value.(CoopException (Exception (exc, v))) ->
-            let f = lookup_exception ~loc f_exc exc in
+            let f = lookup_finally_exception ~loc f_exc exc in
             using (f v)
        end
   in

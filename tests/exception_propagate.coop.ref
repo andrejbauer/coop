@@ -1,0 +1,6 @@
+exception cow of int
+exception bull of bool
+val f : int → int {!cow} = <fun>
+val g : int → int {!cow} @ int = <funk>
+val a : int = 10000
+val b : int × int = (676, 42)
