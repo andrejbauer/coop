@@ -102,7 +102,7 @@ at the top level with the directive
 In kernel mode only, a signal `sig` with argument `v` is sent with `‼sig v`.
 Signals cannot be caught, but they may be [finalized](#run-statement).
 
-### Effect singatures
+### Effect signatures
 
 An **effect signature** is a set of operations, exceptions and signals:
 
@@ -274,7 +274,7 @@ Given runners
 the **runer pairing** `⟨runner₁⟩ ⋈ ⟨runner₂⟩` combines them to give a runner with
 co-operations `op₁, op₂, …, op₁', op₂', …` and state `ρ₁ × ρ₂`. Each component of the
 paired runner has access to its own componetn of the state. The opertion names must be
-disjoint, which can always be achieved with a [runner renaming](#runner-renaiming)
+disjoint, which can always be achieved with a [runner renaming](#runner-renaming).
 
 ### Patterns
 
@@ -287,7 +287,7 @@ pattern `p` may appear anywhere a value is bound:
 * argument of an exception: `!exc p → ⋯` and `!exc p₁ @ p₂ → ⋯`
 * argument of a signal: `‼sig p → ⋯`
 * in [`let`-binding](#let-binding)
-* in [`match`-statements](#match-statements)
+* in [`match`-statements](#match-statement)
 * in [recursive functions](#recursive-functions)
 
 Coop does *not* perform pattern exhaustiveness checks. A runtime error occurs if a value
@@ -324,7 +324,7 @@ can write `(3 + 4, 8)` even though, strictly speaking the subcomputation `3 + 4`
 hoisted: `let x = 3 + 4 in (x, 8)`. Coop performs such hoisting automatically, as it would
 be quite annoying to have to write `let x' = f x in g y` instead of `f x y`.
 
-#### `let`-binding
+#### `let` binding
 
 An ML-style `let`-binding has the form
 
@@ -344,7 +344,7 @@ At the top level a value can be bound globally with
 and similarly for parallel `let`-binding.
 
 
-#### `match`-statements
+#### `match` statement
 
 An ML-style `match` statement (known as `case` in Haskell) has the form
 
@@ -493,6 +493,18 @@ The following computations are specific to kernel mode:
 * `setenv ⟨expr⟩` sets the state to `⟨expr⟩`
 * `user` context switch
 
+#### Kernel state
+
+A kernel computation has access to state with operations `getenv` and `setenv ⟨value⟩`,
+which read and write the state. In a [runner](#runners) the state is shared among the
+co-operations and initialized in the [`run` statement](#run-statement). The kernel state
+is also initialized when a kernel computation is executed with thea [`kernel` context
+switch](#kernel-context-switch)
+
+The final kernel state is available during finalization in `finally` clasues for `return`
+and excepptions (but not signals) of a `run` or `kernel` computation.
+
+
 #### Sending a signal
 
 In kernel mode a signal `sig` is sent with
@@ -543,10 +555,10 @@ values are defined in [`external.ml`](src/external.ml).
 
 A container is a "top level [runner](#runners)" which gives the computations access to
 *actual* computational effects. Currently Coop provides two containers, defined in OCaml
-and bound as [exernal values](#external-values):
+and bound as [external values](#external-values):
 
 * `pure` is a container which implements *no* operations
-* `stdio` is a container which implements basic I/O operations `print_int`, `print_string`, `read_int`, `read_string` and `flush` (see [`pervasives.coop](./pervasives.coop).
+* `stdio` is a container which implements basic I/O operations `print_int`, `print_string`, `read_int`, `read_string` and `flush` (see [`pervasives.coop`](./pervasives.coop).
 
 At the top level you can set the current container with the directive
 
