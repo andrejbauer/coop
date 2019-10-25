@@ -1,0 +1,39 @@
+exception cow of int ;;
+
+exception bull of bool ;;
+
+let f (x : int) =
+try
+  if x < 5 then
+    x + 20
+  else
+    !cow x
+with {}
+;;
+
+
+let g = fun (x : int) @ int ->
+try
+  user
+    if x < 5 then
+      x + 20
+    else
+      !cow x
+  with {}
+with {}
+;;
+
+let a =
+  try
+    f 10
+  with {
+  | !cow y -> 1000 * y
+  }
+
+let b =
+  kernel
+    g 10 @ 42
+  finally {
+  | return x @ c -> (x, c)
+  | !cow y @ c -> (666 + y, c)
+  }

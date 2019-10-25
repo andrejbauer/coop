@@ -610,6 +610,8 @@ It is sometimes necessary to run user code inside kernel mode. The kernel comput
     }
 
 The `with` clauses work the same way as in [exception handling](#exception-handling).
+In particular, and non-handled exception will pass through it.
+
 
 ## Top-level directives
 
