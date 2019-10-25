@@ -14,7 +14,7 @@ This short manual explains the syntax and the basic concepts of Coop.
 
 **Note:** Coop recognizes UTF8 characters such as `→`, `⇒` and `⋈`. Every such symbol also
 has an ASCII equivalent, e.g., `->`, `=>`, `><`. We use here the UTF8 characters. Please
-refer to the [UTF & ASCII](#utf-ascii) section for the mapping from UTF8 to ASCII equivalents.
+refer to the [UTF & ASCII](#utf-and-ascii) section for the mapping from UTF8 to ASCII equivalents.
 
 ## Overview
 
@@ -566,7 +566,7 @@ The following lexical conventions are in place:
 * Coop is case-sensitive.
 * Code need not be properly indented, which is not to say that it should not be.
 
-### UTF & ASCII
+### UTF and ASCII
 
 Source code should be UTF8 encoded. If you do not have convenient ways of entering UTF8
 (isn't it kind of said that this is a problem in the 3rd millenium?) then you may use the following
