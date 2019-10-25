@@ -5,6 +5,7 @@ This short manual explains the syntax and the basic concepts of Coop.
 **Table of contents**
 
 * [Overview](#overview)
+* [Running coop programs](#running-coop-programs)
 * [Computational effects](#computational-effects)
   * [Operations](#operations)
   * [Exceptions](#exceptions)
@@ -75,6 +76,28 @@ up reasorces, e.g., closing files and releasing memory.
 Thus, exceptions should be used for "checked" or "recoverable" exceptions that the user
 code can shoudl react to, while signals are sent when normal operation of the runner is
 not possible anymore (which is why signal handlers do not receive kernel state).
+
+## Running coop programs
+
+Coop programs are saved in files with extension `.coop`. The command
+
+    coop ⟨file.coop⟩
+
+runs the program in the given file. The file may load other files with the [`load`
+directive](#top-level-directives).
+
+To get the Coop REPL, run
+
+    coop
+
+If you install the `rlwrap` or `ledit` command, `coop` will warp itself in it to give the
+REPL line-editing capabilities. You may also run the Coop REPL with a preloaded file
+
+    coop -l ⟨file.coop⟩
+
+When you run `coop` it will look for the file [`pervasives.coop`](./pervasives.coop) and
+load it if found. This behavior can be controled with the `--no-pervasives` and
+`--pervasives ⟨file⟩` command-line options. For other command-line options, run `coop --help`.
 
 
 ## Computational effects
