@@ -904,9 +904,9 @@ let toplevel' ctx = function
        let ctx, lst = rec_clauses ~loc ctx lst in
        ctx, Desugared.TopLetRec lst
 
-    | Sugared.TopContainer c ->
-       let c = comp ctx c in
-       ctx, Desugared.TopContainer c
+    | Sugared.TopContainer cs ->
+       let cs = List.map (comp ctx) cs in
+       ctx, Desugared.TopContainer cs
 
     | Sugared.TopUser c ->
        let c = comp ctx c in

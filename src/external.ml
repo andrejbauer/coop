@@ -1,5 +1,6 @@
 (** Foreign function interface. *)
 
+(** Auxiliary function to make an identifier from a string. *)
 let mk_ident s = Name.Ident (s, Name.Word)
 
 (** Internal errors which do not happen to well-typed programs. *)

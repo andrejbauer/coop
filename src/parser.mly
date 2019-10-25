@@ -116,8 +116,8 @@ toplevel_:
   | LET REC fs=separated_nonempty_list(AND, recursive_clause)
     { Sugared.TopLetRec fs }
 
-  | CONTAINER c=infix_term
-    { Sugared.TopContainer c }
+  | CONTAINER cs=separated_nonempty_list(COMMA, infix_term)
+    { Sugared.TopContainer cs }
 
   | OPERATION op=var_name COLON t1=prod_ty ARROW t2=prod_ty ops=signature?
     { let ops = match ops with None -> [] | Some ops -> ops in

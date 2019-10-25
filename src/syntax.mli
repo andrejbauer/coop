@@ -127,7 +127,7 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * user
   | TopLetRec of rec_clause list * (Name.t * expr_ty) list
-  | TopContainer of user * operations
+  | TopContainer of user list * operations
   | TopUser of user * expr_ty
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty

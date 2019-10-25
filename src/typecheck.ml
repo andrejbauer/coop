@@ -45,6 +45,7 @@ type error =
   | KernelFunctionExpected of Syntax.expr_ty
   | RunnerExpected of Syntax.expr_ty
   | ContainerExpected of Syntax.expr_ty
+  | ContainerDoubleOperation of Name.Set.t
   | RunnerDoubleOperations of Name.Set.t
   | CannotInferArgument
   | CannotInferMatch
@@ -149,6 +150,11 @@ let print_error err ppf =
   | ContainerExpected ty ->
      Format.fprintf ppf "this expression should be a container but has type@ %t"
        (Syntax.print_expr_ty ty)
+
+  | ContainerDoubleOperation ops ->
+     let ops = Name.Set.elements ops in
+     Format.fprintf ppf "these operations are implemented by several runners:@ %t"
+       (Print.sequence (Name.print ~parentheses:true) "," ops)
 
   | RunnerDoubleOperations ops ->
      let ops = Name.Set.elements ops in
@@ -1555,6 +1561,24 @@ let top_infer_user ~fatal ctx c =
   check_exceptions ~loc:c.Location.loc ~fatal c_exc Syntax.empty_exceptions ;
   c, c_ty
 
+
+let infer_container ctx ({Location.loc; _} as c) =
+  let c, Syntax.{user_ty=c_ty';_} = top_infer_user ~fatal:false ctx c in
+  match as_container (norm_ty ~loc ctx c_ty') with
+  | None -> error ~loc (ContainerExpected c_ty')
+  | Some ops -> ops, c
+
+let rec infer_containers ~loc ctx = function
+  | [] -> Syntax.empty_operations, []
+  | c :: cs ->
+     let c_ops, c = infer_container ctx c in
+     let cs_ops, cs = infer_containers ~loc ctx cs in
+     let Syntax.Operations o = meet_operations c_ops cs_ops in
+     if Name.Set.is_empty o then
+       join_operations c_ops cs_ops, c :: cs
+     else
+       error ~loc (ContainerDoubleOperation o)
+
 let rec toplevel ~quiet ctx {Location.it=d'; loc} =
   let ctx, d' =
     match d' with
@@ -1572,14 +1596,11 @@ let rec toplevel ~quiet ctx {Location.it=d'; loc} =
        let ctx, pcs, fts = infer_letrec ctx fs in
        ctx, Syntax.TopLetRec (pcs, fts)
 
-    | Desugared.TopContainer c ->
+    | Desugared.TopContainer cs ->
        begin
-         let c, Syntax.{user_ty=c_ty';_} = top_infer_user ~fatal:false ctx c in
-         match as_container (norm_ty ~loc ctx c_ty') with
-         | None -> error ~loc (ContainerExpected c_ty')
-         | Some ops ->
-            let ctx = set_container ops ctx in
-            ctx, Syntax.TopContainer (c, ops)
+         let ops, cs = infer_containers ~loc ctx cs in
+         let ctx = set_container ops ctx in
+         ctx, Syntax.TopContainer (cs, ops)
        end
 
     | Desugared.TopUser c ->

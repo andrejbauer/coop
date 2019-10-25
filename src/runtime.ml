@@ -14,6 +14,7 @@ type error =
   | FunctionExpected
   | RunnerExpected
   | RunnerDoubleOperation of Name.t
+  | ContainerDoubleOperation of Name.t
   | PairExpected
   | ContainerExpected
   | PatternMismatch
@@ -57,6 +58,9 @@ let print_error err ppf =
 
   | RunnerDoubleOperation op ->
      Format.fprintf ppf "cannot combine runners that both implement %t" (Name.print op)
+
+  | ContainerDoubleOperation op ->
+     Format.fprintf ppf "cannot combine containers that both implement %t" (Name.print op)
 
   | PairExpected ->
      Format.fprintf ppf "pair expected, please report"
@@ -729,13 +733,29 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
                      (Value.print v) ;
      env
 
-  | Syntax.TopContainer (c, ops) ->
-     let v = top_eval_user env c in
-     let shl = as_container ~loc v in
-     let env = set_container shl env in
-     if not quiet then
-       Format.printf "@[<hov>container@ %t@]@." (Syntax.print_container_ty ops) ;
-     env
+  | Syntax.TopContainer (cs, ops) ->
+     let rec fold cnt = function
+       | [] ->
+          let env = set_container cnt env in
+          if not quiet then
+            Format.printf "@[<hov>container@ %t@]@." (Syntax.print_container_ty ops) ;
+          env
+       | c :: cs ->
+          let v = top_eval_user env c in
+          let c_cnt = as_container ~loc v in
+          let cnts =
+            Name.Map.merge
+            (fun op f_opt g_opt ->
+              match f_opt, g_opt with
+              | Some f, None -> Some f
+              | None, Some g -> Some g
+              | None, None -> None
+              | Some _, Some _ -> error ~loc (ContainerDoubleOperation op))
+            cnt c_cnt
+          in
+          fold cnts cs
+     in
+     fold Name.Map.empty cs
 
   | Syntax.DefineAbstract t ->
      if not quiet then
