@@ -80,7 +80,7 @@ and comp = comp' Location.located
 and comp' =
   | AscribeUser of comp * user_ty
   | AscribeKernel of comp * kernel_ty
-  | Val of expr
+  | Return of expr
   | Equal of expr * expr
   | Try of comp * exception_handler
   | Let of pattern * comp * comp
@@ -98,14 +98,14 @@ and comp' =
 
 (** Exception handler *)
 and exception_handler = {
-   try_val : (binder * comp) option ;
+   try_return : (binder * comp) option ;
    try_raise : (Name.t * binder * comp) list
 }
 
 and binder = pattern * expr_ty option
 
 and finally =
-  { fin_val : binder * binder * comp
+  { fin_return : binder * binder * comp
   ; fin_raise : (Name.t * binder * binder * comp) list
   ; fin_kill : (Name.t * binder * comp) list}
 

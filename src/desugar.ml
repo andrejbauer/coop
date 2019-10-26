@@ -558,7 +558,7 @@ and user_abstract0 ~loc ctx pxs c =
     | px :: pxs ->
        let ctx, px = binder ctx px in
        let c = fold ctx pxs in
-       locate (Desugared.Val (locate (Desugared.FunUser (px, c))))
+       locate (Desugared.Return (locate (Desugared.FunUser (px, c))))
   in
   fold ctx pxs
 
@@ -580,7 +580,7 @@ and kernel_abstract0 ~loc ctx pxs wt c =
     | px :: pxs ->
        let ctx, px = binder ctx px in
        let c = fold ctx pxs in
-       locate (Desugared.Val (locate (Desugared.FunKernel (px, wt, c))))
+       locate (Desugared.Return (locate (Desugared.FunKernel (px, wt, c))))
   in
   fold ctx pxs
 
@@ -626,7 +626,7 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
                Tuple _ | Runner _ | Sugared.RunnerTimes _ | Sugared.RunnerRename _ |
                Apply ({Location.it=Constructor _;_}, _)) ->
        let ws, e = expr ctx c in
-       let return_e = locate (Desugared.Val e) in
+       let return_e = locate (Desugared.Return e) in
        let_binds ws return_e
 
     | Sugared.Ascribe (c, t) ->
@@ -686,7 +686,7 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
 
     | Sugared.(Let (BindFunUser (f, pxs, c1), c2)) ->
        let e = user_abstract ~loc ctx pxs c1 in
-       let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Val e) in
+       let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Return e) in
        let ctx = extend_ident f Variable ctx in
        let c2 = comp ctx c2 in
        let p = locate (Desugared.PattVar f) in
@@ -695,7 +695,7 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
     | Sugared.(Let (BindFunKernel (f, pxs, t, c1), c2)) ->
        let t = expr_ty ctx t in
        let e = kernel_abstract ~loc ctx pxs t c1 in
-       let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Val e) in
+       let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Return e) in
        let ctx = extend_ident f Variable ctx in
        let c2 = comp ctx c2 in
        let p = locate (Desugared.PattVar f) in
@@ -784,25 +784,25 @@ and rec_clauses ~loc ctx lst =
   ctx, lst
 
 and finally_clauses ~loc ctx lst =
-  let rec fold fin_val fin_raise fin_kill = function
+  let rec fold fin_return fin_raise fin_kill = function
 
     | [] ->
-       begin match fin_val with
+       begin match fin_return with
        | None -> error ~loc MissingFinallyVal
-       | Some fin_val ->
+       | Some fin_return ->
           let fin_kill = List.rev fin_kill in
-          Desugared.{fin_val; fin_raise; fin_kill}
+          Desugared.{fin_return; fin_raise; fin_kill}
        end
 
     | Sugared.FinVal (px, pw, c) :: lst ->
-       begin match fin_val with
+       begin match fin_return with
        | Some _ -> error ~loc DoubleVal
        | None ->
           let ctx, px = binder ctx px in
           let ctx, pw = binder ctx pw in
           let c = comp ctx c in
-          let fin_val = Some (px, pw, c) in
-          fold fin_val fin_raise fin_kill lst
+          let fin_return = Some (px, pw, c) in
+          fold fin_return fin_raise fin_kill lst
        end
 
     | Sugared.FinRaise (exc, px, pw, c) :: lst ->
@@ -814,7 +814,7 @@ and finally_clauses ~loc ctx lst =
           let ctx, pw = binder ctx pw in
           let c = comp ctx c in
           let fin_raise = (exc, px, pw, c) :: fin_raise in
-          fold fin_val fin_raise fin_kill lst
+          fold fin_return fin_raise fin_kill lst
        end
 
     | Sugared.FinKill (sgl, px, c) :: lst ->
@@ -825,26 +825,26 @@ and finally_clauses ~loc ctx lst =
           let ctx, px = binder ctx px in
           let c = comp ctx c in
           let fin_kill = (sgl, px, c) :: fin_kill in
-          fold fin_val fin_raise fin_kill lst
+          fold fin_return fin_raise fin_kill lst
        end
   in
   fold None [] [] lst
 
 and try_clauses ~loc ctx lst =
-  let rec fold try_val try_raise = function
+  let rec fold try_return try_raise = function
 
     | [] ->
        let try_raise = List.rev try_raise in
-       Desugared.{try_val; try_raise}
+       Desugared.{try_return; try_raise}
 
     | Sugared.TryVal (px, c) :: lst ->
-       begin match try_val with
+       begin match try_return with
        | Some _ -> error ~loc DoubleVal
        | None ->
           let ctx, px = binder ctx px in
           let c = comp ctx c in
-          let try_val = Some (px, c) in
-          fold try_val try_raise lst
+          let try_return = Some (px, c) in
+          fold try_return try_raise lst
        end
 
     | Sugared.TryRaise (exc, px, c) :: lst ->
@@ -855,7 +855,7 @@ and try_clauses ~loc ctx lst =
           let ctx, px = binder ctx px in
           let c = comp ctx c in
           let try_raise = (exc, px, c) :: try_raise in
-          fold try_val try_raise lst
+          fold try_return try_raise lst
        end
   in
   fold None [] lst
@@ -920,7 +920,7 @@ let toplevel' ctx = function
 
     | Sugared.(TopLet (BindFunUser (f, a, c))) ->
        let e = user_abstract ~loc ctx a c in
-       let c = Location.locate ~loc:c.Location.loc (Desugared.Val e) in
+       let c = Location.locate ~loc:c.Location.loc (Desugared.Return e) in
        let ctx = extend_ident f Variable ctx in
        let p = Location.locate ~loc (Desugared.PattVar f) in
        ctx, Desugared.TopLet (p, c)
@@ -928,7 +928,7 @@ let toplevel' ctx = function
     | Sugared.(TopLet (BindFunKernel (f, a, t, c))) ->
        let t = expr_ty ctx t in
        let e = kernel_abstract ~loc ctx a t c in
-       let c = Location.locate ~loc:c.Location.loc (Desugared.Val e) in
+       let c = Location.locate ~loc:c.Location.loc (Desugared.Return e) in
        let ctx = extend_ident f Variable ctx in
        let p = Location.locate ~loc (Desugared.PattVar f) in
        ctx, Desugared.TopLet (p, c)

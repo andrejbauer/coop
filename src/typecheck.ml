@@ -1041,7 +1041,7 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
      let c = check_user ctx c t in
      c, t
 
-  | Desugared.Val e ->
+  | Desugared.Return e ->
      let e, e_ty = infer_expr ctx e in
      locate (Syntax.UserVal e), Syntax.pure_user_ty e_ty
 
@@ -1152,7 +1152,7 @@ and infer_kernel ?world (ctx : context) {Location.it=c'; loc} =
      let c = check_kernel ctx c t in
      c, t
 
-  | Desugared.Val e ->
+  | Desugared.Return e ->
      let w_ty = get_world ()
      and e, e_ty = infer_expr ctx e in
      locate (Syntax.KernelVal e), Syntax.pure_kernel_ty e_ty w_ty
@@ -1243,9 +1243,9 @@ and infer_kernel ?world (ctx : context) {Location.it=c'; loc} =
   | Desugared.(AscribeUser _ | Using _ | ExecKernel _) ->
      error ~loc UnexpectedUserComputation
 
-(** Infer the type of an exception handler, where [ty_val] is the type of the argument for
+(** Infer the type of an exception handler, where [ty_return] is the type of the argument for
    the [val] case. *)
-and infer_user_handler ~loc ctx ty_val Desugared.{try_val; try_raise} =
+and infer_user_handler ~loc ctx ty_return Desugared.{try_return; try_raise} =
   let rec fold ty try_raise = function
     | [] -> ty, List.rev try_raise
     | (exc, px, c) :: lst ->
@@ -1256,18 +1256,18 @@ and infer_user_handler ~loc ctx ty_val Desugared.{try_val; try_raise} =
        let try_raise = (exc, px, c) :: try_raise in
        fold ty try_raise lst
   in
-  let try_val, ty =
-    match try_val with
-    | None -> None, Syntax.pure_user_ty ty_val
-    | Some (px,c_val) ->
-       let ctx, px = extend_binder ctx px ty_val in
-       let c_val, ty = infer_user ctx c_val in
-       Some (px, c_val), ty
+  let try_return, ty =
+    match try_return with
+    | None -> None, Syntax.pure_user_ty ty_return
+    | Some (px,c_return) ->
+       let ctx, px = extend_binder ctx px ty_return in
+       let c_return, ty = infer_user ctx c_return in
+       Some (px, c_return), ty
   in
   let ty, try_raise = fold ty [] try_raise in
-  Syntax.{try_val; try_raise}, ty
+  Syntax.{try_return; try_raise}, ty
 
-and infer_kernel_handler ~world ~loc ctx ty_val Desugared.{try_val; try_raise} =
+and infer_kernel_handler ~world ~loc ctx ty_return Desugared.{try_return; try_raise} =
   let rec fold ty try_raise = function
     | [] -> ty, List.rev try_raise
     | (exc, px, c) :: lst ->
@@ -1278,16 +1278,16 @@ and infer_kernel_handler ~world ~loc ctx ty_val Desugared.{try_val; try_raise} =
        let try_raise = (exc, px, c) :: try_raise in
        fold ty try_raise lst
   in
-  let try_val, ty =
-    match try_val with
-    | None -> None, Syntax.pure_kernel_ty ty_val world
-    | Some (px,c_val) ->
-       let ctx, px = extend_binder ctx px ty_val in
-       let c_val, ty = infer_kernel ~world ctx c_val in
-       Some (px, c_val), ty
+  let try_return, ty =
+    match try_return with
+    | None -> None, Syntax.pure_kernel_ty ty_return world
+    | Some (px,c_return) ->
+       let ctx, px = extend_binder ctx px ty_return in
+       let c_return, ty = infer_kernel ~world ctx c_return in
+       Some (px, c_return), ty
   in
   let ty, try_raise = fold ty [] try_raise in
-  Syntax.{try_val; try_raise}, ty
+  Syntax.{try_return; try_raise}, ty
 
 (** Infer user [let rec] *)
 and infer_letrec ctx fs =
@@ -1402,13 +1402,13 @@ and infer_runner ctx rnr =
        error ~loc:rnr.Location.loc (RunnerExpected e_ty)
 
 (** Infer the types of a finally clause, for given type of [val] case [x_ty] and world type [w_ty]. *)
-and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_raise; fin_kill} =
-  let fin_val, ty_val =
-    let (px, pw, c_val) = fin_val in
+and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_return; fin_raise; fin_kill} =
+  let fin_return, ty_return =
+    let (px, pw, c_return) = fin_return in
     let ctx, px = extend_binder ctx px x_ty in
     let ctx, pw = extend_binder ctx pw w_ty in
-    let c_val, ty_val = infer_user ctx c_val in
-    (px, pw, c_val), ty_val
+    let c_return, ty_return = infer_user ctx c_return in
+    (px, pw, c_return), ty_return
   in
   let fin_raise, fin_excs, fin_ty =
     let rec fold fs excs ty = function
@@ -1427,7 +1427,7 @@ and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_raise; fin_kill} =
            fold ((exc, px, pw, c_exc) :: fs) excs ty lst
          end
     in
-    fold [] Name.Set.empty ty_val fin_raise
+    fold [] Name.Set.empty ty_return fin_raise
   in
   let fin_kill, fin_sgns, fin_ty =
     let rec fold fs sgs ty = function
@@ -1447,7 +1447,7 @@ and infer_finally ~loc ctx x_ty w_ty Desugared.{fin_val; fin_raise; fin_kill} =
     in
     fold [] Name.Set.empty fin_ty fin_kill
   in
-  Syntax.{fin_val; fin_kill; fin_raise},
+  Syntax.{fin_return; fin_kill; fin_raise},
   Syntax.Exceptions fin_excs,
   Syntax.Signals fin_sgns,
   fin_ty
@@ -1472,7 +1472,7 @@ and check_user ctx ({Location.it=c'; loc} as c) check_ty =
   let locate = Location.locate ~loc in
   match c' with
 
-  | Desugared.Val e ->
+  | Desugared.Return e ->
     let e = check_expr ctx e c_ty in
     locate (Syntax.UserVal e)
 
@@ -1516,7 +1516,7 @@ and check_kernel ctx (Location.{it=c';loc} as c) check_ty =
   let Syntax.{kernel_ty=c_ty; kernel_ops=c_ops; kernel_exc=c_exc; kernel_sgn=c_sgn; kernel_world=c_w} = check_ty in
   let locate = Location.locate ~loc in
   match c' with
-  | Desugared.Val e ->
+  | Desugared.Return e ->
     let e = check_expr ctx e c_ty in
     locate (Syntax.KernelVal e)
 

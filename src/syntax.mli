@@ -106,13 +106,13 @@ and kernel' =
   | KernelExec of user * kernel exception_handler
 
 and finally =
-  { fin_val : pattern * pattern * user
+  { fin_return : pattern * pattern * user
   ; fin_raise : (Name.t * pattern * pattern * user) list
   ; fin_kill : (Name.t * pattern * user) list }
 
 (** Exception handler *)
 and 'a exception_handler =
-  { try_val : (pattern * 'a) option
+  { try_return : (pattern * 'a) option
   ; try_raise : (Name.t * pattern * 'a) list }
 
 and runner_clause = Name.t * pattern * kernel

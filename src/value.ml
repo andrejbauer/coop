@@ -50,10 +50,10 @@ let rec user_bind r k =
   match r with
   | UserVal v -> k v
   | UserException _ as r -> r
-  | UserOperation (op, u, l_val, l_exc) ->
-     let l_val = (fun v -> let r = l_val v in user_bind r k)
+  | UserOperation (op, u, l_return, l_exc) ->
+     let l_return = (fun v -> let r = l_return v in user_bind r k)
      and l_exc = Name.Map.map (fun f v -> let r = f v in user_bind r k) l_exc in
-     UserOperation (op, u, l_val, l_exc)
+     UserOperation (op, u, l_return, l_exc)
 
 (** The kernel monad *)
 let kernel_return x w = KernelVal (x, w)
@@ -65,10 +65,10 @@ let kernel_bind k f =
     | KernelVal (v, w) -> f v w
     | KernelException _ as r -> r
     | KernelSignal _ as r -> r
-    | KernelOperation (op, u, l_val, l_exc) ->
-       let l_val = (fun v -> let r = l_val v in fold r f)
+    | KernelOperation (op, u, l_return, l_exc) ->
+       let l_return = (fun v -> let r = l_return v in fold r f)
        and l_exc = Name.Map.map (fun h v -> let r = h v in fold r f) l_exc in
-       KernelOperation (op, u, l_val, l_exc)
+       KernelOperation (op, u, l_return, l_exc)
   in
   fun w -> fold (k w) f
 

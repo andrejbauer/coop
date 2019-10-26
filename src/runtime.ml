@@ -353,10 +353,10 @@ let rec eval_expr env {Location.it=e'; loc} =
        | Value.KernelVal (v, w'') -> Value.KernelVal (v, lens_put w w'')
        | Value.KernelException (e, w'') -> Value.KernelException (e, lens_put w w'')
        | Value.KernelSignal _ as s -> s
-       | Value.KernelOperation (op, u, l_val, l_exc) ->
-          let l_val v = fold (l_val v)
+       | Value.KernelOperation (op, u, l_return, l_exc) ->
+          let l_return v = fold (l_return v)
           and l_exc = Name.Map.map (fun f v -> fold (f v)) l_exc in
-          Value.KernelOperation (op, u, l_val, l_exc)
+          Value.KernelOperation (op, u, l_return, l_exc)
        in
        let w' = lens_get w in
        fold (coop v w')
@@ -453,10 +453,10 @@ and eval_user env Location.{it=c'; loc} =
      user_exec ~loc w r fin
 
   | Syntax.UserTry (c, hnd) ->
-     let (exc_val, exc_raise) = eval_user_exception_handler ~loc env hnd in
+     let (exc_return, exc_raise) = eval_user_exception_handler ~loc env hnd in
      let rec fold = function
 
-       | Value.UserVal v -> exc_val v
+       | Value.UserVal v -> exc_return v
 
        | Value.(UserException (Exception (exc, v))) as e ->
           begin match lookup_with_exception exc_raise exc with
@@ -464,10 +464,10 @@ and eval_user env Location.{it=c'; loc} =
           | None -> e
           end
 
-       | Value.UserOperation (op, v, f_val, f_exc) ->
-          let f_val v = fold (f_val v)
+       | Value.UserOperation (op, v, f_return, f_exc) ->
+          let f_return v = fold (f_return v)
           and f_exc = Name.Map.map (fun f v -> fold (f v)) f_exc in
-          Value.UserOperation (op, v, f_val, f_exc)
+          Value.UserOperation (op, v, f_return, f_exc)
      in
      let r = eval_user env c in
      fold r
@@ -517,9 +517,9 @@ and eval_kernel env Location.{it=c';loc} w =
      Value.(KernelSignal (Signal (sgn, v)))
 
   | Syntax.KernelExec (c, hnd) ->
-     let (h_val, h_exc) = eval_kernel_exception_handler ~loc env hnd in
+     let (h_return, h_exc) = eval_kernel_exception_handler ~loc env hnd in
      let rec fold = function
-       | Value.UserVal v -> h_val v w
+       | Value.UserVal v -> h_return v w
 
        | Value.(UserException (Exception (exc, v) as e)) ->
           begin match lookup_with_exception h_exc exc with
@@ -527,19 +527,19 @@ and eval_kernel env Location.{it=c';loc} w =
           | None -> Value.(KernelException (e, w))
           end
 
-       | Value.UserOperation (op, v, f_val, f_exc) ->
-          let f_val v = fold (f_val v)
+       | Value.UserOperation (op, v, f_return, f_exc) ->
+          let f_return v = fold (f_return v)
           and f_exc = Name.Map.map (fun f v -> fold (f v)) f_exc in
-          Value.KernelOperation (op, v, f_val, f_exc)
+          Value.KernelOperation (op, v, f_return, f_exc)
      in
      let r = eval_user env c in
      fold r
 
   | Syntax.KernelTry (c, hnd) ->
-     let (exc_val, exc_raise) = eval_kernel_exception_handler ~loc env hnd in
+     let (exc_return, exc_raise) = eval_kernel_exception_handler ~loc env hnd in
      let rec fold = function
 
-       | Value.KernelVal (v, w) -> exc_val v w
+       | Value.KernelVal (v, w) -> exc_return v w
 
        | Value.(KernelException (Exception (exc, v), w)) as e ->
           begin match lookup_with_exception exc_raise exc with
@@ -550,10 +550,10 @@ and eval_kernel env Location.{it=c';loc} w =
        | Value.KernelSignal _ as r ->
           r
 
-       | Value.KernelOperation (op, v, f_val, f_exc) ->
-          let f_val v = fold (f_val v)
+       | Value.KernelOperation (op, v, f_return, f_exc) ->
+          let f_return v = fold (f_return v)
           and f_exc = Name.Map.map (fun f v -> fold (f v)) f_exc in
-          Value.KernelOperation (op, v, f_val, f_exc)
+          Value.KernelOperation (op, v, f_return, f_exc)
      in
      let r = eval_kernel env c w in
      fold r
@@ -566,9 +566,9 @@ and eval_kernel env Location.{it=c';loc} w =
      let v = eval_expr env e in
      Value.(KernelVal (unit_val, Value.World v))
 
-and eval_user_exception_handler ~loc env Syntax.{try_val; try_raise} =
-  let f_val v =
-    match try_val with
+and eval_user_exception_handler ~loc env Syntax.{try_return; try_raise} =
+  let f_return v =
+    match try_return with
     | Some (px,c) -> let env = extend_pattern ~loc px v env in eval_user env c
     | None -> Value.user_return v
   and f_excs =
@@ -579,11 +579,11 @@ and eval_user_exception_handler ~loc env Syntax.{try_val; try_raise} =
     Name.Map.empty
     try_raise
   in
-  (f_val, f_excs)
+  (f_return, f_excs)
 
-and eval_kernel_exception_handler ~loc env Syntax.{try_val; try_raise} =
-  let f_val v =
-    match try_val with
+and eval_kernel_exception_handler ~loc env Syntax.{try_return; try_raise} =
+  let f_return v =
+    match try_return with
     | Some (px,c) -> let env = extend_pattern ~loc px v env in eval_kernel env c
     | None -> Value.kernel_return v
   and f_excs =
@@ -594,10 +594,10 @@ and eval_kernel_exception_handler ~loc env Syntax.{try_val; try_raise} =
     Name.Map.empty
     try_raise
   in
-  (f_val, f_excs)
+  (f_return, f_excs)
 
-and eval_finally ~loc env Syntax.{fin_val=(px, pw, c); fin_raise; fin_kill} =
-  let fin_val (v, Value.World w) =
+and eval_finally ~loc env Syntax.{fin_return=(px, pw, c); fin_raise; fin_kill} =
+  let fin_return (v, Value.World w) =
     let env = extend_pattern ~loc px v env in
     let env = extend_pattern ~loc pw w env in
     eval_user env c
@@ -623,7 +623,7 @@ and eval_finally ~loc env Syntax.{fin_val=(px, pw, c); fin_raise; fin_kill} =
       Name.Map.empty
       fin_kill
   in
-  (fin_val, fin_raise, fin_kill)
+  (fin_return, fin_raise, fin_kill)
 
 and extend_rec ~loc fs env =
   let env' = ref env in
@@ -637,28 +637,28 @@ and extend_rec ~loc fs env =
   env
 
 (** Run a result with the given runner and finally clause. *)
-and user_using ~loc rnr w r (fin_val, fin_raise, fin_kill) =
+and user_using ~loc rnr w r (fin_return, fin_raise, fin_kill) =
   let rec using w = function
     | Value.UserVal v ->
-       fin_val (v, w)
+       fin_return (v, w)
 
     | Value.(UserException (Exception (exc, v))) ->
        let f_exc = lookup_finally_exception ~loc fin_raise exc in
        f_exc (v, w)
 
-    | Value.UserOperation (op, v, f_val, f_exc) ->
+    | Value.UserOperation (op, v, f_return, f_exc) ->
        let coop = lookup_operation ~loc rnr op in
-       let f_val (v, w) = (let r = f_val v in using w r)
+       let f_return (v, w) = (let r = f_return v in using w r)
        and f_exc = Name.Map.map (fun f -> (fun (v, w) -> using w (f v))) f_exc
        in
-       user_exec ~loc w (coop v) (f_val, f_exc, fin_kill)
+       user_exec ~loc w (coop v) (f_return, f_exc, fin_kill)
   in
   using w r
 
-and user_exec ~loc w r (fin_val, fin_raise, fin_kill) =
+and user_exec ~loc w r (fin_return, fin_raise, fin_kill) =
   (* Folds over a kernel tree *)
   let rec fold = function
-  | Value.KernelVal (v, w) -> fin_val (v, w)
+  | Value.KernelVal (v, w) -> fin_return (v, w)
 
   | Value.(KernelException (Exception (exc, v), w)) ->
      let f_exc = lookup_finally_exception ~loc fin_raise exc in
@@ -668,10 +668,10 @@ and user_exec ~loc w r (fin_val, fin_raise, fin_kill) =
      let f_sgn = lookup_signal ~loc fin_kill sgn in
      f_sgn v
 
-  | Value.KernelOperation (op, v_op, f_val, f_exc) ->
-     let f_val = fun v -> fold (f_val v)
+  | Value.KernelOperation (op, v_op, f_return, f_exc) ->
+     let f_return = fun v -> fold (f_return v)
      and f_exc = Name.Map.map (fun f v -> fold (f v)) f_exc in
-     Value.UserOperation (op, v_op, f_val, f_exc)
+     Value.UserOperation (op, v_op, f_return, f_exc)
   in
   fold (r w)
 
@@ -682,11 +682,11 @@ let top_eval_user {env_vars; env_container=coops} ({Location.loc; _} as c) =
     | Value.(UserException (Exception (exc, v))) ->
        error ~loc (UnhandledException exc)
 
-    | Value.UserOperation (op, v, f_val, f_exc) ->
+    | Value.UserOperation (op, v, f_return, f_exc) ->
        let coop = lookup_operation ~loc coops op in
        begin
          try
-           using (f_val (coop v))
+           using (f_return (coop v))
          with
          | Value.(CoopException (Exception (exc, v))) ->
             let f = lookup_finally_exception ~loc f_exc exc in
