@@ -19,15 +19,17 @@ let demo1 =
 ;;
 
 (** We re-make the above example using a runner, which guarantees proper
-   finalization. Note that [close_out] may raise a further [sys_error]. *)
+   finalization. *)
 
 (** The runner implements an auxiliary operation which does not require a file handle *)
 operation write : string -> unit {!sys_error} ;;
 
+let fileIO = { write s -> let fh = getenv in user output_string fh s with {}} @ out_channel
+
+(* Note that [close_out] may raise a further [sys_error]. *)
 let demo2 =
-  using
-    ({ write s -> let fh = getenv in user output_string fh s with {}} @ out_channel)
-    @ (open_out "greeting2.txt")
+try
+  using fileIO @ (open_out "greeting2.txt")
   run
     write "Hello, world!\n"
   finally {
@@ -36,4 +38,32 @@ let demo2 =
       print_string msg ;
       try close_out fh with { !sys_error msg -> print_string msg }
   }
+with {!sys_error msg -> print_string msg (* open_out failed *) }
+;;
+
+(** By nesting runners, we may interpose another runner [accIO] between the user
+   code and [fileIO] that accumulates all the writes and commits them at the end
+   *)
+let accIO = { write s -> let s' = getenv in setenv (user (s' ^ s) with {}) } @ string
+
+let demo3 =
+try
+  using fileIO @ (open_out "greeting3.txt")
+  run
+    using accIO @ ""
+    run
+      write "Hell" ;
+      write "o, wor" ;
+      write "ld!\n"
+    finally {
+      | return x @ s -> write s ; x
+      | !sys_error msg @ s -> write s ; !sys_error msg
+    }
+  finally {
+  | return _ @ fh -> close_out fh
+  | !sys_error msg @ fh ->
+      print_string msg ;
+      try close_out fh with { !sys_error msg -> print_string msg }
+  }
+with {!sys_error msg -> print_string msg (* open_out failed *) }
 ;;
