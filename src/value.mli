@@ -1,8 +1,13 @@
 (** Runtime values *)
 
+(** A type that holds values whose Coop type is abstract. *)
+type abstract =
+  | Out_channel of Stdlib.out_channel
+  | In_channel of Stdlib.in_channel
+
 (** Runtime value *)
 type t =
-  | Abstract
+  | Abstract of abstract
   | Numeral of int
   | Boolean of bool
   | Quoted of string

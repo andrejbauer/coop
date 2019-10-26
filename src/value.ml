@@ -1,5 +1,9 @@
+type abstract =
+  | Out_channel of Stdlib.out_channel
+  | In_channel of Stdlib.in_channel
+
 type t =
-  | Abstract
+  | Abstract of abstract
   | Numeral of int
   | Boolean of bool
   | Quoted of string
@@ -70,7 +74,7 @@ let kernel_bind k f =
 
 
 let name = function
-  | Abstract -> "abstract value"
+  | Abstract (Out_channel _ | In_channel _) -> "file handle"
   | Numeral _ -> "integer"
   | Boolean _ -> "boolean"
   | Quoted _ -> "string"
@@ -82,7 +86,7 @@ let name = function
   | Container _ -> "container"
 
 let names = function
-  | Abstract -> "abstract values"
+  | Abstract (Out_channel _ | In_channel _) -> "file handles"
   | Numeral _ -> "integers"
   | Boolean _ -> "booleans"
   | Quoted _ -> "strings"
@@ -97,7 +101,7 @@ let pure_container = Name.Map.empty
 
 let rec print ?max_level v ppf =
   match v with
-  | Abstract -> Format.fprintf ppf "<abstr>"
+  | Abstract (Out_channel _ | In_channel _) -> Format.fprintf ppf "<file>"
 
   | Numeral k -> Format.fprintf ppf "%d" k
 

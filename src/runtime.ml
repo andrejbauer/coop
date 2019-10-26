@@ -182,31 +182,31 @@ let match_clauses ~loc env ps v =
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
   | Value.(ClosureUser _ | ClosureKernel _ | Numeral _ | Boolean _ | Quoted _ | Constructor _
-    | Tuple ([] | [_] | _::_::_::_) | Runner _ | Abstract | Container _) ->
+    | Tuple ([] | [_] | _::_::_::_) | Runner _ | Abstract _ | Container _) ->
      error ~loc PairExpected
 
 let as_closure_user ~loc = function
   | Value.ClosureUser f -> f
   | Value.(Numeral _ | Boolean _ | Quoted _ | Constructor _ | Tuple _ |
-           ClosureKernel _ | Runner _  | Abstract | Container _) ->
+           ClosureKernel _ | Runner _  | Abstract _ | Container _) ->
      error ~loc FunctionExpected
 
 let as_closure_kernel ~loc = function
   | Value.ClosureKernel f -> f
   | Value.(Numeral _ | Boolean _ | Quoted _ | Constructor _ | Tuple _ |
-           ClosureUser _ | Runner _  | Abstract | Container _) ->
+           ClosureUser _ | Runner _  | Abstract _ | Container _) ->
      error ~loc FunctionExpected
 
 let as_runner ~loc = function
   | Value.Runner rnr -> rnr
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
-           ClosureUser _  |ClosureKernel _ |  Abstract | Container _) ->
+           ClosureUser _  |ClosureKernel _ |  Abstract _ | Container _) ->
      error ~loc RunnerExpected
 
 let as_container ~loc = function
   | Value.Container ops -> ops
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
-           ClosureUser _  |ClosureKernel _ |  Abstract | Runner _) ->
+           ClosureUser _  |ClosureKernel _ |  Abstract _ | Runner _) ->
      error ~loc ContainerExpected
 
 
@@ -214,10 +214,12 @@ let as_container ~loc = function
 let rec equal_value ~loc (v1 : Value.t) (v2 : Value.t) =
   match v1, v2 with
 
-  | Value.(Abstract | ClosureUser _ | ClosureKernel _ | Runner _ | Container _), _ ->
+  | Value.(Abstract (In_channel _ | Out_channel _) |
+           ClosureUser _ | ClosureKernel _ | Runner _ | Container _), _ ->
      error ~loc (IllegalComparison v1)
 
-  | _, Value.(Abstract | ClosureUser _ | ClosureKernel _ | Runner _) ->
+  | _, Value.(Abstract (In_channel _ | Out_channel _) |
+              ClosureUser _ | ClosureKernel _ | Runner _) ->
      error ~loc (IllegalComparison v1)
 
   | Value.(Numeral k1, Numeral k2) ->
