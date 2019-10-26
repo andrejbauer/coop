@@ -497,8 +497,9 @@ let rec expr (ctx : context) ({Location.it=e'; Location.loc=loc} as e) =
     | Sugared.FunUser (pxs, c) ->
        ([], user_abstract ~loc ctx pxs c)
 
-    | Sugared.FunKernel (px, wt, c) ->
-       ([], kernel_abstract ~loc ctx px wt c)
+    | Sugared.FunKernel (pxs, wt, c) ->
+       let wt = expr_ty ctx wt in
+       ([], kernel_abstract ~loc ctx pxs wt c)
 
     | Sugared.Runner (lst, t) ->
        let t = expr_ty ctx t in
@@ -561,7 +562,7 @@ and user_abstract0 ~loc ctx pxs c =
   in
   fold ctx pxs
 
-(** Abstract 1 or more times to get a user abstraction *)
+(** Abstract 1 or more times to get a user function *)
 and user_abstract ~loc ctx pxs c =
   match pxs with
   | [] -> assert false
@@ -571,11 +572,26 @@ and user_abstract ~loc ctx pxs c =
      let c = user_abstract0 ~loc ctx pxs c in
      Location.locate ~loc (Desugared.FunUser (px, c))
 
-(** Abstract a kernel comptuation *)
-and kernel_abstract ~loc ctx px wt c =
-     let wt = expr_ty ctx wt in
+(** Abstract 0 or more times to get a kernel computation *)
+and kernel_abstract0 ~loc ctx pxs wt c =
+  let locate x = Location.locate ~loc x in
+  let rec fold ctx = function
+    | [] -> comp ctx c
+    | px :: pxs ->
+       let ctx, px = binder ctx px in
+       let c = fold ctx pxs in
+       locate (Desugared.Val (locate (Desugared.FunKernel (px, wt, c))))
+  in
+  fold ctx pxs
+
+(** Abstract 1 or more times to get a kernel function *)
+and kernel_abstract ~loc ctx pxs wt c =
+  match pxs with
+  | [] -> assert false
+
+  | px :: pxs ->
      let ctx, px = binder ctx px in
-     let c = comp ctx c in
+     let c = kernel_abstract0 ~loc ctx pxs wt c in
      Location.locate ~loc (Desugared.FunKernel (px, wt, c))
 
 and runner_clauses ~loc ctx lst = List.map (runner_clause ~loc ctx) lst
@@ -668,8 +684,17 @@ and comp ctx ({Location.it=c'; Location.loc=loc} as c) : Desugared.comp =
        let c2 = comp ctx c2 in
        locate (Desugared.Let (p, c1, c2))
 
-    | Sugared.(Let (BindFun (f, pxs, c1), c2)) ->
+    | Sugared.(Let (BindFunUser (f, pxs, c1), c2)) ->
        let e = user_abstract ~loc ctx pxs c1 in
+       let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Val e) in
+       let ctx = extend_ident f Variable ctx in
+       let c2 = comp ctx c2 in
+       let p = locate (Desugared.PattVar f) in
+       locate (Desugared.Let (p, c1, c2))
+
+    | Sugared.(Let (BindFunKernel (f, pxs, t, c1), c2)) ->
+       let t = expr_ty ctx t in
+       let e = kernel_abstract ~loc ctx pxs t c1 in
        let c1 = Location.locate ~loc:c1.Location.loc (Desugared.Val e) in
        let ctx = extend_ident f Variable ctx in
        let c2 = comp ctx c2 in
@@ -893,8 +918,16 @@ let toplevel' ctx = function
        and ctx, p = pattern ctx p in
        ctx, Desugared.TopLet (p, c)
 
-    | Sugared.(TopLet (BindFun (f, a, c))) ->
+    | Sugared.(TopLet (BindFunUser (f, a, c))) ->
        let e = user_abstract ~loc ctx a c in
+       let c = Location.locate ~loc:c.Location.loc (Desugared.Val e) in
+       let ctx = extend_ident f Variable ctx in
+       let p = Location.locate ~loc (Desugared.PattVar f) in
+       ctx, Desugared.TopLet (p, c)
+
+    | Sugared.(TopLet (BindFunKernel (f, a, t, c))) ->
+       let t = expr_ty ctx t in
+       let e = kernel_abstract ~loc ctx a t c in
        let c = Location.locate ~loc:c.Location.loc (Desugared.Val e) in
        let ctx = extend_ident f Variable ctx in
        let p = Location.locate ~loc (Desugared.PattVar f) in

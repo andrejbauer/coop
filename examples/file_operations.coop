@@ -21,12 +21,23 @@ let demo1 =
 (** We re-make the above example using a runner, which guarantees proper
    finalization. *)
 
-(** The runner implements an auxiliary operation which does not require a file handle *)
-operation write : string -> unit {!sys_error} ;;
-
-let fileIO = { write s -> let fh = getenv in user output_string fh s with {}} @ out_channel
+(** The runner implements an auxiliary operation which does not require a file handle,
+    and does not raise any I/O exceptions. Instead, if an I/O error occurs, it
+    closes the file and raises a signal. *)
+signal sys_kill of string ;;
+operation write : string -> unit ;;
 
 (* Note that [close_out] may raise a further [sys_error]. *)
+let fileIO = {
+  write s ->
+    let fh = getenv in
+    user
+      output_string fh s
+    with { !sys_error msg ->
+             (user close_out fh with { !sys_error _ -> () }) ;
+             !!sys_kill msg }
+} @ out_channel
+
 let demo2 =
 try
   using fileIO @ (open_out "greeting2.txt")
@@ -34,16 +45,13 @@ try
     write "Hello, world!\n"
   finally {
   | return _ @ fh -> close_out fh
-  | !sys_error msg @ fh ->
-      print_string msg ;
-      try close_out fh with { !sys_error msg -> print_string msg }
-  }
-with {!sys_error msg -> print_string msg (* open_out failed *) }
+  | !!sys_kill msg -> print_string msg }
+with { !sys_error msg -> print_string msg (* open_out failed *) }
 ;;
 
 (** By nesting runners, we may interpose another runner [accIO] between the user
-   code and [fileIO] that accumulates all the writes and commits them at the end
-   *)
+   code and [fileIO] that accumulates all the writes and commits them at the
+   end. *)
 let accIO = { write s -> let s' = getenv in setenv (user (s' ^ s) with {}) } @ string
 
 let demo3 =
@@ -56,14 +64,32 @@ try
       write "o, wor" ;
       write "ld!\n"
     finally {
-      | return x @ s -> write s ; x
-      | !sys_error msg @ s -> write s ; !sys_error msg
-    }
+    | return x @ s -> write s ; x (* commit writes *) }
   finally {
   | return _ @ fh -> close_out fh
-  | !sys_error msg @ fh ->
-      print_string msg ;
-      try close_out fh with { !sys_error msg -> print_string msg }
-  }
-with {!sys_error msg -> print_string msg (* open_out failed *) }
+  | !!sys_kill msg -> print_string msg }
+with { !sys_error msg -> print_string msg (* open_out failed *) }
+;;
+
+(** Another use for interposing a runner is to collect various kinds of
+    statistics about resource usage. *)
+let report_stats (k : int) =
+  (print_string "Statistics: " ; print_int k ; print_string " calls to write.\n")
+;;
+
+let demo4 =
+try
+  using fileIO @ (open_out "greeting4.txt")
+  run
+      using ({ write s -> let k = getenv in setenv (user k + 1 with {})} @ int) @ 0
+      run
+        write "Hell" ;
+        write "o, wor" ;
+        write "ld!" ;
+        write "\n"
+      finally { return x @ k -> (x, k) }
+  finally {
+  | return (x, k) @ fh -> close_out fh ; report_stats k ; x
+  | !!sys_kill msg -> print_string msg }
+with { !sys_error msg -> print_string msg (* open_out failed *) }
 ;;

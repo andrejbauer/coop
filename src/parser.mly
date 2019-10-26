@@ -1,3 +1,9 @@
+%{
+  let ascribe_opt e = function
+    | None -> e
+    | Some t -> Location.locate ~loc:e.Location.loc (Sugared.Ascribe (e, t))
+%}
+
 (* Infix operations a la OCaml *)
 %token <Name.t Location.located> PREFIXOP INFIXOP0 INFIXOP1 EQUAL INFIXOP2 INFIXOP3 INFIXOP4 INFIXOP5 STAR BANG AT
 
@@ -154,7 +160,7 @@ term_:
   | FUN a=binder+ ARROW e=term
     { Sugared.FunUser (a, e) }
 
-  | FUN a=binder AT wt=prod_ty ARROW e=term
+  | FUN a=binder+ AT wt=prod_ty ARROW e=term
     { Sugared.FunKernel (a, wt, e) }
 
   | LET bnd=let_binding IN c=term
@@ -354,23 +360,20 @@ recursive_clause:
     { (f, px, t, c) }
 
 annot:
+  |
+    { None }
   | COLON t = ty
-    { t }
+    { Some t }
 
 let_binding:
-  | p=pattern t=annot EQUAL e=term
-    { let e = Location.locate ~loc:e.Location.loc (Sugared.Ascribe (e, t)) in
-      Sugared.(BindVal (p, e)) }
+  | p=pattern topt=annot EQUAL e=term
+    { Sugared.(BindVal (p, ascribe_opt e topt)) }
 
-  | p=pattern EQUAL e=term
-    { Sugared.(BindVal (p, e)) }
+  | f=var_name a=binder+ topt=annot EQUAL e=term
+    { Sugared.BindFunUser (f, a, ascribe_opt e topt) }
 
-  | f=var_name a=binder+ t=annot EQUAL e=term
-    { let e = Location.locate ~loc:e.Location.loc (Sugared.Ascribe (e, t)) in
-      Sugared.BindFun (f, a, e) }
-
-  | f=var_name a=binder+ EQUAL e=term
-    { Sugared.BindFun (f, a, e) }
+  | f=var_name a=binder+ AT wt=prod_ty topt=annot EQUAL e=term
+    { Sugared.BindFunKernel (f, a, wt, ascribe_opt e topt) }
 
 match_binder:
   | p=pattern
