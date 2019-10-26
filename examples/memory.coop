@@ -61,7 +61,7 @@ let demo1 =
 ;;
 
 (** Because locations are not abstract we can cheat, which can lead to a segfault. *)
-let  demo2 =
+let demo2 =
   using ml_ref @ empty_heap
   run
     let r = ref 5 in
@@ -75,3 +75,80 @@ let  demo2 =
      666
   }
 ;;
+
+(** Let us implement a runner which enforces monotonic state, i.e., a policy that
+    only allows certain memory updates. Rather than changing the ml_ref runner,
+    we write another one which then combines with ml_ref (or any other implementation
+    of references). *)
+
+(** A policy tells us whether a reference may be updated. Think of it is a preorder,
+    so that we can only ever "increase" the contents of a reference. *)
+type policy = cell -> cell -> bool
+
+(** Raised when a policiy is violated. *)
+exception policy_violation of location
+
+(** Sent when a reference without a policy is used. *)
+signal no_policy of location
+
+(** The monotonic versions of ref operations. *)
+operation mref : cell * policy -> location
+operation mget : location -> cell
+operation mput : location * cell -> unit {!policy_violation}
+
+(** A map that checks policies. *)
+type policy_checker = Checker of (location * cell -> unit {get, !policy_violation, !!no_policy} @ policy_checker)
+
+let empty_checker = Checker (fun ((l, _) : location * cell) @ policy_checker -> !!no_policy l)
+;;
+
+let update_checker (l : location) (p : policy) @ policy_checker =
+  let (Checker f) = getenv in
+  let f' ((l', c) : location * cell) @ policy_checker =
+    if l = l' then
+      if (user p (get l) c with {}) then () else !policy_violation l
+    else
+      f (l, c)
+  in
+  setenv (Checker f')
+;;
+
+(** A runner for monotone state *)
+let ml_mref = {
+  | mref (x, p) -> let r = ref x in update_checker r p ; r
+  | mget r -> get r
+  | mput (r, x) ->
+     let (Checker c) = getenv in
+     c (r, x) ;
+     put (r, x)
+} @ policy_checker ;;
+
+(** An auxiliary runner that we pair with other runners so that
+    inner printing operations get access to their outer implementation. *)
+let printer =
+  { print_string s -> print_string s
+  | print_int k -> print_int k
+  } @ unit
+
+let demo3 =
+  using (ml_ref ⋈ printer) @ (empty_heap, ())
+  run
+    using (ml_mref ⋈ printer) @ (empty_checker, ())
+    run
+        let x = mref (5, ( < )) in
+        mput (x, 6) ;
+        mput (x, 4) ;
+        mget x
+    finally {
+     | return x @ _ -> x
+     | !policy_violation (Location l) @ _ ->
+        print_string "POLICY VIOLATION " ; print_int l ; print_string "\n" ;
+        666
+     | !!no_policy (Location l) ->
+        print_string "NO POLICY " ; print_int l ; print_string "\n" ;
+        42
+    }
+  finally {
+  | return x @ _ -> x
+  | !!segfault _ -> print_string "SEGFAULT\n" ; 666
+  }
