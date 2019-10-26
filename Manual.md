@@ -639,19 +639,30 @@ values are defined in [`external.ml`](src/external.ml).
 
 ### Containers
 
-A container is a "top level [runner](#runners)" which gives the computations access to
-*actual* computational effects. Currently Coop provides two containers, defined in OCaml
-and bound as [external values](#external-values):
+A container is a "top level [runner](#runners)" which gives the computations
+access to *actual* computational effects. From the point of view of Coop code,
+containers provide co-operations that return values and raise exceptions, but is
+unware of any signals that co-operations may send. This is so because an
+external (OCaml-level) co-operation runs in the "external OCaml monad" where
+such signals live.
 
-* `pure` is a container which implements *no* operations
-* `stdio` is a container which implements basic I/O operations `print_int`, `print_string`, `read_int`, `read_string` and `flush` (see [`pervasives.coop`](./pervasives.coop).
+Currently Coop provides three containers, defined in OCaml and bound as [external values](#external-values):
 
-At the top level you can set the current container with the directive
+* `pure` implements *no* operations
+* `stdio` implements basic I/O operations
+* `file` implements basic file operations
 
-    container ⟨container⟩
+Please consult [`pervasives.coop`](./pervasives.coop) for details on the `stdio` and `file` containers,
+as well as the [`file_operations.coop`](./examples/file_operations.coop) example.
 
-The initial container is `pure`, which forces Coop programs to be pure. If you want to
-call external I/O operations, set the container to `stdio` first.
+At the top level you can set the current containers with the directive
+
+    container ⟨container₁⟩, …, ⟨containerᵢ⟩
+
+You may use any combination of containers, as long as they have disjoint sets of co-operations.
+
+The initial container is `pure`, which forces Coop programs to be pure. If you
+want to use I/O you must first set the `stdio` container.
 
 ## Syntax
 
