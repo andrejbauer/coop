@@ -1,0 +1,77 @@
+(** ML style references *)
+
+(** The type of memory cells. Ideally we would like this to be a polymorphic type. *)
+type cell = int
+
+(** The type of memory locations. Ideally we would liek this to an abstract type. *)
+type location = Location of int
+
+(** We first implement a naive memory heap holding integers. It is a kernel map
+   [int -> int @ heap] with a counter for the next available location. Invalid
+   dereferencing results in a [segfault] signal. *)
+signal segfault of location
+
+type heap = Heap of int * (location -> cell {!!segfault} @ heap)
+
+let empty_heap = Heap (0, (fun (l : location) @ heap -> !!segfault l))
+
+let read_heap (l : location) @ heap =
+  let (Heap (_, h)) = getenv in h l
+
+let write_heap (l : location) (c : cell) @ heap =
+  let (Heap (hp, h)) = getenv in
+  let h' (k : location) @ heap = (if l = k then c else h k) in
+  setenv (Heap (hp, h'))
+
+(** To make using the heap more dangerous, allocation of a new heap cell
+    does not initialize it. *)
+let alloc_heap (_ : unit) @ heap =
+  let (Heap (hp, h)) = getenv in
+  let hp' = (user hp + 1 with {}) in
+  setenv (Heap (hp', h)) ;
+  Location hp
+
+(** We implement ML-style references using the primitive heap. *)
+operation ref : cell -> location
+operation get : location -> cell
+operation put : location * cell -> unit
+
+let ml_ref =
+  { ref x -> let r = alloc_heap () in write_heap r x ; r
+  | get r -> read_heap r
+  | put (r, x) -> write_heap r x
+  } @ heap
+
+container stdio ;;
+
+(** Now we can use ML-style references as follows. *)
+let demo1 =
+  using ml_ref @ empty_heap
+  run
+    let r = ref 5 in
+    put (r, 2 + get r) ;
+    let q = ref (get r) in
+    get q * get r
+  finally {
+  | return x @ _ -> x
+  | !!segfault (Location k) ->
+     print_string "SEGFAULT at " ; print_int k ;
+     666
+  }
+;;
+
+(** Because locations are not abstract we can cheat, which can lead to a segfault. *)
+let  demo2 =
+  using ml_ref @ empty_heap
+  run
+    let r = ref 5 in
+    put (r, 2 + get r) ;
+    let q = ref (get (Location 0)) in
+    get q * get (Location 42)
+  finally {
+  | return x @ _ -> x
+  | !!segfault (Location k) ->
+     print_string "SEGFAULT at " ; print_int k ; print_string "\n" ;
+     666
+  }
+;;
