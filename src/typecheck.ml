@@ -420,6 +420,9 @@ let rec expr_subty ~loc ctx t u =
   | Syntax.ArrowUser (t1, t2), Syntax.ArrowUser (u1, u2) ->
      expr_subty ~loc ctx u1 t1 && user_subty ~loc ctx t2 u2
 
+  | Syntax.ArrowKernel (t1, t2), Syntax.ArrowKernel (u1, u2) ->
+     expr_subty ~loc ctx u1 t1 && kernel_subty ~loc ctx t2 u2
+
   | Syntax.(RunnerTy (Operations ops1, Operations ops1', Signals sgn1, w_ty1)),
     Syntax.(RunnerTy (Operations ops2, Operations ops2', Signals sgn2, w_ty2)) ->
      Name.Set.subset ops2 ops1 &&
