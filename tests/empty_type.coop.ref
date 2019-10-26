@@ -1,6 +1,6 @@
 exception boom of unit
 val f : int → empty {!boom} = <fun>
 val g : int → int {!boom} = <fun>
-container {flush, print_int, print_string, read_int, read_string}
+container {flush_stdout, print_int, print_string, read_int, read_string}
 Boom!
 - : unit = ()
