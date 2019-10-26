@@ -119,7 +119,7 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * comp
   | TopLetRec of rec_clause list
-  | TopContainer of comp
+  | TopContainer of comp list
   | TopUser of comp
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty

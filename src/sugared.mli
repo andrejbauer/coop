@@ -99,7 +99,7 @@ and toplevel' =
   | TopLoad of string
   | TopLet of let_binding
   | TopLetRec of rec_clause list
-  | TopContainer of term
+  | TopContainer of term list
   | TopUser of term
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * ty

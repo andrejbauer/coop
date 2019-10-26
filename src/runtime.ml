@@ -14,6 +14,7 @@ type error =
   | FunctionExpected
   | RunnerExpected
   | RunnerDoubleOperation of Name.t
+  | ContainerDoubleOperation of Name.t
   | PairExpected
   | ContainerExpected
   | PatternMismatch
@@ -57,6 +58,9 @@ let print_error err ppf =
 
   | RunnerDoubleOperation op ->
      Format.fprintf ppf "cannot combine runners that both implement %t" (Name.print op)
+
+  | ContainerDoubleOperation op ->
+     Format.fprintf ppf "cannot combine containers that both implement %t" (Name.print op)
 
   | PairExpected ->
      Format.fprintf ppf "pair expected, please report"
@@ -178,31 +182,31 @@ let match_clauses ~loc env ps v =
 let as_pair ~loc = function
   | Value.Tuple [v1; v2] -> (v1, v2)
   | Value.(ClosureUser _ | ClosureKernel _ | Numeral _ | Boolean _ | Quoted _ | Constructor _
-    | Tuple ([] | [_] | _::_::_::_) | Runner _ | Abstract | Container _) ->
+    | Tuple ([] | [_] | _::_::_::_) | Runner _ | Abstract _ | Container _) ->
      error ~loc PairExpected
 
 let as_closure_user ~loc = function
   | Value.ClosureUser f -> f
   | Value.(Numeral _ | Boolean _ | Quoted _ | Constructor _ | Tuple _ |
-           ClosureKernel _ | Runner _  | Abstract | Container _) ->
+           ClosureKernel _ | Runner _  | Abstract _ | Container _) ->
      error ~loc FunctionExpected
 
 let as_closure_kernel ~loc = function
   | Value.ClosureKernel f -> f
   | Value.(Numeral _ | Boolean _ | Quoted _ | Constructor _ | Tuple _ |
-           ClosureUser _ | Runner _  | Abstract | Container _) ->
+           ClosureUser _ | Runner _  | Abstract _ | Container _) ->
      error ~loc FunctionExpected
 
 let as_runner ~loc = function
   | Value.Runner rnr -> rnr
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
-           ClosureUser _  |ClosureKernel _ |  Abstract | Container _) ->
+           ClosureUser _  |ClosureKernel _ |  Abstract _ | Container _) ->
      error ~loc RunnerExpected
 
 let as_container ~loc = function
   | Value.Container ops -> ops
   | Value.(Numeral _ | Boolean _ | Quoted _ | Tuple _ | Constructor _ |
-           ClosureUser _  |ClosureKernel _ |  Abstract | Runner _) ->
+           ClosureUser _  |ClosureKernel _ |  Abstract _ | Runner _) ->
      error ~loc ContainerExpected
 
 
@@ -210,10 +214,12 @@ let as_container ~loc = function
 let rec equal_value ~loc (v1 : Value.t) (v2 : Value.t) =
   match v1, v2 with
 
-  | Value.(Abstract | ClosureUser _ | ClosureKernel _ | Runner _ | Container _), _ ->
+  | Value.(Abstract (In_channel _ | Out_channel _) |
+           ClosureUser _ | ClosureKernel _ | Runner _ | Container _), _ ->
      error ~loc (IllegalComparison v1)
 
-  | _, Value.(Abstract | ClosureUser _ | ClosureKernel _ | Runner _) ->
+  | _, Value.(Abstract (In_channel _ | Out_channel _) |
+              ClosureUser _ | ClosureKernel _ | Runner _) ->
      error ~loc (IllegalComparison v1)
 
   | Value.(Numeral k1, Numeral k2) ->
@@ -729,13 +735,29 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
                      (Value.print v) ;
      env
 
-  | Syntax.TopContainer (c, ops) ->
-     let v = top_eval_user env c in
-     let shl = as_container ~loc v in
-     let env = set_container shl env in
-     if not quiet then
-       Format.printf "@[<hov>container@ %t@]@." (Syntax.print_container_ty ops) ;
-     env
+  | Syntax.TopContainer (cs, ops) ->
+     let rec fold cnt = function
+       | [] ->
+          let env = set_container cnt env in
+          if not quiet then
+            Format.printf "@[<hov>container@ %t@]@." (Syntax.print_container_ty ops) ;
+          env
+       | c :: cs ->
+          let v = top_eval_user env c in
+          let c_cnt = as_container ~loc v in
+          let cnts =
+            Name.Map.merge
+            (fun op f_opt g_opt ->
+              match f_opt, g_opt with
+              | Some f, None -> Some f
+              | None, Some g -> Some g
+              | None, None -> None
+              | Some _, Some _ -> error ~loc (ContainerDoubleOperation op))
+            cnt c_cnt
+          in
+          fold cnts cs
+     in
+     fold Name.Map.empty cs
 
   | Syntax.DefineAbstract t ->
      if not quiet then

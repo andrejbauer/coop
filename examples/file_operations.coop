@@ -1,0 +1,39 @@
+(** Basic file usage. *)
+
+(** In order to get access to file operations we first have
+    to install the [file] container at the top level.
+    We also use printing, so we install [stdio] as well. *)
+container stdio, file ;;
+
+(** We now have access to OCaml's basic file operations, consult
+    [pervasives.coop] and [src/external.ml] for details. So we could
+    write traditional code, like this. Should [output_string] fail
+    with the [sys_error] exception, the file will not get closed. *)
+let demo1 =
+  try
+    let fh = open_out "greeting1.txt" in
+    output_string fh "Hello, world!\n" ;
+    close_out fh
+  with {
+  | !sys_error msg -> print_string msg }
+;;
+
+(** We re-make the above example using a runner, which guarantees proper
+   finalization. Note that [close_out] may raise a further [sys_error]. *)
+
+(** The runner implements an auxiliary operation which does not require a file handle *)
+operation write : string -> unit {!sys_error} ;;
+
+let demo2 =
+  using
+    ({ write s -> let fh = getenv in user output_string fh s with {}} @ out_channel)
+    @ (open_out "greeting2.txt")
+  run
+    write "Hello, world!\n"
+  finally {
+  | return _ @ fh -> close_out fh
+  | !sys_error msg @ fh ->
+      print_string msg ;
+      try close_out fh with { !sys_error msg -> print_string msg }
+  }
+;;
