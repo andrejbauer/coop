@@ -54,7 +54,7 @@ and term' =
   | Match of term * (binder * term) list
   | If of term * term * term
   | FunUser of binder list * term
-  | FunKernel of binder * ty * term
+  | FunKernel of binder list * ty * term
   | Apply of term * term
   | Let of let_binding * term
   | LetRec of rec_clause list * term
@@ -82,7 +82,8 @@ and rec_clause = Name.t * typed_binder * ty * term
 
 and let_binding =
   | BindVal of pattern * term
-  | BindFun of Name.t * binder list * term
+  | BindFunUser of Name.t * binder list * term
+  | BindFunKernel of Name.t * binder list * ty * term
 
 and finally_clause =
   | FinVal of binder * binder * term

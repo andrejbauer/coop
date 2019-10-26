@@ -12,6 +12,7 @@ This short manual explains the syntax and the basic concepts of Coop.
   * [Signals](#signals)
   * [Effect signatures](#effect-signatures)
 * [Types](#types)
+  * [Type ascription](#type-ascription)
   * [Value types](#value-types)
   * [User and kernel types](#user-and-kernel-types)
   * [Type definitions](#type-definitions)
@@ -257,7 +258,6 @@ results in one of the following:
 * the signal `device_error`
 
 
-
 ### Type definitions
 
 At the top level a **type alias** `t` may be introduced with
@@ -290,6 +290,19 @@ The type of integer lists may be defined as
     type int_list = Nil | Cons of int * int_list
 
 
+### Type ascription
+
+You can explicitly state the type of an expression or computation with **type ascription**
+
+    ⟨expr⟩ : ⟨type⟩
+
+This may help with finding sources of type errors. As a special case, you can write
+
+    let ⟨pattern⟩ : ⟨type⟩ = ⟨expr⟩
+
+instead of `let ⟨pattern⟩ = ⟨expr⟩ : ⟨type⟩`.
+
+
 ## Values
 
 Values are pure data, i.e., they perform no effects and need not be evaluated
@@ -317,9 +330,24 @@ Because Coop does not have polymorphic types, all function arguments must be exp
 typed. That is, `fun x → x` is not a valid expression, you have to write
 `fun (x : τ) → x` for some value type `τ`.
 
-Iterated user functions `fun (x₁ : τ₁) → fun (y : σ) → ⟨user-comp⟩` can be abbreviated to
-`fun (x : τ) (y : σ) -> ⟨user-comp⟩`. However, there is no such abbreviation for kernel
-functions so you have to write them as `fun (x₁ : τ₁) @ ρ₁ → fun (y : σ) @ ρ₂ → ⟨kernel-comp⟩`.
+Iterated user functions `fun (x : τ) → fun (y : σ) → ⟨user-comp⟩` can be abbreviated to
+`fun (x : τ) (y : σ) -> ⟨user-comp⟩`, and similarly for more argment.
+
+Likewise, you may iterate arguments for a kernel function: `fun (x : τ) (y : σ) @ ρ → ⟨kernel-comp⟩`
+is equivalent to `fun (x₁ : τ₁) @ ρ → fun (y : σ) @ ρ → ⟨kernel-comp⟩`.
+
+The syntax
+
+    let f (x : τ) (y : σ) = ⟨user-comp⟩
+
+is equivalent to `fun (x : τ) (y : σ) -> ⟨user-comp⟩`. You may also specify the type of the result `υ`:
+
+    let f (x : τ) (y : σ) : υ = ⟨user-comp⟩
+
+For kernel functions the corresponding notation is
+
+    let f (x : τ) (y : σ) @ ρ = ⟨kernel-comp⟩
+
 
 **Caveat:** you cannot apply a user function in kernel mode. For instance, writing `3 + 4`
 in the definition of a [runner co-operation](#runners) is a type error because `+` is a
