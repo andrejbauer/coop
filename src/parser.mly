@@ -226,6 +226,9 @@ app_term_:
   | SETENV e=prefix_term
     { Sugared.Setenv e }
 
+  | RETURN e=prefix_term
+    { e.Location.it }
+
   | sgn=SIGNALNAME e=prefix_term
     { Sugared.Kill (sgn, e) }
 
