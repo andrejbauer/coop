@@ -244,6 +244,17 @@ of type `τ` in kernel mode, where the kernel state has type `ρ`. It may call t
 listed operations, raise the listed exceptions, and send the listed signals (and
 no others).
 
+Let us note that there is a difference between a value type and a corresponding
+user type with empty effect signature:
+
+* `4` is a value whose type is `int`,
+* `2 + 2` is a user computation whose type is `int {}`.
+
+These are not equivalent! In the second case, the interpreter has to do some
+work to get the result, whereas in the first case the final value is already
+given.
+
+
 #### Example
 
 Executing a kernel comptuations of type
@@ -435,6 +446,10 @@ In fact, Coop allows the programmer to freely mix values and computations. For e
 can write `(3 + 4, 8)` even though, strictly speaking the subcomputation `3 + 4` should be
 hoisted: `let x = 3 + 4 in (x, 8)`. Coop performs such hoisting automatically, as it would
 be quite annoying to have to write `let x' = f x in g y` instead of `f x y`.
+
+You may write `return ⟨expr⟩` instead of `⟨expr⟩` if it makes you feel better,
+but the two are equivalent.
+
 
 #### `let` binding
 
