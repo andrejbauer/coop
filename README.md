@@ -2,10 +2,12 @@
 
 Coop is a prototype programming language for programming with *runners*, also known as *comodels*.
 
-Coop is part of ongoing research by [Danel Ahman](https://danel.ahman.ee) and [Andrej
-Bauer](http://www.andrej.com/). Until a proper publication has appeared, you may wish to
-consult Danel's talk [Interacting with external resources using runners (aka
-comodels)](https://danel.ahman.ee/talks/chocola19.pdf).
+Coop is part of ongoing research by [Danel Ahman](https://danel.ahman.ee) and
+[Andrej Bauer](http://www.andrej.com/). The theoretical aspects of our work are
+described in the paper [Runners in action](https://github.com/andrejbauer/coop).
+You may also be interested in Danel's talk [Interacting with external resources
+using runners (aka comodels)](https://danel.ahman.ee/talks/chocola19.pdf) and
+his [Haskell-Coop](https://github.com/danelahman/haskell-coop) library.
 
 
 ## Installation
@@ -44,15 +46,16 @@ To find out more about Coop, please consult the [Coop manual](./Manual.md).
 
 ### Theoretical background
 
-Coop is an extension of `λ-coop`, a calculus devised by Danel Ahman and Andrej Bauer
-(publication is forthcoming) to study how *runners* (also known as *comodels*) can be used
-to program with external resources. These are similar to handlers for algebraic effects,
-except that they carry state and use the continuation at most one in a tail-call position.
-There are two kinds of computations in `λ-coop`: the *kernel* computations implement
-access to resources as *co-operations*, while the *user* computations use resources by
-calling algebraic operations. The kernel mode has the ability to report errors to user
-mode by raising *exceptions* (recoverable errors), or aborting user code by sending it
-*signals* (unrecoverable errors).
+Coop is an extension of `λ-coop`, a calculus devised by Danel Ahman and Andrej
+Bauer, cf. our paper [Runners in action](http://arxiv.org/abs/1910.11629), to
+study how *runners* (also known as *comodels*) can be used to program with
+external resources. These are similar to handlers for algebraic effects, except
+that they carry state and use the continuation at most one in a tail-call
+position. There are two kinds of computations in `λ-coop`: the *kernel*
+computations implement access to resources as *co-operations*, while the *user*
+computations use resources by calling algebraic operations. The kernel mode has
+the ability to report errors to user mode by raising *exceptions* (recoverable
+errors), or aborting user code by sending it *signals* (unrecoverable errors).
 
 The central construct of `λ-coop` is
 
