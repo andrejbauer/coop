@@ -4,7 +4,7 @@ Coop is a prototype programming language for programming with *runners*, also kn
 
 Coop is part of ongoing research by [Danel Ahman](https://danel.ahman.ee) and
 [Andrej Bauer](http://www.andrej.com/). The theoretical aspects of our work are
-described in the paper [Runners in action](https://github.com/andrejbauer/coop).
+described in the paper [Runners in action](https://arxiv.org/abs/1910.11629).
 You may also be interested in Danel's talk [Interacting with external resources
 using runners (aka comodels)](https://danel.ahman.ee/talks/chocola19.pdf) and
 his [Haskell-Coop](https://github.com/danelahman/haskell-coop) library.
