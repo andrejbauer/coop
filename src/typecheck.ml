@@ -94,7 +94,7 @@ let print_error err ppf =
        (Syntax.print_expr_ty ty_actual)
 
   | WorldTypeMismatch (ty_expected, ty_actual) ->
-     Format.fprintf ppf "the world of this runner should have type@ %t but has type@ %t"
+     Format.fprintf ppf "the world of this kernel computation should have type@ %t but has type@ %t"
        (Syntax.print_expr_ty ty_expected)
        (Syntax.print_expr_ty ty_actual)
 
@@ -1030,6 +1030,13 @@ and check_constructor ~loc ctx cnstr eopt topt =
   | Some _, None ->
      error ~loc (IllegalConstructor cnstr)
 
+and check_world ~loc ?world ctx w_actual =
+  match world with
+  | None -> ()
+  | Some w_expected ->
+     if not (expr_eqtype ~loc ctx w_expected w_actual) then
+       error ~loc (WorldTypeMismatch (w_expected, w_actual))
+
 (** [infer_user ctx c] infers the type [ty] of a user computation [c]. It returns
     the processed computation [c] and its type [ty].  *)
 and infer_user (ctx : context) {Location.it=c'; loc} =
@@ -1132,6 +1139,7 @@ and infer_user (ctx : context) {Location.it=c'; loc} =
   | Desugared.(ExecUser _ | Getenv | Setenv _ | Kill _ | AscribeKernel _) ->
      error ~loc UnexpectedKernelComputation
 
+(* Infer the type of a kernel computation, possibly with the given [world] type. *)
 and infer_kernel ?world (ctx : context) {Location.it=c'; loc} =
   let get_world () =
      match world with
@@ -1143,12 +1151,7 @@ and infer_kernel ?world (ctx : context) {Location.it=c'; loc} =
 
   | Desugared.AscribeKernel (c, t) ->
      let (Syntax.{kernel_world;_} as t) = kernel_ty t in
-     begin match world with
-     | None -> ()
-     | Some w_ty ->
-        if not (expr_eqtype ~loc ctx kernel_world w_ty) then
-          error ~loc (WorldTypeMismatch (w_ty, kernel_world))
-     end ;
+     check_world ~loc ?world ctx kernel_world ;
      let c = check_kernel ctx c t in
      c, t
 
@@ -1193,8 +1196,9 @@ and infer_kernel ?world (ctx : context) {Location.it=c'; loc} =
   | Desugared.Apply (e1, e2) ->
      let e1, t1 = infer_expr ctx e1 in
      begin match as_kernel_arrow (norm_ty ~loc:(e1.Location.loc) ctx t1) with
-       | Some (u1, u2) ->
+       | Some (u1, (Syntax.{kernel_world=w2;_} as u2)) ->
           let e2 = check_expr ctx e2 u1 in
+          check_world ~loc ?world ctx w2 ;
           locate (Syntax.KernelApply (e1, e2)), u2
        | None ->
           error ~loc:(e1.Location.loc) (KernelFunctionExpected t1)
