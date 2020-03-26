@@ -23,13 +23,13 @@ and sgn = Signal of Name.t * t
 and 'a user =
   | UserVal of 'a
   | UserException of exc
-  | UserOperation of Name.t * t * (t -> 'a user) * (t -> 'a user) Name.Map.t
+  | UserResource of Name.t * t * (t -> 'a user) * (t -> 'a user) Name.Map.t
 
 and 'a kernel_tree =
   | KernelVal of 'a * world
   | KernelException of exc * world
   | KernelSignal of sgn
-  | KernelOperation of Name.t * t * (t -> 'a kernel_tree) * (t -> 'a kernel_tree) Name.Map.t
+  | KernelResource of Name.t * t * (t -> 'a kernel_tree) * (t -> 'a kernel_tree) Name.Map.t
 
 and 'a kernel = world -> 'a kernel_tree
 
@@ -50,10 +50,10 @@ let rec user_bind r k =
   match r with
   | UserVal v -> k v
   | UserException _ as r -> r
-  | UserOperation (op, u, l_return, l_exc) ->
+  | UserResource (op, u, l_return, l_exc) ->
      let l_return = (fun v -> let r = l_return v in user_bind r k)
      and l_exc = Name.Map.map (fun f v -> let r = f v in user_bind r k) l_exc in
-     UserOperation (op, u, l_return, l_exc)
+     UserResource (op, u, l_return, l_exc)
 
 (** The kernel monad *)
 let kernel_return x w = KernelVal (x, w)
@@ -65,10 +65,10 @@ let kernel_bind k f =
     | KernelVal (v, w) -> f v w
     | KernelException _ as r -> r
     | KernelSignal _ as r -> r
-    | KernelOperation (op, u, l_return, l_exc) ->
+    | KernelResource (op, u, l_return, l_exc) ->
        let l_return = (fun v -> let r = l_return v in fold r f)
        and l_exc = Name.Map.map (fun h v -> let r = h v in fold r f) l_exc in
-       KernelOperation (op, u, l_return, l_exc)
+       KernelResource (op, u, l_return, l_exc)
   in
   fun w -> fold (k w) f
 

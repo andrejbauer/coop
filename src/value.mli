@@ -22,13 +22,13 @@ type t =
 and 'a user =
   | UserVal of 'a
   | UserException of exc
-  | UserOperation of Name.t * t * (t -> 'a user) * (t -> 'a user) Name.Map.t
+  | UserResource of Name.t * t * (t -> 'a user) * (t -> 'a user) Name.Map.t
 
 and 'a kernel_tree =
   | KernelVal of 'a * world
   | KernelException of exc * world
   | KernelSignal of sgn
-  | KernelOperation of Name.t * t * (t -> 'a kernel_tree) * (t -> 'a kernel_tree) Name.Map.t
+  | KernelResource of Name.t * t * (t -> 'a kernel_tree) * (t -> 'a kernel_tree) Name.Map.t
 
 (** The kernel monad carrier *)
 and 'a kernel = world -> 'a kernel_tree

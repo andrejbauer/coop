@@ -1,6 +1,6 @@
 (** Type-checked abstract syntax of Coop. *)
 
-type operations = Operations of Name.Set.t
+type resources = Resources of Name.Set.t
 
 type exceptions = Exceptions of Name.Set.t
 
@@ -23,24 +23,24 @@ type expr_ty =
   | ArrowUser of expr_ty * user_ty
   | ArrowKernel of expr_ty * kernel_ty
   | RunnerTy of runner_ty
-  | ContainerTy of operations
+  | ContainerTy of resources
 
 (** The typing information for a user computation *)
 and user_ty =
   { user_ty : expr_ty
-  ; user_ops : operations
+  ; user_res : resources
   ; user_exc : exceptions }
 
 (** The typing information for a kernel computation *)
 and kernel_ty =
   { kernel_ty : expr_ty
-  ; kernel_ops : operations
+  ; kernel_res : resources
   ; kernel_exc : exceptions
   ; kernel_sgn : signals
   ; kernel_world : expr_ty }
 
 (** Runner *)
-and runner_ty = operations * operations * signals * expr_ty
+and runner_ty = resources * resources * signals * expr_ty
 
 (** The body of a datatype definition *)
 type datatype = (Name.t * expr_ty option) list
@@ -83,7 +83,7 @@ and user' =
   | UserLetRec of rec_clause list * user
   | UserApply of expr * expr
   | UserMatch of expr * (pattern * user) list
-  | UserOperation of Name.t * expr * exceptions
+  | UserResource of Name.t * expr * exceptions
   | UserRaise of Name.t * expr
   | UserUsing of expr * expr * user * finally
   | UserExec of kernel * expr * finally
@@ -98,7 +98,7 @@ and kernel' =
   | KernelLetRec of rec_clause list * kernel
   | KernelApply of expr * expr
   | KernelMatch of expr * (pattern * kernel) list
-  | KernelOperation of Name.t * expr * exceptions
+  | KernelResource of Name.t * expr * exceptions
   | KernelRaise of Name.t * expr
   | KernelKill of Name.t * expr
   | KernelGetenv
@@ -127,12 +127,12 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * user
   | TopLetRec of rec_clause list * (Name.t * expr_ty) list
-  | TopContainer of user list * operations
+  | TopContainer of user list * resources
   | TopUser of user * expr_ty
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty
   | DefineDatatype of (Name.t * datatype) list
-  | DeclareOperation of Name.t * expr_ty * expr_ty
+  | DeclareResource of Name.t * expr_ty * expr_ty
   | DeclareException of Name.t * expr_ty
   | DeclareSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string
@@ -142,50 +142,50 @@ let unit_ty = Product []
 
 (** Empty sets of gadgets *)
 
-let empty_operations = Operations Name.Set.empty
+let empty_resources = Resources Name.Set.empty
 let empty_exceptions = Exceptions Name.Set.empty
 let empty_signals = Signals Name.Set.empty
 
 (** Make a pure user-computation type *)
 let pure_user_ty t =
  { user_ty = t
- ; user_ops = empty_operations
+ ; user_res = empty_resources
  ; user_exc = empty_exceptions }
 
 (** Make a pure kernel-computation type *)
 let pure_kernel_ty t tw =
   { kernel_ty = t
-  ; kernel_ops = empty_operations
+  ; kernel_res = empty_resources
   ; kernel_exc = empty_exceptions
   ; kernel_sgn = empty_signals
   ; kernel_world = tw }
 
-(** Pollute a user type with given operations and exceptions *)
-let pollute_user {user_ty; user_ops=Operations ops; user_exc=Exceptions exc}
-                 (Operations ops') (Exceptions exc') =
+(** Pollute a user type with given resources and exceptions *)
+let pollute_user {user_ty; user_res=Resources ops; user_exc=Exceptions exc}
+                 (Resources ops') (Exceptions exc') =
   { user_ty
-  ; user_ops = Operations (Name.Set.union ops ops')
+  ; user_res = Resources (Name.Set.union ops ops')
   ; user_exc = Exceptions (Name.Set.union exc exc') }
 
-(** Pollute a kernel type with given operations, exceptions, and signals *)
-let pollute_kernel {kernel_ty; kernel_ops=Operations ops; kernel_exc=Exceptions exc; kernel_sgn=Signals sgn; kernel_world}
-                 (Operations ops') (Exceptions exc') (Signals sgn') =
+(** Pollute a kernel type with given resources, exceptions, and signals *)
+let pollute_kernel {kernel_ty; kernel_res=Resources ops; kernel_exc=Exceptions exc; kernel_sgn=Signals sgn; kernel_world}
+                 (Resources ops') (Exceptions exc') (Signals sgn') =
   { kernel_ty
-  ; kernel_ops = Operations (Name.Set.union ops ops')
+  ; kernel_res = Resources (Name.Set.union ops ops')
   ; kernel_exc = Exceptions (Name.Set.union exc exc')
   ; kernel_sgn = Signals (Name.Set.union sgn sgn')
   ; kernel_world }
 
-(** The user type of the given operation [op] *)
-let operation_user_ty t op exc =
+(** The user type of the given resource [op] *)
+let resource_user_ty t op exc =
   { user_ty = t
-  ; user_ops = Operations (Name.Set.add op Name.Set.empty)
+  ; user_res = Resources (Name.Set.add op Name.Set.empty)
   ; user_exc = exc }
 
-(** The kernel type of the given operation [op] *)
-let operation_kernel_ty t op exc tw =
+(** The kernel type of the given resource [op] *)
+let resource_kernel_ty t op exc tw =
   { kernel_ty = t
-  ; kernel_ops = Operations (Name.Set.add op Name.Set.empty)
+  ; kernel_res = Resources (Name.Set.add op Name.Set.empty)
   ; kernel_exc = exc
   ; kernel_sgn = empty_signals
   ; kernel_world = tw }
@@ -193,13 +193,13 @@ let operation_kernel_ty t op exc tw =
 (** The user type of a raise *)
 let raise_user_ty exc =
   { user_ty = Primitive Empty
-  ; user_ops = empty_operations
+  ; user_res = empty_resources
   ; user_exc = Exceptions (Name.Set.add exc Name.Set.empty) }
 
 (** The kernel type of a raise *)
 let raise_kernel_ty exc w_ty =
   { kernel_ty = Primitive Empty
-  ; kernel_ops = empty_operations
+  ; kernel_res = empty_resources
   ; kernel_exc = Exceptions (Name.Set.add exc Name.Set.empty)
   ; kernel_sgn = empty_signals
   ; kernel_world = w_ty }
@@ -207,7 +207,7 @@ let raise_kernel_ty exc w_ty =
 (** The kernel type of a kill *)
 let kill_ty sgn w_ty =
   { kernel_ty = Primitive Empty
-  ; kernel_ops = empty_operations
+  ; kernel_res = empty_resources
   ; kernel_exc = empty_exceptions
   ; kernel_sgn = Signals (Name.Set.add sgn Name.Set.empty)
   ; kernel_world = w_ty }
@@ -223,18 +223,18 @@ let print_primitive p ppf =
 
 (** Pretty-print effect information *)
 type effect =
-  | Operation of Name.t
+  | Resource of Name.t
   | Exception of Name.t
   | Signal of Name.t
 
 let effects ~ops ~exc ~sgn =
-  List.map (fun o -> Operation o) (Name.Set.elements ops) @
+  List.map (fun o -> Resource o) (Name.Set.elements ops) @
   List.map (fun e -> Exception e) (Name.Set.elements exc) @
   List.map (fun s -> Signal s) (Name.Set.elements sgn)
 
 let print_effect eff ppf =
   match eff with
-  | Operation o -> Name.print ~parentheses:true o ppf
+  | Resource o -> Name.print ~parentheses:true o ppf
   | Exception e -> Print.exception_name e ppf
   | Signal s -> Print.signal_name s ppf
 
@@ -274,17 +274,17 @@ let rec print_expr_ty ?max_level ty ppf =
 
   | RunnerTy rnr_ty -> print_runner_ty rnr_ty ppf
 
-  | ContainerTy (Operations ops) ->
+  | ContainerTy (Resources ops) ->
      Format.fprintf ppf "{%t}"
        (Print.names ops)
 
-and print_user_ty ?max_level {user_ty=t; user_ops=Operations ops; user_exc=Exceptions exc} ppf =
+and print_user_ty ?max_level {user_ty=t; user_res=Resources ops; user_exc=Exceptions exc} ppf =
     Print.print ?max_level ~at_level:Level.user_ty ppf "%t@ %t"
       (print_expr_ty ~max_level:Level.user_ty_left t)
       (print_effects ~ops ~exc ~sgn:Name.Set.empty)
 
 and print_kernel_ty ?max_level {kernel_ty=t;
-                                kernel_ops=Operations ops;
+                                kernel_res=Resources ops;
                                 kernel_exc=Exceptions exc;
                                 kernel_sgn=Signals sgn;
                                 kernel_world=wt} ppf =
@@ -293,14 +293,14 @@ and print_kernel_ty ?max_level {kernel_ty=t;
       (print_effects ~ops ~exc ~sgn)
       (print_expr_ty ~max_level:Level.world_ty wt)
 
-and print_runner_ty (Operations ops1, Operations ops2, Signals sgns, wt) ppf =
+and print_runner_ty (Resources ops1, Resources ops2, Signals sgns, wt) ppf =
   Format.fprintf ppf "%t@ %s@ %t@ @@@ %t"
     (print_effects ~ops:ops1 ~exc:Name.Set.empty ~sgn:Name.Set.empty)
     (Print.char_darrow ())
     (print_effects ~ops:ops2 ~exc:Name.Set.empty ~sgn:sgns)
     (print_expr_ty ~max_level:Level.runner_ty_world wt)
 
-and print_container_ty (Operations ops) ppf =
+and print_container_ty (Resources ops) ppf =
   print_effects ~ops ~exc:Name.Set.empty ~sgn:Name.Set.empty ppf
 
 let print_datatype (t, cnstrs) ppf =

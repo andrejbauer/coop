@@ -24,7 +24,7 @@ let reserved = [
   ("load", Parser.LOAD) ;
   ("match", Parser.MATCH) ;
   ("of", Parser.OF) ;
-  ("operation", Parser.OPERATION) ;
+  ("resource", Parser.RESOURCE) ;
   ("rec", Parser.REC) ;
   ("return", Parser.RETURN) ;
   ("run", Parser.RUN) ;

@@ -2,7 +2,7 @@
 
 (** Operations, exceptions and signals *)
 type effect =
-  | Operation of Name.t
+  | Resource of Name.t
   | Exception of Name.t
   | Signal of Name.t
 
@@ -105,7 +105,7 @@ and toplevel' =
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * ty
   | DefineDatatype of (Name.t * datatype) list
-  | DeclareOperation of Name.t * ty * ty * signature
+  | DeclareResource of Name.t * ty * ty * signature
   | DeclareException of Name.t * ty
   | DeclareSignal of Name.t * ty
   | External of Name.t * ty * string

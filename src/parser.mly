@@ -38,7 +38,7 @@
 
 %token <string> QUOTED_STRING
 %token LOAD
-%token OPERATION
+%token RESOURCE
 %token EXCEPTION SIGNAL OF
 %token CONTAINER
 %token EXTERNAL
@@ -125,9 +125,9 @@ toplevel_:
   | CONTAINER cs=separated_nonempty_list(COMMA, infix_term)
     { Sugared.TopContainer cs }
 
-  | OPERATION op=var_name COLON t1=prod_ty ARROW t2=prod_ty ops=signature?
+  | RESOURCE op=var_name COLON t1=prod_ty ARROW t2=prod_ty ops=signature?
     { let ops = match ops with None -> [] | Some ops -> ops in
-      Sugared.DeclareOperation (op, t1, t2, ops) }
+      Sugared.DeclareResource (op, t1, t2, ops) }
 
   | EXCEPTION exc=var_name OF t=ty
     { Sugared.DeclareException (exc, t) }
@@ -484,7 +484,7 @@ simple_ty_:
 
 effect:
   | op=NAME
-    { Sugared.Operation op }
+    { Sugared.Resource op }
 
   | exc=EXCEPTIONNAME
     { Sugared.Exception exc }

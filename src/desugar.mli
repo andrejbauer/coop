@@ -5,7 +5,7 @@
    computations. The desugaring phase separtes them and hoists computations
    which appear inside expressions into outer `let`-bindings, as necessary.
 
-   The desugaring phase also keeps track of known identifiers, operations,
+   The desugaring phase also keeps track of known identifiers, resources,
    signals and type names, and makes sure they do not get mixed up or shadowed.
 *)
 

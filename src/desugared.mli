@@ -5,7 +5,7 @@
     syntax {!module:Syntax}.
 *)
 
-type operations = Operations of Name.Set.t
+type resources = Resources of Name.Set.t
 
 type exceptions = Exceptions of Name.Set.t
 
@@ -28,19 +28,19 @@ and expr_ty' =
   | Product of expr_ty list
   | ArrowUser of expr_ty * user_ty
   | ArrowKernel of expr_ty * kernel_ty
-  | RunnerTy of operations * operations * signals * expr_ty
-  | ContainerTy of operations
+  | RunnerTy of resources * resources * signals * expr_ty
+  | ContainerTy of resources
 
 and user_ty = user_ty' Location.located
 and user_ty' =
   { user_ty : expr_ty
-  ; user_ops : operations
+  ; user_res : resources
   ; user_exc : exceptions }
 
 and kernel_ty = kernel_ty' Location.located
 and kernel_ty' =
   { kernel_ty : expr_ty
-  ; kernel_ops : operations
+  ; kernel_res : resources
   ; kernel_exc : exceptions
   ; kernel_sgn : signals
   ; kernel_world : expr_ty }
@@ -87,7 +87,7 @@ and comp' =
   | LetRec of rec_clause list * comp
   | Apply of expr * expr
   | Match of expr * (binder * comp) list
-  | Operation of Name.t * expr
+  | Resource of Name.t * expr
   | Raise of Name.t * expr
   | Kill of Name.t * expr
   | Getenv
@@ -124,7 +124,7 @@ and toplevel' =
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty
   | DefineDatatype of (Name.t * datatype) list
-  | DeclareOperation of Name.t * expr_ty * expr_ty * exceptions
+  | DeclareResource of Name.t * expr_ty * expr_ty * exceptions
   | DeclareException of Name.t * expr_ty
   | DeclareSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string

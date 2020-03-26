@@ -5,7 +5,7 @@ type environment = {
 
 type error =
   | InvalidDeBruijn of int
-  | UnhandledOperation of Name.t
+  | UnhandledResource of Name.t
   | UnhandledSignal of Name.t
   | UnhandledException of Name.t
   | UnknownExternal of string
@@ -13,8 +13,8 @@ type error =
   | IllegalComparison of Value.t
   | FunctionExpected
   | RunnerExpected
-  | RunnerDoubleOperation of Name.t
-  | ContainerDoubleOperation of Name.t
+  | RunnerDoubleResource of Name.t
+  | ContainerDoubleResource of Name.t
   | PairExpected
   | ContainerExpected
   | PatternMismatch
@@ -29,8 +29,8 @@ let print_error err ppf =
   | InvalidDeBruijn i ->
      Format.fprintf ppf "invalid de Bruijn index %d, please report" i
 
-  | UnhandledOperation op ->
-     Format.fprintf ppf "unhandled operation %t"
+  | UnhandledResource op ->
+     Format.fprintf ppf "unhandled resource %t"
        (Name.print op)
 
   | UnhandledSignal sgl ->
@@ -56,10 +56,10 @@ let print_error err ppf =
   | RunnerExpected ->
      Format.fprintf ppf "runner expected, please report"
 
-  | RunnerDoubleOperation op ->
+  | RunnerDoubleResource op ->
      Format.fprintf ppf "cannot combine runners that both implement %t" (Name.print op)
 
-  | ContainerDoubleOperation op ->
+  | ContainerDoubleResource op ->
      Format.fprintf ppf "cannot combine containers that both implement %t" (Name.print op)
 
   | PairExpected ->
@@ -283,9 +283,9 @@ let lookup_signal ~loc sgns sgn =
   | None -> error ~loc (UnhandledSignal sgn)
   | Some f -> f
 
-let lookup_operation ~loc ops op =
+let lookup_resource ~loc ops op =
   match Name.Map.find op ops with
-  | None -> error ~loc (UnhandledOperation op)
+  | None -> error ~loc (UnhandledResource op)
   | Some f -> f
 
 
@@ -353,10 +353,10 @@ let rec eval_expr env {Location.it=e'; loc} =
        | Value.KernelVal (v, w'') -> Value.KernelVal (v, lens_put w w'')
        | Value.KernelException (e, w'') -> Value.KernelException (e, lens_put w w'')
        | Value.KernelSignal _ as s -> s
-       | Value.KernelOperation (op, u, l_return, l_exc) ->
+       | Value.KernelResource (op, u, l_return, l_exc) ->
           let l_return v = fold (l_return v)
           and l_exc = Name.Map.map (fun f v -> fold (f v)) l_exc in
-          Value.KernelOperation (op, u, l_return, l_exc)
+          Value.KernelResource (op, u, l_return, l_exc)
        in
        let w' = lens_get w in
        fold (coop v w')
@@ -382,7 +382,7 @@ let rec eval_expr env {Location.it=e'; loc} =
                 let (w1, _) = as_pair ~loc w in Value.World (Value.Tuple [w1; w2])
               in
               Some (wrap lens_get lens_put f2)
-           | Some _, Some _ -> error ~loc (RunnerDoubleOperation op))
+           | Some _, Some _ -> error ~loc (RunnerDoubleResource op))
          rnr1 rnr2
      in
      Value.Runner rnr
@@ -431,9 +431,9 @@ and eval_user env Location.{it=c'; loc} =
      let env = extend_rec ~loc fs env in
      eval_user env c
 
-  | Syntax.(UserOperation (op, u, Exceptions excs)) ->
+  | Syntax.(UserResource (op, u, Exceptions excs)) ->
      let u = eval_expr env u in
-     Value.UserOperation (op, u, user_return, reraise_user excs)
+     Value.UserResource (op, u, user_return, reraise_user excs)
 
   | Syntax.UserRaise (exc, e) ->
      let v = eval_expr env e in
@@ -464,10 +464,10 @@ and eval_user env Location.{it=c'; loc} =
           | None -> e
           end
 
-       | Value.UserOperation (op, v, f_return, f_exc) ->
+       | Value.UserResource (op, v, f_return, f_exc) ->
           let f_return v = fold (f_return v)
           and f_exc = Name.Map.map (fun f v -> fold (f v)) f_exc in
-          Value.UserOperation (op, v, f_return, f_exc)
+          Value.UserResource (op, v, f_return, f_exc)
      in
      let r = eval_user env c in
      fold r
@@ -504,9 +504,9 @@ and eval_kernel env Location.{it=c';loc} w =
      let env = extend_rec ~loc fs env in
      eval_kernel env c w
 
-  | Syntax.(KernelOperation (op, u, Exceptions excs)) ->
+  | Syntax.(KernelResource (op, u, Exceptions excs)) ->
      let u = eval_expr env u in
-     Value.KernelOperation (op, u, (fun v -> kernel_return v w), reraise_kernel w excs)
+     Value.KernelResource (op, u, (fun v -> kernel_return v w), reraise_kernel w excs)
 
   | Syntax.KernelRaise (exc, e) ->
      let v = eval_expr env e in
@@ -527,10 +527,10 @@ and eval_kernel env Location.{it=c';loc} w =
           | None -> Value.(KernelException (e, w))
           end
 
-       | Value.UserOperation (op, v, f_return, f_exc) ->
+       | Value.UserResource (op, v, f_return, f_exc) ->
           let f_return v = fold (f_return v)
           and f_exc = Name.Map.map (fun f v -> fold (f v)) f_exc in
-          Value.KernelOperation (op, v, f_return, f_exc)
+          Value.KernelResource (op, v, f_return, f_exc)
      in
      let r = eval_user env c in
      fold r
@@ -550,10 +550,10 @@ and eval_kernel env Location.{it=c';loc} w =
        | Value.KernelSignal _ as r ->
           r
 
-       | Value.KernelOperation (op, v, f_return, f_exc) ->
+       | Value.KernelResource (op, v, f_return, f_exc) ->
           let f_return v = fold (f_return v)
           and f_exc = Name.Map.map (fun f v -> fold (f v)) f_exc in
-          Value.KernelOperation (op, v, f_return, f_exc)
+          Value.KernelResource (op, v, f_return, f_exc)
      in
      let r = eval_kernel env c w in
      fold r
@@ -646,8 +646,8 @@ and user_using ~loc rnr w r (fin_return, fin_raise, fin_kill) =
        let f_exc = lookup_finally_exception ~loc fin_raise exc in
        f_exc (v, w)
 
-    | Value.UserOperation (op, v, f_return, f_exc) ->
-       let coop = lookup_operation ~loc rnr op in
+    | Value.UserResource (op, v, f_return, f_exc) ->
+       let coop = lookup_resource ~loc rnr op in
        let f_return (v, w) = (let r = f_return v in using w r)
        and f_exc = Name.Map.map (fun f -> (fun (v, w) -> using w (f v))) f_exc
        in
@@ -668,10 +668,10 @@ and user_exec ~loc w r (fin_return, fin_raise, fin_kill) =
      let f_sgn = lookup_signal ~loc fin_kill sgn in
      f_sgn v
 
-  | Value.KernelOperation (op, v_op, f_return, f_exc) ->
+  | Value.KernelResource (op, v_op, f_return, f_exc) ->
      let f_return = fun v -> fold (f_return v)
      and f_exc = Name.Map.map (fun f v -> fold (f v)) f_exc in
-     Value.UserOperation (op, v_op, f_return, f_exc)
+     Value.UserResource (op, v_op, f_return, f_exc)
   in
   fold (r w)
 
@@ -682,8 +682,8 @@ let top_eval_user {env_vars; env_container=coops} ({Location.loc; _} as c) =
     | Value.(UserException (Exception (exc, v))) ->
        error ~loc (UnhandledException exc)
 
-    | Value.UserOperation (op, v, f_return, f_exc) ->
-       let coop = lookup_operation ~loc coops op in
+    | Value.UserResource (op, v, f_return, f_exc) ->
+       let coop = lookup_resource ~loc coops op in
        begin
          try
            using (f_return (coop v))
@@ -752,7 +752,7 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
               | Some f, None -> Some f
               | None, Some g -> Some g
               | None, None -> None
-              | Some _, Some _ -> error ~loc (ContainerDoubleOperation op))
+              | Some _, Some _ -> error ~loc (ContainerDoubleResource op))
             cnt c_cnt
           in
           fold cnts cs
@@ -776,9 +776,9 @@ let rec eval_toplevel ~quiet ({env_vars; env_container} as env) {Location.it=d';
        Format.printf "@[<v>type %t@]@." (Syntax.print_datatypes lst) ;
      env
 
-  | Syntax.DeclareOperation (op, ty1, ty2) ->
+  | Syntax.DeclareResource (op, ty1, ty2) ->
      if not quiet then
-       Format.printf "@[<hov>operation %t@ :@ %t@ %s@ %t@]@."
+       Format.printf "@[<hov>resource %t@ :@ %t@ %s@ %t@]@."
                      (Name.print op)
                      (Syntax.print_expr_ty ty1)
                      (Print.char_arrow ())

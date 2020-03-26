@@ -1,6 +1,6 @@
 (** Type-checked syntax of Coop. *)
 
-type operations = Operations of Name.Set.t
+type resources = Resources of Name.Set.t
 
 type exceptions = Exceptions of Name.Set.t
 
@@ -23,24 +23,24 @@ type expr_ty =
   | ArrowUser of expr_ty * user_ty
   | ArrowKernel of expr_ty * kernel_ty
   | RunnerTy of runner_ty
-  | ContainerTy of operations
+  | ContainerTy of resources
 
 (** The typing information for a user computation *)
 and user_ty =
   { user_ty : expr_ty
-  ; user_ops : operations
+  ; user_res : resources
   ; user_exc : exceptions }
 
 (** The typing information for a kernel computation *)
 and kernel_ty =
   { kernel_ty : expr_ty
-  ; kernel_ops : operations
+  ; kernel_res : resources
   ; kernel_exc : exceptions
   ; kernel_sgn : signals
   ; kernel_world : expr_ty }
 
 (** Runner *)
-and runner_ty = operations * operations * signals * expr_ty
+and runner_ty = resources * resources * signals * expr_ty
 
 (** The body of a datatype definition *)
 type datatype = (Name.t * expr_ty option) list
@@ -83,7 +83,7 @@ and user' =
   | UserLetRec of rec_clause list * user
   | UserApply of expr * expr
   | UserMatch of expr * (pattern * user) list
-  | UserOperation of Name.t * expr * exceptions
+  | UserResource of Name.t * expr * exceptions
   | UserRaise of Name.t * expr
   | UserUsing of expr * expr * user * finally
   | UserExec of kernel * expr * finally
@@ -98,7 +98,7 @@ and kernel' =
   | KernelLetRec of rec_clause list * kernel
   | KernelApply of expr * expr
   | KernelMatch of expr * (pattern * kernel) list
-  | KernelOperation of Name.t * expr * exceptions
+  | KernelResource of Name.t * expr * exceptions
   | KernelRaise of Name.t * expr
   | KernelKill of Name.t * expr
   | KernelGetenv
@@ -127,12 +127,12 @@ and toplevel' =
   | TopLoad of toplevel list
   | TopLet of pattern * (Name.t * expr_ty) list * user
   | TopLetRec of rec_clause list * (Name.t * expr_ty) list
-  | TopContainer of user list * operations
+  | TopContainer of user list * resources
   | TopUser of user * expr_ty
   | DefineAbstract of Name.t
   | DefineAlias of Name.t * expr_ty
   | DefineDatatype of (Name.t * datatype) list
-  | DeclareOperation of Name.t * expr_ty * expr_ty
+  | DeclareResource of Name.t * expr_ty * expr_ty
   | DeclareException of Name.t * expr_ty
   | DeclareSignal of Name.t * expr_ty
   | External of Name.t * expr_ty * string
@@ -141,7 +141,7 @@ and toplevel' =
 val unit_ty : expr_ty
 
 (** The empty entities *)
-val empty_operations : operations
+val empty_resources : resources
 val empty_exceptions : exceptions
 val empty_signals : signals
 
@@ -151,17 +151,17 @@ val pure_user_ty : expr_ty -> user_ty
 (** Make a pure kernel type *)
 val pure_kernel_ty : expr_ty -> expr_ty -> kernel_ty
 
-(** Pollute a user type with given operations and exceptions *)
-val pollute_user : user_ty -> operations -> exceptions -> user_ty
+(** Pollute a user type with given resources and exceptions *)
+val pollute_user : user_ty -> resources -> exceptions -> user_ty
 
-(** Pollute a kernel type with given operations, exceptions, and signals *)
-val pollute_kernel : kernel_ty -> operations -> exceptions -> signals -> kernel_ty
+(** Pollute a kernel type with given resources, exceptions, and signals *)
+val pollute_kernel : kernel_ty -> resources -> exceptions -> signals -> kernel_ty
 
-(** Make a user computation type with a single operation. *)
-val operation_user_ty : expr_ty -> Name.t -> exceptions -> user_ty
+(** Make a user computation type with a single resource. *)
+val resource_user_ty : expr_ty -> Name.t -> exceptions -> user_ty
 
-(** Make a kernel computation type with a single operation. *)
-val operation_kernel_ty : expr_ty -> Name.t -> exceptions -> expr_ty -> kernel_ty
+(** Make a kernel computation type with a single resource. *)
+val resource_kernel_ty : expr_ty -> Name.t -> exceptions -> expr_ty -> kernel_ty
 
 (** The user type of a raise *)
 val raise_user_ty : Name.t -> user_ty
@@ -182,7 +182,7 @@ val print_user_ty : ?max_level:Level.t -> user_ty -> Format.formatter -> unit
 val print_kernel_ty : ?max_level:Level.t -> kernel_ty -> Format.formatter -> unit
 
 (** Print a shell type *)
-val print_container_ty : operations -> Format.formatter -> unit
+val print_container_ty : resources -> Format.formatter -> unit
 
 (** Print the body of a datatype definition *)
 val print_datatype : Name.t * datatype -> Format.formatter -> unit
