@@ -1,6 +1,6 @@
 (* Test execution of user code in kernel mode. *)
 
-operation add : int * int -> int
+resource add : int * int -> int
 
 let adder =
   { add (a, b) -> user (a + b) with { } } @ unit

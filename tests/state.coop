@@ -1,5 +1,5 @@
-operation get : unit -> int
-operation put : int -> unit
+resource get : unit -> int
+resource put : int -> unit
 
 let state =
   {

@@ -1,2 +1,2 @@
-operation op : int -> int * int
+resource op : int -> int * int
 signal sgl of int * int

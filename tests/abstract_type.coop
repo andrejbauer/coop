@@ -1,7 +1,7 @@
 type cow
 type bull
 
-operation moo : cow -> unit
+resource moo : cow -> unit
 
 let swap (c : cow) (b : bull) =
   moo c ; (b, c)

@@ -1,4 +1,4 @@
 type cow
 type bull
-operation moo : cow → unit
+resource moo : cow → unit
 val swap : cow → (bull → bull × cow {moo}) {} = <fun>

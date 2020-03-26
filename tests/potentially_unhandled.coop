@@ -1,4 +1,4 @@
-operation tickle : unit -> unit
+resource tickle : unit -> unit
 exception giggle of unit
 
 let a = if false then tickle () else ()

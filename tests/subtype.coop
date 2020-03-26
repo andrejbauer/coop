@@ -1,4 +1,4 @@
-operation op : int -> int
+resource op : int -> int
 exception die of unit
 signal croak of int
 

@@ -1,8 +1,8 @@
-operation get : unit → int
-operation put : int → unit
-operation get' : unit → int
-operation put' : int → unit
-operation tick : unit → int
+resource get : unit → int
+resource put : int → unit
+resource get' : unit → int
+resource put' : int → unit
+resource tick : unit → int
 val state : {get, put} ⇒ {} @ int = <runner>
 val ticker : {tick} ⇒ {} @ int = <runner>
 val c : {get, put, tick} ⇒ {} @ int × int = <runner>

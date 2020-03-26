@@ -1,3 +1,3 @@
-operation add : int × int → int
+resource add : int × int → int
 val adder : {add} ⇒ {} @ unit = <runner>
 val demo : int = 7

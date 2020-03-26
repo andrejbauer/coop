@@ -13,7 +13,7 @@ finally {
 
 (* Catch a signal arising in a co-operation. *)
 
-operation op : unit -> unit
+resource op : unit -> unit
 signal sgl of unit
 
 let demo =

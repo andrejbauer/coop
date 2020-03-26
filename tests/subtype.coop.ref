@@ -4,7 +4,7 @@ the following exceptions are potentially unhandled: die
 Type warning at file "./subtype.coop", line 35, charaters 0-7:
 the following exceptions are potentially unhandled: die
 
-operation op : int → int
+resource op : int → int
 exception die of unit
 signal croak of int
 val apply : (int → int {op, !die}) → (int → int {op, !die}) {} = <fun>

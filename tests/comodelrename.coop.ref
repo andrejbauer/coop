@@ -1,7 +1,7 @@
-operation cow : unit → int
-operation bull : unit → int
-operation dog : bool → bool
-operation cat : bool → bool
+resource cow : unit → int
+resource bull : unit → int
+resource dog : bool → bool
+resource cat : bool → bool
 val c : {cow, dog} ⇒ {} @ unit = <runner>
 val d : {cat, cow} ⇒ {} @ unit = <runner>
 val e : {bull, cat} ⇒ {} @ unit = <runner>

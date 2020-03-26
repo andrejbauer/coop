@@ -1,8 +1,8 @@
-operation cow : unit -> int
-operation bull : unit -> int
+resource cow : unit -> int
+resource bull : unit -> int
 
-operation dog : bool -> bool
-operation cat : bool -> bool
+resource dog : bool -> bool
+resource cat : bool -> bool
 
 let c =
   {

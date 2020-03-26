@@ -5,24 +5,24 @@
 exception division_by_zero of unit
 exception malformed_integer of unit
 
-operation print_int : int -> unit
-operation print_string : string -> unit
-operation read_int : unit -> int {!malformed_integer}
-operation read_string : unit -> string
-operation flush_stdout : unit -> unit
+resource print_int : int -> unit
+resource print_string : string -> unit
+resource read_int : unit -> int {!malformed_integer}
+resource read_string : unit -> string
+resource flush_stdout : unit -> unit
 type io_container = {print_int, print_string, read_int, read_string, flush_stdout}
 
 type in_channel
 type out_channel
 exception sys_error of string
 exception end_of_file of unit
-operation open_in : string -> in_channel {!sys_error}
-operation close_in : in_channel -> unit {!sys_error}
-operation input_line : in_channel -> string {!sys_error, !end_of_file}
-operation open_out : string -> out_channel {!sys_error}
-operation close_out : out_channel -> unit {!sys_error}
-operation output_string : out_channel -> (string -> unit {!sys_error})
-operation flush_out : out_channel -> unit {!sys_error}
+resource open_in : string -> in_channel {!sys_error}
+resource close_in : in_channel -> unit {!sys_error}
+resource input_line : in_channel -> string {!sys_error, !end_of_file}
+resource open_out : string -> out_channel {!sys_error}
+resource close_out : out_channel -> unit {!sys_error}
+resource output_string : out_channel -> (string -> unit {!sys_error})
+resource flush_out : out_channel -> unit {!sys_error}
 type file_container = {open_in, close_in, input_line, open_out, close_out, output_string, flush_out}
 
 external pure : {} = "pure"

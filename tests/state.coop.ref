@@ -1,4 +1,4 @@
-operation get : unit → int
-operation put : int → unit
+resource get : unit → int
+resource put : int → unit
 val state : {get, put} ⇒ {} @ int = <runner>
 val demo : (int × int) × int = ((1, 2), 3)

@@ -1,6 +1,6 @@
-operation get : unit -> int
-operation put : int -> unit
-operation tick : unit -> int
+resource get : unit -> int
+resource put : int -> unit
+resource tick : unit -> int
 
 let state =
   {
