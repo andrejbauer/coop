@@ -109,26 +109,30 @@ operations, exceptions, and signals.
 ### Operations
 
 All computational effects (apart from exceptions and signals) are represented by
-operations. You can declare new operation `op` at the top level with the directive
+operations. You can declare a new operation `op` at the top level with the directive
 
-    operation op : τ → ρ {!exc₁, !exc₂, …}
+    resource op : τ → ρ {!exc₁, !exc₂, …}
 
-This says that `op` is an operation which takes an argument of type `τ` and
-returns a result of type `ρ`, or raises one of the exceptions `exc₁, exc₂, …`. The
-shorthand `operation op : τ → ρ` is equivalent to `operation op : τ → ρ {}`.
+This says that `op` is an (resource-like) operation which takes an argument of type `τ`
+and returns a result of type `ρ`, or raises one of the exceptions `exc₁, exc₂, …`. The
+shorthand `resource op : τ → ρ` is equivalent to `resource op : τ → ρ {}`.
 
-An operation `op` with argument `v` is called with `op v`. Such calls are
+An operation `op` with argument `v` is called as `op v`. Such calls are
 handled by [runners](#runners), or by [containers](#containers) at the toplevel.
+
+**Note:** We reserve the more customary keyword `operation` for those operations that
+users can handle with arbitrary general effect handlers. Such general effect handlers
+are currently not yet implemented in `coop`, but we plan to add them soon enough.
 
 #### Example
 
 The file `pervasives.coop` delcares the I/O operations
 
-    operation print_int : int → unit
-    operation print_string : string → unit
-    operation read_int : unit → int {!malformed_integer}
-    operation read_string : unit → string
-    operation flush : unit → unit
+    resource print_int : int → unit
+    resource print_string : string → unit
+    resource read_int : unit → int {!malformed_integer}
+    resource read_string : unit → string
+    resource flush : unit → unit
 
 Notice that `read_int` may throw a `malformed_integer` exception. Coop keeps track of
 exceptions and issues a warning if the `malformed_integer` exception is not handled.
@@ -721,7 +725,7 @@ The following lexical conventions are in place:
 ### UTF and ASCII
 
 Source code should be UTF8 encoded. If you do not have convenient ways of entering UTF8
-(isn't it kind of said that this is a problem in the 3rd millenium?) then you may use the following
+(isn't it kind of sad that this is a problem in the 3rd millenium?) then you may use the following
 ASCII equivalents:
 
 | Operator      | UTF8 | ASCII |
