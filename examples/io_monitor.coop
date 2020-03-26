@@ -28,7 +28,7 @@ let io_recorder =
   | print_string s -> print_string s ; setenv (Cons (PrintString s, getenv))
   | read_int () -> let k = read_int () in setenv (Cons (ReadInt k, getenv)) ; k
   | read_string () -> let s = read_string () in setenv (Cons (ReadString s, getenv)) ; s
-  | flush () -> flush () ; setenv (Cons (Flush, getenv))
+  | flush_stdout () -> flush_stdout () ; setenv (Cons (Flush, getenv))
   } @ io_record
 
 signal sync_error of unit
@@ -40,7 +40,7 @@ let io_player =
       match getenv with {
       | Cons (PrintInt m, r) ->
         if k = m then
-          print_string "DEBUG PRINT: " ; print_int k ; flush () ;
+          print_string "DEBUG PRINT: " ; print_int k ; flush_stdout () ;
           setenv r
         else
           !!sync_error ()
@@ -51,7 +51,7 @@ let io_player =
       match getenv with {
       | Cons (PrintString t, r) ->
         if s = t then
-           print_string "DEBUG PRINT: " ; print_string s ; flush () ;
+           print_string "DEBUG PRINT: " ; print_string s ; flush_stdout () ;
            setenv r
         else
            !!sync_error ()
@@ -61,7 +61,7 @@ let io_player =
    | read_int () ->
       match getenv with {
       | Cons (ReadInt k, r) ->
-           print_string "DEBUG READ: " ; print_int k ; flush () ;
+           print_string "DEBUG READ: " ; print_int k ; flush_stdout () ;
            setenv r ;
            k
       | _ -> !!sync_error ()
@@ -70,16 +70,16 @@ let io_player =
    | read_string () ->
       match getenv with {
       | Cons (ReadString s, r) ->
-           print_string "DEBUG READ: " ; print_string s ; flush () ;
+           print_string "DEBUG READ: " ; print_string s ; flush_stdout () ;
            setenv r ;
            s
       | _ -> !!sync_error ()
       }
 
-    | flush () ->
+    | flush_stdout () ->
       match getenv with {
       | Cons (Flush, r) ->
-           print_string "DEBUG FLUSH" ; flush () ;
+           print_string "DEBUG FLUSH" ; flush_stdout () ;
            setenv r
       | _ -> !!sync_error ()
       }
@@ -93,7 +93,7 @@ let conversation1 (_ : unit) =
   print_string "I wish you " ;
   print_int (100 - k) ;
   print_string " more years of happy life." ;
-  flush ()
+  flush_stdout ()
 ;;
 
 let conversation2 (_ : unit) =

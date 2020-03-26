@@ -32,9 +32,9 @@ let alloc_heap (_ : unit) @ heap =
   Location hp
 
 (** We implement ML-style references using the primitive heap. *)
-operation ref : cell -> location
-operation get : location -> cell
-operation put : location * cell -> unit
+resource ref : cell -> location
+resource get : location -> cell
+resource put : location * cell -> unit
 
 let ml_ref =
   { ref x -> let r = alloc_heap () in write_heap r x ; r
@@ -92,9 +92,9 @@ exception policy_violation of location
 signal no_policy of location
 
 (** The monotonic versions of ref operations. *)
-operation mref : cell * policy -> location
-operation mget : location -> cell
-operation mput : location * cell -> unit {!policy_violation}
+resource mref : cell * policy -> location
+resource mget : location -> cell
+resource mput : location * cell -> unit {!policy_violation}
 
 (** A map that checks policies. *)
 type policy_checker = Checker of (location * cell -> unit {get, !policy_violation, !!no_policy} @ policy_checker)

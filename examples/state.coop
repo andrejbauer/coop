@@ -1,12 +1,12 @@
 (** Standard state. *)
 
 (** The operations for accessing and modifyng state *)
-operation get : unit -> int
-operation put : int -> unit
+resource get : unit -> int
+resource put : int -> unit
 
 (** Another set of operations, used when we combined several states *)
-operation get' : unit -> int
-operation put' : int -> unit
+resource get' : unit -> int
+resource put' : int -> unit
 
 (** A signal used for the cohandler that only allows positive integers *)
 signal negative of int

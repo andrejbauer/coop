@@ -25,7 +25,7 @@ let demo1 =
     and does not raise any I/O exceptions. Instead, if an I/O error occurs, it
     closes the file and raises a signal. *)
 signal sys_kill of string ;;
-operation write : string -> unit ;;
+resource write : string -> unit ;;
 
 (* Note that [close_out] may raise a further [sys_error]. *)
 let fileIO = {

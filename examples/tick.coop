@@ -1,5 +1,5 @@
 (** A counter *)
-operation tick : unit -> int
+resource tick : unit -> int
 
 let ticker =
   {
