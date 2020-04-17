@@ -4,7 +4,7 @@
   (modules_without_implementation desugared sugared)
   (preprocess (pps sedlex.ppx))
   (flags -w +a-4-27-29-50 -warn-error +a)
-  (libraries unix sedlex menhirlib))
+  (libraries unix sedlex menhirLib))
 
 (menhir
   (flags "--explain")
