@@ -482,7 +482,7 @@ simple_ty_:
   | LPAREN t=ty_ RPAREN
     { t }
 
-effect:
+effect_:
   | op=NAME
     { Sugared.Operation op }
 
@@ -493,7 +493,7 @@ effect:
     { Sugared.Signal sgn }
 
 signature:
-  | LBRACE sgn=separated_list(COMMA, effect) RBRACE
+  | LBRACE sgn=separated_list(COMMA, effect_) RBRACE
     { sgn }
 
 op_renaming:
