@@ -3,7 +3,7 @@
   (public_name "coop")
   (modules_without_implementation desugared sugared)
   (preprocess (pps sedlex.ppx))
-  (flags -w +a-4-27-29-50 -warn-error +a)
+  (flags -w +a-4-27-29-50-70 -warn-error +a)
   (libraries unix sedlex menhirLib))
 
 (menhir
