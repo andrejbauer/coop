@@ -1,12 +1,12 @@
 (** Concrete syntax as parsed by the parser. *)
 
 (** Operations, exceptions and signals *)
-type effect =
+type effect_ =
   | Operation of Name.t
   | Exception of Name.t
   | Signal of Name.t
 
-type signature = effect list
+type signature = effect_ list
 
 (** Primitive types *)
 type primitive =

@@ -222,7 +222,7 @@ let print_primitive p ppf =
   | String -> "string")
 
 (** Pretty-print effect information *)
-type effect =
+type effect_ =
   | Operation of Name.t
   | Exception of Name.t
   | Signal of Name.t
